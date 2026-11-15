@@ -360,7 +360,8 @@
     <!-- ================= Search ================= -->
     <DataTemplate DataType="{x:Type vm:SearchViewModel}">
         <DockPanel Margin="32,0,24,0">
-            <Grid DockPanel.Dock="Top" MaxWidth="480" HorizontalAlignment="Left" Width="480" Visibility="Collapsed">
+            <TextBlock DockPanel.Dock="Top" Text="Search" Style="{StaticResource Title1}" Margin="0,0,0,16" />
+            <Grid DockPanel.Dock="Top" MaxWidth="560" HorizontalAlignment="Left" Width="560">
                 <TextBox x:Name="box" Style="{StaticResource SearchBox}" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
                          Loaded="SearchBox_Loaded">
                     <TextBox.InputBindings>

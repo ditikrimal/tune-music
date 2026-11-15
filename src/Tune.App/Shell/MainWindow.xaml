@@ -114,12 +114,6 @@
                             Width="32" Height="32" Command="{Binding GoBackCommand}" IsEnabled="{Binding CanGoBack}" ToolTip="Back" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE76C;" Background="#66000000" Foreground="White" FontSize="12"
                             Width="32" Height="32" Margin="8,0,16,0" Command="{Binding GoForwardCommand}" IsEnabled="{Binding CanGoForward}" ToolTip="Forward" />
-                    <Grid Width="420">
-                        <TextBox x:Name="TopSearch" Style="{StaticResource TopSearchBox}" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="Search box" />
-                        <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource SubtleTextBrush}" FontSize="14"
-                                   VerticalAlignment="Center" Margin="16,0,0,0" IsHitTestVisible="False" />
-                    </Grid>
                 </StackPanel>
             </DockPanel>
 

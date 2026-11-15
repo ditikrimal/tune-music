@@ -20,40 +20,30 @@ Console.WriteLine($"wrote {icoPath} ({new FileInfo(icoPath).Length / 1024} KB, s
 
 static BitmapSource Render(int size)
 {
+    // Tune logo: a white sound waveform (six rounded bars), no tile — reads cleanly on the dark taskbar and sidebar.
     var v = new DrawingVisual();
     using (var dc = v.RenderOpen())
     {
-        double u = size / 512.0;                       // design grid is 512×512
-        // dark mark: graphite tile with a soft top sheen, silver-white bars
-        var tile = new LinearGradientBrush(Color.FromRgb(0x2C, 0x2C, 0x31), Color.FromRgb(0x08, 0x08, 0x0A), 90);
-        var green = new LinearGradientBrush(Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0x9C, 0x9C, 0xA6), 90); // bar fill
-        dc.DrawRoundedRectangle(tile, null, new Rect(0, 0, size, size), 116 * u, 116 * u);
-        if (size >= 48)
-        {
-            var rim = new Pen(new LinearGradientBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF), 90), Math.Max(1, 6 * u));
-            var inset = rim.Thickness / 2;
-            dc.DrawRoundedRectangle(null, rim, new Rect(inset, inset, size - 2 * inset, size - 2 * inset), 116 * u - inset, 116 * u - inset);
-        }
-
+        var white = new LinearGradientBrush(Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0xE4, 0xE4, 0xEA), 90);
         if (size >= 32)
         {
-            // full mark: five bars, the middle one is the stem of the T
-            (double x, double y, double h)[] bars = [(96, 150, 60), (160, 118, 124), (234, 96, 320), (308, 118, 124), (372, 150, 60)];
-            foreach (var (x, y, h) in bars)
-                dc.DrawRoundedRectangle(green, null, new Rect(x * u, y * u, 44 * u, h * u), 22 * u, 22 * u);
+            // design grid 24×24: x centre, top, bottom (stroke 2.2, round caps)
+            (double x, double y1, double y2)[] bars = [(2, 10, 13), (6, 6, 17), (10, 3, 21), (14, 8, 15), (18, 5, 18), (22, 10, 13)];
+            double pad = size * 0.06, u = (size - 2 * pad) / 24.0, w = 2.4 * u;
+            foreach (var (x, y1, y2) in bars)
+                dc.DrawRoundedRectangle(white, null, new Rect(pad + x * u - w / 2, pad + y1 * u - w / 2, w, (y2 - y1) * u + w), w / 2, w / 2);
         }
         else
         {
-            // tiny sizes: 3 bars snapped to whole pixels (bar width ≈ 1/6 of the icon)
-            double w = Math.Max(2, Math.Round(size / 6.0));
-            double gap = Math.Max(1, Math.Round(size / 16.0));
-            double cx = Math.Round((size - w) / 2);
-            double top = Math.Round(size * 0.19), stemBottom = Math.Round(size * 0.82);
-            double sideTop = Math.Round(size * 0.27), sideBottom = Math.Round(size * 0.47);
-            var r = w / 2;
-            dc.DrawRoundedRectangle(green, null, new Rect(cx, top, w, stemBottom - top), r, r);
-            dc.DrawRoundedRectangle(green, null, new Rect(cx - gap - w, sideTop, w, sideBottom - sideTop), r, r);
-            dc.DrawRoundedRectangle(green, null, new Rect(cx + w + gap, sideTop, w, sideBottom - sideTop), r, r);
+            // tiny sizes: four bars snapped to whole pixels
+            double w = Math.Max(2, Math.Round(size / 8.0)), gap = Math.Max(2, Math.Round(size / 8.0));
+            double total = 4 * w + 3 * gap, x0 = Math.Round((size - total) / 2);
+            (double top, double bottom)[] hs = [(0.30, 0.70), (0.10, 0.90), (0.36, 0.64), (0.22, 0.78)];
+            for (var k = 0; k < 4; k++)
+            {
+                double top = Math.Round(size * hs[k].top), bottom = Math.Round(size * hs[k].bottom);
+                dc.DrawRoundedRectangle(Brushes.White, null, new Rect(x0 + k * (w + gap), top, w, bottom - top), w / 2, w / 2);
+            }
         }
     }
     var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);

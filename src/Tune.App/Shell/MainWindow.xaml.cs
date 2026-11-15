@@ -90,8 +90,8 @@ public partial class MainWindow : Window
         switch (key)
         {
             case Key.K or Key.F when ctrl:
-                TopSearch.Focus();
-                TopSearch.SelectAll();
+                Vm.GoToCommand.Execute("search");
+                Dispatcher.BeginInvoke(FocusSearchBox, System.Windows.Threading.DispatcherPriority.Loaded);
                 break;
             case Key.Space when !typing:
                 p.PlayPauseCommand.Execute(null);
@@ -181,6 +181,27 @@ public partial class MainWindow : Window
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Mini_Click(object sender, RoutedEventArgs e) => MiniPlayerRequested?.Invoke();
+
+    /// <summary>Puts the cursor in the Search page's box (Ctrl+K), also when that page is already open.</summary>
+    private void FocusSearchBox()
+    {
+        if (Find<System.Windows.Controls.TextBox>(PageHost, "box") is { } box)
+        {
+            box.Focus();
+            box.SelectAll();
+        }
+    }
+
+    private static T? Find<T>(System.Windows.DependencyObject root, string name) where T : System.Windows.FrameworkElement
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T t && t.Name == name) return t;
+            if (Find<T>(child, name) is { } hit) return hit;
+        }
+        return null;
+    }
 
     private void Disc_Click(object sender, MouseButtonEventArgs e) => Vm.NowPlaying.ToggleCommand.Execute(null);
 
