@@ -18,7 +18,7 @@ public static class SearchParser
             if (section.At("musicCardShelfRenderer") is { } cardShelf)
             {
                 top ??= TopResult(cardShelf);
-                var fallback = top is { Kind: CardKind.Artist } ? new ArtistRef(top.Title, top.BrowseId) : null;
+                IReadOnlyList<ArtistRef>? fallback = top is { Kind: CardKind.Artist } ? [new ArtistRef(top.Title, top.BrowseId)] : null;
                 cards.AddRange(ItemParser.SafeMap(ListItems(cardShelf), r => ItemParser.ResponsiveItem(r, fallback)));
                 continue;
             }

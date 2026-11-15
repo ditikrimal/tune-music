@@ -82,7 +82,7 @@ internal static partial class ItemParser
         r.At("fixedColumns", i, "musicResponsiveListItemFixedColumnRenderer", "text");
 
     /// <summary>Parses a <c>musicResponsiveListItemRenderer</c> into a card (song card carries a Track).</summary>
-    public static Card? ResponsiveItem(JsonNode r, ArtistRef? fallbackArtist = null, AlbumRef? albumContext = null, string? thumbnailContext = null)
+    public static Card? ResponsiveItem(JsonNode r, IReadOnlyList<ArtistRef>? fallbackArtists = null, AlbumRef? albumContext = null, string? thumbnailContext = null)
     {
         var col0 = Column(r, 0);
         var col1 = Column(r, 1);
@@ -101,7 +101,7 @@ internal static partial class ItemParser
             var artists = Artists(col1, skipLeadingTypeLabel: true);
             // later flex columns (album track lists, playlists) may hold the artist / album
             for (var i = 2; artists.Count == 0 && i < 4; i++) artists = Artists(Column(r, i), false);
-            if (artists.Count == 0 && fallbackArtist is not null) artists = [fallbackArtist];
+            if (artists.Count == 0 && fallbackArtists is { Count: > 0 }) artists = [.. fallbackArtists];
             var album = Album(col1) ?? Album(Column(r, 2)) ?? albumContext;
             var duration = Segments(col1, true).Select(ParseDuration).FirstOrDefault(d => d is not null)
                            ?? ParseDuration(FixedColumn(r, 0).RunsText());

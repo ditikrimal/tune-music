@@ -57,6 +57,17 @@ public class InnerTubeClientTests
     }
 
     [Fact]
+    public async Task Visitor_id_from_response_is_sent_on_later_requests()
+    {
+        var h = new CapturingHandler(_ => """{"responseContext":{"visitorData":"VIS123"}}""");
+        var c = new InnerTubeClient(new HttpClient(h));
+        await c.PostAsync("browse", new JsonObject());
+        await c.PostAsync("browse", new JsonObject());
+        Assert.False(h.Requests[0].Request.Headers.Contains("X-Goog-Visitor-Id"));
+        Assert.Equal("VIS123", h.Requests[1].Request.Headers.GetValues("X-Goog-Visitor-Id").Single());
+    }
+
+    [Fact]
     public void Json_At_returns_null_on_missing_path()
     {
         var n = JsonNode.Parse("""{"a":[{"b":1}]}""");

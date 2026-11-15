@@ -16,6 +16,8 @@ public sealed class InnerTubeClient(HttpClient http)
     private static readonly string ClientVersion =
         "1." + DateTime.UtcNow.AddDays(-7).ToString("yyyyMMdd", CultureInfo.InvariantCulture) + ".01.00";
 
+    private string? _visitorData;
+
     public async Task<JsonNode> PostAsync(string endpoint, JsonObject body, CancellationToken ct = default)
     {
         var payload = new JsonObject
@@ -43,10 +45,14 @@ public sealed class InnerTubeClient(HttpClient http)
         req.Headers.TryAddWithoutValidation("Origin", "https://music.youtube.com");
         req.Headers.Referrer = new Uri("https://music.youtube.com/");
         req.Headers.AcceptLanguage.Add(new StringWithQualityHeaderValue("en"));
+        if (_visitorData is { } visitor) req.Headers.TryAddWithoutValidation("X-Goog-Visitor-Id", visitor);
 
         using var resp = await http.SendAsync(req, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
         var text = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return JsonNode.Parse(text) ?? new JsonObject();
+        var node = JsonNode.Parse(text) ?? new JsonObject();
+        // continuations are only honoured when the anonymous visitor id is echoed back
+        _visitorData ??= node.Str("responseContext", "visitorData");
+        return node;
     }
 }

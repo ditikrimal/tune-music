@@ -19,6 +19,9 @@ function Invoke-InnerTube([string]$endpoint, [hashtable]$body) {
         -Headers $headers -ContentType 'application/json' -Body $bytes
     # decode as UTF-8 explicitly (PS 5.1 may guess Latin-1)
     $text = [Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray())
+    # continuations only work when the visitor id from an earlier response is sent back
+    $vd = [regex]::Match($text, '"visitorData":"([^"]+)"')
+    if ($vd.Success -and -not $headers.ContainsKey('X-Goog-Visitor-Id')) { $headers['X-Goog-Visitor-Id'] = $vd.Groups[1].Value }
     return $text
 }
 
@@ -49,6 +52,8 @@ Save 'search_arijit_mutated.json' $mut
 # --- Task 4: browse ---
 $homeJson = Invoke-InnerTube 'browse' @{ browseId = 'FEmusic_home' }
 Save 'home.json' $homeJson
+$homeToken = First-Match $homeJson '"nextContinuationData":\{"continuation":"([^"]+)"'
+Save 'home_continuation.json' (Invoke-InnerTube 'browse' @{ continuation = $homeToken })
 $albumId  = First-Match $arijit '"browseId":"(MPRE[A-Za-z0-9_-]+)"'
 $artistId = First-Match $arijit '"browseId":"(UC[A-Za-z0-9_-]{22})"'
 Save 'album.json'  (Invoke-InnerTube 'browse' @{ browseId = $albumId })
