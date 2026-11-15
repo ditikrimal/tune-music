@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:Tune.App.ViewModels"
         xmlns:p="clr-namespace:Tune.App.Platform"
         xmlns:sh="clr-namespace:Tune.App.Shell"
+        xmlns:views="clr-namespace:Tune.App.Views"
         Title="Tune" Width="1280" Height="800" MinWidth="900" MinHeight="600"
         Background="{StaticResource BaseBrush}" Foreground="White"
         FontFamily="{StaticResource UiFont}"
@@ -15,6 +16,10 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <views:Views />
+        </ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <sh:NullToVisibilityConverter x:Key="NullToVis" />
         <sh:EqualsToTagConverter x:Key="EqualsToTag" />
@@ -23,6 +28,7 @@
         <DataTemplate DataType="{x:Type vm:PlaceholderPage}">
             <TextBlock Text="{Binding Title}" Style="{StaticResource Title1}" Margin="32,8" />
         </DataTemplate>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid x:Name="Root">
@@ -47,21 +53,21 @@
                         <TextBlock Text="Tune" FontSize="20" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource TextBase}" />
                     </StackPanel>
 
-                    <Button Style="{StaticResource NavButton}" Command="{Binding GoToCommand}" CommandParameter="home"
+                    <Button Style="{StaticResource NavButton}" Command="{Binding GoToCommand}" CommandParameter="home" AutomationProperties.Name="Home"
                             Tag="{Binding NavKey, Converter={StaticResource EqualsToTag}, ConverterParameter=home}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE80F;" FontFamily="{StaticResource IconFont}" FontSize="18" Width="30" VerticalAlignment="Center" />
                             <TextBlock Text="Home" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Command="{Binding GoToCommand}" CommandParameter="search"
+                    <Button Style="{StaticResource NavButton}" Command="{Binding GoToCommand}" CommandParameter="search" AutomationProperties.Name="Search"
                             Tag="{Binding NavKey, Converter={StaticResource EqualsToTag}, ConverterParameter=search}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="18" Width="30" VerticalAlignment="Center" />
                             <TextBlock Text="Search" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Command="{Binding GoToCommand}" CommandParameter="liked"
+                    <Button Style="{StaticResource NavButton}" Command="{Binding GoToCommand}" CommandParameter="liked" AutomationProperties.Name="Liked songs"
                             Tag="{Binding NavKey, Converter={StaticResource EqualsToTag}, ConverterParameter=liked}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xEB52;" FontFamily="{StaticResource IconFont}" FontSize="18" Width="30" VerticalAlignment="Center" />
@@ -82,8 +88,8 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Button Style="{StaticResource NavButton}" FontWeight="Normal"
-                                        Command="{Binding DataContext.GoToCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding Id, StringFormat=playlist:{0}}">
+                                        Command="{Binding DataContext.OpenPlaylistCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name}">
                                     <Button.Tag>
                                         <MultiBinding Converter="{x:Static sh:PlaylistNavTagConverter.Instance}">
                                             <Binding Path="DataContext.NavKey" RelativeSource="{RelativeSource AncestorType=Window}" />
@@ -100,7 +106,7 @@
                                         </Border>
                                         <StackPanel Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="140">
                                             <TextBlock Text="{Binding Name}" Style="{StaticResource Body}" />
-                                            <TextBlock Text="{Binding Count, StringFormat={}{0} songs}" Style="{StaticResource Caption}" />
+                                            <TextBlock Text="{Binding Count, Converter={x:Static sh:SongCountConverter.Instance}}" Style="{StaticResource Caption}" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Button>
@@ -129,9 +135,9 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button Style="{StaticResource IconButton}" Content="&#xE713;" ToolTip="Settings" Margin="0,0,8,0"
                             Command="{Binding GoToCommand}" CommandParameter="settings" />
-                    <Button x:Name="MinButton" Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Min_Click" />
-                    <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" Click="Max_Click" />
-                    <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" Click="Close_Click" />
+                    <Button x:Name="MinButton" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Min_Click" />
+                    <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize" Click="Max_Click" />
+                    <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" />
                 </StackPanel>
                 <Button Style="{StaticResource IconButton}" Content="&#xE72B;" Background="#80000000" Foreground="White"
                         Width="32" Height="32" HorizontalAlignment="Left" WindowChrome.IsHitTestVisibleInChrome="True"
@@ -141,8 +147,9 @@
             <ContentControl Grid.Row="1" Content="{Binding Page}" Focusable="False" />
 
             <!-- queue panel slides in over the right edge -->
-            <ContentControl x:Name="QueueHost" Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Right" Width="360"
-                            Visibility="{Binding IsQueueOpen, Converter={StaticResource BoolToVis}}" Focusable="False" />
+            <views:QueuePanel x:Name="QueueHost" Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Right" Width="360"
+                              DataContext="{Binding Queue}"
+                              Visibility="{Binding DataContext.IsQueueOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
 
             <!-- toast -->
             <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,20"

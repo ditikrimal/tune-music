@@ -79,6 +79,7 @@ public partial class App : Application
 
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir);
         Shell = new ShellViewModel(Services, Dispatcher);
+        Shell.InitPages();
         MainWin = new MainWindow { DataContext = Shell };
         MainWin.Show();
         Shell.GoToCommand.Execute("home");

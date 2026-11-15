@@ -12,7 +12,36 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         StateChanged += (_, _) => OnWindowStateChanged();
-        SourceInitialized += (_, _) => UseRoundedCorners();
+        SourceInitialized += (_, _) =>
+        {
+            UseRoundedCorners();
+            RestorePlacement();
+        };
+    }
+
+    private const string PlacementKey = "window.main";
+
+    private void RestorePlacement()
+    {
+        var lib = Vm.Services.Library;
+        if (WindowPlacement.Parse(lib.GetSetting(PlacementKey)) is not { } saved) return;
+        var r = WindowPlacement.Clamp(saved, WindowPlacement.CurrentWorkAreas(this));
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        (Left, Top, Width, Height) = (r.X, r.Y, r.Width, r.Height);
+        if (lib.GetSetting(PlacementKey + ".max") == "1") WindowState = WindowState.Maximized;
+    }
+
+    public void SavePlacement()
+    {
+        var lib = Vm.Services.Library;
+        lib.SetSetting(PlacementKey, WindowPlacement.Format(RestoreBounds.IsEmpty ? new Rect(Left, Top, Width, Height) : RestoreBounds));
+        lib.SetSetting(PlacementKey + ".max", WindowState == WindowState.Maximized ? "1" : "0");
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        SavePlacement();
+        base.OnClosing(e);
     }
 
     private ShellViewModel Vm => (ShellViewModel)DataContext;

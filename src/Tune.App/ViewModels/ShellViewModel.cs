@@ -36,12 +36,18 @@ public sealed partial class ShellViewModel : ObservableObject
         Services = services;
         _ui = ui;
         Player = new PlayerBarViewModel(services.Playback, services.Library, ui);
+        Queue = new QueueViewModel(this, ui);
+        Player.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlayerBarViewModel.Track)) MarkCurrentRows();
+        };
         services.Playback.Notice += msg => _ui.BeginInvoke(() => ShowToast(msg));
         ReloadPlaylists();
     }
 
     public AppServices Services { get; }
     public PlayerBarViewModel Player { get; }
+    public QueueViewModel Queue { get; }
     public ObservableCollection<PlaylistInfo> Playlists { get; } = [];
     public bool CanGoBack => _back.Count > 0;
     public string? NavKey => Page?.NavKey;
@@ -49,7 +55,31 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>Creates the page for a sidebar key; replaced in full by the views task.</summary>
     public Func<string, IPage> PageFactory { get; set; } = key => new PlaceholderPage(key, key);
 
-    partial void OnPageChanged(IPage? value) => OnPropertyChanged(nameof(NavKey));
+    partial void OnPageChanged(IPage? value)
+    {
+        OnPropertyChanged(nameof(NavKey));
+        if (value is HomeViewModel home) home.OnShown();
+        MarkCurrentRows();
+    }
+
+    partial void OnIsQueueOpenChanged(bool value)
+    {
+        if (value) Queue.Refresh();
+    }
+
+    /// <summary>Highlights the playing song in whatever list is on screen.</summary>
+    private void MarkCurrentRows()
+    {
+        var id = Services.Playback.Current?.VideoId;
+        IEnumerable<TrackRowViewModel> rows = Page switch
+        {
+            CollectionViewModel c => c.Tracks,
+            ArtistViewModel a => a.TopSongs,
+            SearchViewModel s => s.Songs,
+            _ => [],
+        };
+        foreach (var r in rows) r.IsCurrent = r.Track.VideoId == id;
+    }
 
     public void Navigate(IPage page)
     {

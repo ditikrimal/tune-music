@@ -41,3 +41,13 @@ public sealed class PlaylistNavTagConverter : IMultiValueConverter
 
     public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+public sealed class SongCountConverter : IValueConverter
+{
+    public static readonly SongCountConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Tune.App.ViewModels.ShellViewModel.Songs(value is int n ? n : 0);
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
