@@ -38,6 +38,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Software rendering: halves WPF's memory on this laptop (the Direct3D device costs ~50 MB of driver
+        // memory) and keeps the dedicated GPU asleep. A static music UI renders cheaply on the CPU.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
 
         _mutex = new Mutex(true, MutexName, out var first);
         if (!first)
