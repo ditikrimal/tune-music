@@ -31,14 +31,24 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid x:Name="Root">
+    <Grid x:Name="Root" Background="{DynamicResource WindowBrush}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="240" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <!-- optional top tint: spans sidebar and pages so the window stays one surface -->
+        <Border Grid.ColumnSpan="2" IsHitTestVisible="False">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop x:Name="HeaderStop" Color="Transparent" Offset="0" />
+                    <GradientStop Color="Transparent" Offset="0.45" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
         <!-- ===================== sidebar ===================== -->
-        <Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource SidebarBrush}">
+        <Border Grid.Row="0" Grid.Column="0" Background="Transparent">
             <DockPanel Margin="12,0,12,8">
                 <StackPanel DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" Height="56" Margin="12,4,0,14">
@@ -55,10 +65,10 @@
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=liked|&#xEB52;}" Content="Liked songs" />
 
                     <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="8,14" />
-                    <DockPanel Margin="12,0,4,6">
+                    <DockPanel Margin="16,0,4,8">
                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" FontSize="13" Width="28" Height="28"
                                 ToolTip="New playlist" Click="NewPlaylist_Click" />
-                        <TextBlock Text="YOUR LIBRARY" Style="{StaticResource Caption}" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBlock Text="YOUR LIBRARY" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" />
                     </DockPanel>
                 </StackPanel>
 
@@ -66,7 +76,7 @@
                     <ItemsControl ItemsSource="{Binding Playlists}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Button Style="{StaticResource NavButton}" FontWeight="Normal"
+                                <Button Style="{StaticResource LibraryItem}"
                                         Command="{Binding DataContext.OpenPlaylistCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name}">
                                     <Button.Tag>
@@ -75,19 +85,6 @@
                                             <Binding Path="Id" />
                                         </MultiBinding>
                                     </Button.Tag>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Border Width="36" Height="36" CornerRadius="4" Background="#282828" ClipToBounds="True">
-                                            <Grid>
-                                                <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource IconFont}" Foreground="#7A7A7A"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                <Image Width="36" Height="36" Stretch="UniformToFill" p:Art.Url="{Binding ThumbnailUrl}" />
-                                            </Grid>
-                                        </Border>
-                                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="140">
-                                            <TextBlock Text="{Binding Name}" Style="{StaticResource Body}" />
-                                            <TextBlock Text="{Binding Count, Converter={x:Static sh:SongCountConverter.Instance}}" Style="{StaticResource Caption}" />
-                                        </StackPanel>
-                                    </StackPanel>
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -98,12 +95,6 @@
 
         <!-- ===================== main area ===================== -->
         <Grid Grid.Row="0" Grid.Column="1" ClipToBounds="True">
-            <Grid.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop x:Name="HeaderStop" Color="#2A2140" Offset="0" />
-                    <GradientStop Color="{DynamicResource BaseColor}" Offset="0.45" />
-                </LinearGradientBrush>
-            </Grid.Background>
             <Grid.RowDefinitions>
                 <RowDefinition Height="48" />
                 <RowDefinition Height="*" />

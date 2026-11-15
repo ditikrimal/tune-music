@@ -424,7 +424,21 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private bool _closeToTray;
     [ObservableProperty] private bool _miniOnTop;
-    [ObservableProperty] private bool _headerFromArt;
+    [ObservableProperty] private Tune.App.Platform.HeaderTint _header = Tune.App.Platform.ThemeManager.Header;
+
+    public string HeaderName => Header.ToString();
+
+    partial void OnHeaderChanged(Tune.App.Platform.HeaderTint value)
+    {
+        Tune.App.Platform.ThemeManager.Set(Lib, header: value);
+        OnPropertyChanged(nameof(HeaderName));
+    }
+
+    [RelayCommand]
+    private void PickHeader(string h)
+    {
+        if (Enum.TryParse<Tune.App.Platform.HeaderTint>(h, out var v)) Header = v;
+    }
     [ObservableProperty] private bool _translucent = Tune.App.Platform.ThemeManager.Translucent;
 
     partial void OnTranslucentChanged(bool value) => Tune.App.Platform.ThemeManager.Set(Lib, translucent: value);
@@ -441,7 +455,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         _normalize = Lib.GetSetting("audio.normalize") == "1";
         _closeToTray = Lib.GetSetting("window.closeToTray") != "0";
         _miniOnTop = Lib.GetSetting("mini.topmost") != "0";
-        _headerFromArt = Tune.App.Platform.ThemeManager.HeaderFromArt;
+
         _accent = Tune.App.Platform.ThemeManager.Accent;
         _background = Tune.App.Platform.ThemeManager.Background;
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
@@ -471,7 +485,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         App.ApplyMiniTopmost();
     }
 
-    partial void OnHeaderFromArtChanged(bool value) => Tune.App.Platform.ThemeManager.Set(Lib, headerFromArt: value);
+
     partial void OnAccentChanged(Tune.App.Platform.AccentChoice value) => Tune.App.Platform.ThemeManager.Set(Lib, accent: value);
     partial void OnBackgroundChanged(Tune.App.Platform.BackgroundStyle value) => Tune.App.Platform.ThemeManager.Set(Lib, background: value);
 

@@ -8,6 +8,9 @@ namespace Tune.App.Platform;
 
 public enum BackgroundStyle { Dark, Black, Midnight }
 
+/// <summary>What colours the top of each page: nothing (default), the accent, or the playing song's art.</summary>
+public enum HeaderTint { None, Accent, AlbumArt }
+
 public sealed record AccentChoice(string Name, Color Color);
 
 public sealed record Palette(Color Base, Color Sidebar, Color Card, Color CardHover, Color PlayerBar, Color Divider, Color Header);
@@ -111,7 +114,7 @@ public static class ThemeManager
 
     public static AccentChoice Accent { get; private set; } = Accents[0];
     public static BackgroundStyle Background { get; private set; }
-    public static bool HeaderFromArt { get; private set; } = true;
+    public static HeaderTint Header { get; private set; } = HeaderTint.None;
 
     /// <summary>Windows 11 acrylic behind the window; the sidebar becomes see-through glass.</summary>
     public static bool Translucent { get; private set; } = true;
@@ -122,12 +125,12 @@ public static class ThemeManager
     {
         Accent = Accents.FirstOrDefault(a => a.Name == lib.GetSetting("theme.accent")) ?? Accents[0];
         Background = Enum.TryParse<BackgroundStyle>(lib.GetSetting("theme.background"), out var bg) ? bg : BackgroundStyle.Dark;
-        HeaderFromArt = lib.GetSetting("theme.headerFromArt") != "0";
+        Header = Enum.TryParse<HeaderTint>(lib.GetSetting("theme.header"), out var h) ? h : HeaderTint.None;
         Translucent = lib.GetSetting("theme.translucent") != "0";
         Apply();
     }
 
-    public static void Set(LibraryStore lib, AccentChoice? accent = null, BackgroundStyle? background = null, bool? headerFromArt = null, bool? translucent = null)
+    public static void Set(LibraryStore lib, AccentChoice? accent = null, BackgroundStyle? background = null, HeaderTint? header = null, bool? translucent = null)
     {
         if (translucent is not null)
         {
@@ -137,7 +140,7 @@ public static class ThemeManager
         }
         if (accent is not null) { Accent = accent; lib.SetSetting("theme.accent", accent.Name); }
         if (background is not null) { Background = background.Value; lib.SetSetting("theme.background", background.Value.ToString()); }
-        if (headerFromArt is not null) { HeaderFromArt = headerFromArt.Value; lib.SetSetting("theme.headerFromArt", headerFromArt.Value ? "1" : "0"); }
+        if (header is not null) { Header = header.Value; lib.SetSetting("theme.header", header.Value.ToString()); }
         Apply();
     }
 
@@ -150,16 +153,22 @@ public static class ThemeManager
         SetColor("HeaderColor", CurrentHeader(), animate: true);
     }
 
-    private static Color CurrentHeader() =>
-        HeaderFromArt && _artHeader != Colors.Transparent ? _artHeader : Palette(Background, Accent.Color).Header;
+    private static Color CurrentHeader() => Header switch
+    {
+        HeaderTint.AlbumArt when _artHeader != Colors.Transparent => _artHeader,
+        HeaderTint.AlbumArt or HeaderTint.Accent => Tint(Accent.Color, 0.32),
+        _ => Colors.Transparent, // no tint: the page is one consistent surface
+    };
 
     private static void Apply()
     {
         var p = Palette(Background, Accent.Color);
         SetBrush("BaseBrush", p.Base);
         SetColor("BaseColor", p.Base);
-        // see-through sidebar over the acrylic backdrop (a light tint of the palette keeps it on-theme)
-        SetBrush("SidebarBrush", Translucent && Backdrop.Supported ? Color.FromArgb(0x70, p.Sidebar.R, p.Sidebar.G, p.Sidebar.B) : p.Sidebar);
+        // one surface for the whole window: sidebar and pages share it (frosted when translucent)
+        var glass = Translucent && Backdrop.Supported;
+        SetBrush("WindowBrush", glass ? Color.FromArgb(0xC8, p.Base.R, p.Base.G, p.Base.B) : p.Base);
+        SetBrush("SidebarBrush", p.Sidebar);
         SetBrush("CardBrush", p.Card);
         SetBrush("CardHoverBrush", p.CardHover);
         SetBrush("PlayerBarBrush", p.PlayerBar);

@@ -70,7 +70,7 @@
                             <Setter TargetName="bg" Property="Background" Value="{DynamicResource CardHoverBrush}" />
                             <Setter Property="RenderTransform">
                                 <Setter.Value>
-                                    <ScaleTransform ScaleX="1.03" ScaleY="1.03" />
+                                    <TranslateTransform Y="-6" />
                                 </Setter.Value>
                             </Setter>
                         </Trigger>
@@ -161,31 +161,36 @@
                 MouseEnter="Card_MouseEnter" AutomationProperties.Name="{Binding Title}"
                 Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
             <Button.RenderTransform>
-                <ScaleTransform x:Name="lift" />
+                <TranslateTransform />
             </Button.RenderTransform>
             <Button.Template>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="tint" CornerRadius="26" Background="{DynamicResource CardHoverBrush}" p:Art.TintFrom="{Binding ThumbnailUrl}">
-                        <Border.Effect>
-                            <DropShadowEffect x:Name="glow" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
-                        </Border.Effect>
-                        <ContentPresenter />
-                    </Border>
+                    <Grid>
+                        <!-- shadow lives on its own layer so the text/art never get rasterised (stays sharp) -->
+                        <Border x:Name="shadow" CornerRadius="26" Background="Black" Opacity="0.35" Margin="4,8,4,0">
+                            <Border.Effect>
+                                <BlurEffect Radius="18" />
+                            </Border.Effect>
+                        </Border>
+                        <Border x:Name="tint" CornerRadius="26" Background="{DynamicResource CardHoverBrush}" p:Art.TintFrom="{Binding ThumbnailUrl}">
+                            <ContentPresenter />
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.03" Duration="0:0:0.15" />
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.03" Duration="0:0:0.15" />
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Y" To="-8" Duration="0:0:0.15" />
+                                        <DoubleAnimation Storyboard.TargetName="shadow" Storyboard.TargetProperty="Opacity" To="0.6" Duration="0:0:0.15" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
                             <Trigger.ExitActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.2" />
-                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.2" />
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.Y" To="0" Duration="0:0:0.2" />
+                                        <DoubleAnimation Storyboard.TargetName="shadow" Storyboard.TargetProperty="Opacity" To="0.35" Duration="0:0:0.2" />
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -499,10 +504,7 @@
         <Setter Property="Padding" Value="20,16" />
         <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
-    <Style x:Key="SettingsSection" TargetType="TextBlock" BasedOn="{StaticResource TextBase}">
-        <Setter Property="FontSize" Value="13" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
+    <Style x:Key="SettingsSection" TargetType="TextBlock" BasedOn="{StaticResource SectionLabel}">
         <Setter Property="Margin" Value="4,26,0,10" />
     </Style>
     <Style x:Key="Switch" TargetType="CheckBox">
@@ -561,6 +563,33 @@
                                 <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
                                     <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
                                     <Binding Path="DataContext.WidgetStyleName" RelativeSource="{RelativeSource AncestorType=ScrollViewer}" />
+                                </MultiBinding>
+                            </DataTrigger.Binding>
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
+                            <Setter Property="Foreground" Value="Black" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="HeaderPill" TargetType="Button" BasedOn="{StaticResource SegmentPill}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b" CornerRadius="18" Padding="18,9" Background="#2A2A2A">
+                        <ContentPresenter HorizontalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="#3A3A3A" />
+                        </Trigger>
+                        <DataTrigger Value="True">
+                            <DataTrigger.Binding>
+                                <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
+                                    <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
+                                    <Binding Path="DataContext.HeaderName" RelativeSource="{RelativeSource AncestorType=ScrollViewer}" />
                                 </MultiBinding>
                             </DataTrigger.Binding>
                             <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
@@ -694,18 +723,23 @@
                         <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding Translucent}" VerticalAlignment="Center" AutomationProperties.Name="Translucent window" />
                         <StackPanel>
                             <TextBlock Text="Translucent window" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="Frosted-glass sidebar showing your desktop's colours (Windows 11)." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
+                            <TextBlock Text="Frosted-glass window showing your desktop's colours (Windows 11)." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
                 <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
-                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding HeaderFromArt}" VerticalAlignment="Center" AutomationProperties.Name="Colour from album art" />
-                        <StackPanel>
-                            <TextBlock Text="Colour from album art" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="The top of every page fades to the colours of the song that's playing." Style="{StaticResource Subtle}" Margin="0,4,48,0" TextWrapping="Wrap" />
+                    <StackPanel>
+                        <TextBlock Text="Colour at the top of pages" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Text="None keeps every page one consistent colour." Style="{StaticResource Subtle}" Margin="0,4,0,14" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource HeaderPill}" Tag="None" Content="None" AutomationProperties.Name="Header none"
+                                    Command="{Binding PickHeaderCommand}" CommandParameter="None" />
+                            <Button Style="{StaticResource HeaderPill}" Tag="Accent" Content="Accent colour" AutomationProperties.Name="Header accent"
+                                    Command="{Binding PickHeaderCommand}" CommandParameter="Accent" />
+                            <Button Style="{StaticResource HeaderPill}" Tag="AlbumArt" Content="Album art" AutomationProperties.Name="Header album art"
+                                    Command="{Binding PickHeaderCommand}" CommandParameter="AlbumArt" />
                         </StackPanel>
-                    </DockPanel>
+                    </StackPanel>
                 </Border>
 
                 <!-- ===== Mini-player ===== -->
