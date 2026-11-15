@@ -28,6 +28,7 @@ public partial class App : Application
     private Mutex? _mutex;
     private EventWaitHandle? _activate;
     private MpvPlayer? _player;
+    private MediaControls? _media;
     private LibraryStore? _library;
 
     public static AppServices Services { get; private set; } = null!;
@@ -87,6 +88,9 @@ public partial class App : Application
         MainWin.MiniPlayerRequested += ToggleMini;
         Shell.GoToCommand.Execute("home");
         _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
+
+        // media keys + Windows media flyout need a window handle; creating it doesn't show the window
+        _media = new MediaControls(new System.Windows.Interop.WindowInteropHelper(MainWin).EnsureHandle(), playback, Dispatcher);
 
         var startHidden = e.Args.Contains("--minimized");
         if (!startHidden) MainWin.Show();
@@ -172,6 +176,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _media?.Dispose();
         _player?.Dispose();
         _library?.Dispose();
         _mutex?.Dispose();
