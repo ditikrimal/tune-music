@@ -59,6 +59,18 @@ public partial class Views : ResourceDictionary
         }
     }
 
+    // pointing at a song is a strong hint it's next: look it up now so the click starts instantly
+    private void TrackRow_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (Row(sender) is { } row) Shell.Prefetch([row.Track], Tune.Core.Streams.PrefetchPriority.Hover);
+    }
+
+    private void Card_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is Tune.Core.Models.Card { Track: { } t })
+            Shell.Prefetch([t], Tune.Core.Streams.PrefetchPriority.Hover);
+    }
+
     private void Like_Click(object sender, RoutedEventArgs e)
     {
         if (Row(sender) is not { } row) return;

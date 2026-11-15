@@ -15,4 +15,5 @@ public sealed record AppServices(
     ToolManager Tools,
     ArtCache Art,
     IClock Clock,
-    string DataDir);
+    string DataDir,
+    StreamPrefetcher Prefetcher);

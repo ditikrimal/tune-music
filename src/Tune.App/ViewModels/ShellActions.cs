@@ -83,6 +83,10 @@ public sealed partial class ShellViewModel
         if (artist?.BrowseId is { } id) Navigate(new ArtistViewModel(this, id, artist.Name));
     }
 
+    /// <summary>Prepare songs the user can see (or is pointing at) so clicking them starts instantly.</summary>
+    public void Prefetch(IEnumerable<Track> tracks, Tune.Core.Streams.PrefetchPriority priority) =>
+        Services.Prefetcher.Request(tracks.Select(t => t.VideoId).ToList(), priority);
+
     public void PlayNext(Track t)
     {
         Services.Playback.Queue.PlayNext(t);

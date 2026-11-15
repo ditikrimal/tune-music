@@ -234,6 +234,20 @@ public sealed class PlaybackService
         IsLoading = false;
         IsPlaying = true;
         StateChanged?.Invoke();
+        PrepareUpcoming();
+    }
+
+    private const int PrepareAhead = 2;
+
+    /// <summary>Looks up the next songs now, so Next / auto-advance start instantly.</summary>
+    private void PrepareUpcoming()
+    {
+        var items = Queue.Items;
+        for (int i = Queue.CurrentIndex + 1, n = 0; i < items.Count && n < PrepareAhead; i++, n++)
+        {
+            var id = items[i].VideoId;
+            if (!_resolver.IsKnown(id)) Spawn(() => _resolver.PrepareAsync(id));
+        }
     }
 
     /// <summary>Resume after a long pause: fresh URL, same position. Without network it stays paused.</summary>
@@ -357,6 +371,7 @@ public sealed class PlaybackService
             if (key.Epoch != Volatile.Read(ref _queueEpoch)) return; // the user started something else meanwhile
             Queue.AppendRadio(tracks);
             StateChanged?.Invoke();
+            if (_loaded) PrepareUpcoming();
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -382,8 +397,6 @@ public sealed class PlaybackService
         if (!_lookaheadDone && pos >= LookaheadAfter)
         {
             _lookaheadDone = true;
-            if (Queue.PeekNext() is { } next && next.VideoId != Current?.VideoId)
-                Spawn(() => _resolver.ResolveAsync(next.VideoId));
             if (Queue.NeedsRadio) Spawn(EnsureRadioAsync);
         }
 

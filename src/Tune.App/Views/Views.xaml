@@ -11,7 +11,7 @@
 
     <!-- ================= card (album / playlist / artist / song) ================= -->
     <DataTemplate x:Key="CardTemplate" DataType="{x:Type m:Card}">
-        <Button x:Name="card" Width="196" Margin="0,0,12,0" Cursor="Hand" Focusable="False"
+        <Button x:Name="card" Width="196" Margin="0,0,12,0" Cursor="Hand" Focusable="False" MouseEnter="Card_MouseEnter"
                 Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
@@ -82,7 +82,7 @@
     <!-- ================= one track row ================= -->
     <DataTemplate x:Key="TrackRowTemplate" DataType="{x:Type vm:TrackRowViewModel}">
         <Border x:Name="row" Background="Transparent" CornerRadius="6" Padding="12,6" Height="58" Cursor="Hand"
-                MouseLeftButtonUp="TrackRow_Click" MouseRightButtonUp="TrackRow_RightClick">
+                MouseLeftButtonUp="TrackRow_Click" MouseRightButtonUp="TrackRow_RightClick" MouseEnter="TrackRow_MouseEnter">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="36" />

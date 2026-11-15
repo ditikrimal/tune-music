@@ -28,6 +28,9 @@ public sealed record ToolManifest(string DenoVersion, string DenoUrl, string Den
 /// <summary>Download progress for the first-run setup screen. Fraction is null when the size is unknown.</summary>
 public sealed record ToolProgress(string Tool, double? Fraction);
 
+/// <summary>Tune's own copy of python.exe plus the install it borrows its standard library from.</summary>
+public sealed record PrivatePython(string Exe, string Home);
+
 public sealed class ToolManager(string toolsDir, HttpClient http, IProcessRunner runner, LibraryStore settings, IClock clock, ToolManifest manifest)
 {
     private const string LastUpdateKey = "ytdlp.lastUpdate";
@@ -93,10 +96,77 @@ public sealed class ToolManager(string toolsDir, HttpClient http, IProcessRunner
             return false;
 
         var (exit, stdout, stderr) = await runner.RunAsync(YtDlpPath, ["-U"], TimeSpan.FromMinutes(2), ct).ConfigureAwait(false);
-        settings.SetSetting(LastUpdateKey, now.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
         Log.Info($"yt-dlp -U exit {exit}: {stdout.Trim()} {stderr.Trim()}");
+        if (exit == 0) settings.SetSetting(LastUpdateKey, Unix(now)); // a failed (e.g. offline) update is retried next time
         return exit == 0;
     }
+
+    // ---------- yt-dlp as a Python module (fast path: one long-lived worker, updates from PyPI) ----------
+
+    private const string PyLibUpdateKey = "pylib.lastUpdate";
+
+    /// <summary>Tune's private copy of the yt-dlp Python package (doesn't touch the user's own Python packages).</summary>
+    public string PyLibDir { get; } = Path.Combine(toolsDir, "pylib");
+
+    public bool PyLibInstalled => Directory.Exists(Path.Combine(PyLibDir, "yt_dlp"));
+
+    /// <summary>First python.exe on PATH, skipping the Microsoft Store "install Python" stub.</summary>
+    public static string? FindPython(string? pathEnv, Func<string, bool> fileExists)
+    {
+        foreach (var dir in (pathEnv ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (dir.Contains(@"\Microsoft\WindowsApps", StringComparison.OrdinalIgnoreCase)) continue;
+            var candidate = Path.Combine(dir, "python.exe");
+            if (fileExists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A copy of the interpreter in Tune's folder, run with PYTHONHOME pointing at the real install.
+    /// VPN split-tunnelling rules match programs by path: the user's python.exe goes through a VPN while
+    /// mpv inside Tune.exe goes direct, and YouTube links only work from the IP that fetched them.
+    /// </summary>
+    public PrivatePython PreparePrivatePython(string python)
+    {
+        var home = Path.GetDirectoryName(python)!;
+        var dir = Path.Combine(toolsDir, "py");
+        Directory.CreateDirectory(dir);
+        foreach (var src in Directory.GetFiles(home, "*.*")
+                     .Where(f => Path.GetFileName(f) is var n && (n.Equals("python.exe", StringComparison.OrdinalIgnoreCase)
+                                 || (n.StartsWith("python3", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                                 || (n.StartsWith("vcruntime", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))))
+        {
+            var dst = Path.Combine(dir, Path.GetFileName(src));
+            var s = new FileInfo(src);
+            var d = new FileInfo(dst);
+            if (!d.Exists || d.Length != s.Length || d.LastWriteTimeUtc < s.LastWriteTimeUtc)
+                File.Copy(src, dst, overwrite: true);
+        }
+        return new PrivatePython(Path.Combine(dir, "python.exe"), home);
+    }
+
+    /// <summary>Installs (or with <paramref name="update"/> upgrades) yt-dlp into <see cref="PyLibDir"/> with pip.</summary>
+    public async Task<bool> EnsurePyLibAsync(string python, bool update, CancellationToken ct = default)
+    {
+        if (!update && PyLibInstalled) return true;
+        string[] args = ["-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--upgrade", "--target", PyLibDir, "yt-dlp"];
+        var (exit, _, stderr) = await runner.RunAsync(python, args, TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
+        Log.Info($"pip yt-dlp ({(update ? "update" : "install")}) exit {exit} {stderr.Trim()}");
+        if (exit == 0) settings.SetSetting(PyLibUpdateKey, Unix(clock.Now));
+        return exit == 0;
+    }
+
+    /// <summary>Upgrades the Python yt-dlp at most once a day. True when an upgrade ran successfully.</summary>
+    public async Task<bool> UpdatePyLibIfDueAsync(string python, CancellationToken ct = default)
+    {
+        if (long.TryParse(settings.GetSetting(PyLibUpdateKey), out var last)
+            && clock.Now - DateTimeOffset.FromUnixTimeSeconds(last) < UpdateInterval)
+            return false;
+        return await EnsurePyLibAsync(python, update: true, ct).ConfigureAwait(false);
+    }
+
+    private static string Unix(DateTimeOffset t) => t.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private async Task DownloadAsync(Uri url, string target, string tool, IProgress<ToolProgress>? progress, CancellationToken ct)
     {

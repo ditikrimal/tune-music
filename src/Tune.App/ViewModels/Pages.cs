@@ -85,6 +85,8 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
             Shelves.Clear();
             foreach (var s in feed.Shelves) Shelves.Add(s);
             Offline = feed.Offline;
+            _shell.Prefetch(feed.Shelves.SelectMany(sh => sh.Items.Take(6)).Where(c => c.Track is not null).Select(c => c.Track!).Take(12),
+                Tune.Core.Streams.PrefetchPriority.Page);
             _loadedAt = _shell.Services.Clock.Now;
         }
         catch (Exception e) when (e is not OperationCanceledException)
@@ -165,6 +167,7 @@ public sealed partial class SearchViewModel : ObservableObject, IPage
             Albums = r.Albums;
             Playlists = r.Playlists;
             HasResults = r.Songs.Count + r.Artists.Count + r.Albums.Count + r.Playlists.Count > 0;
+            _shell.Prefetch(r.Songs.Take(6), Tune.Core.Streams.PrefetchPriority.Page);
             Message = HasResults ? null : $"No results for \"{q}\"";
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -261,6 +264,7 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
             Subtitle = c.Subtitle;
             ThumbnailUrl = c.ThumbnailUrl ?? ThumbnailUrl ?? c.Tracks.FirstOrDefault()?.ThumbnailUrl;
             Tracks = Rows.From(_shell, c.Tracks);
+            _shell.Prefetch(c.Tracks.Take(6), Tune.Core.Streams.PrefetchPriority.Page);
             if (c.Tracks.Count == 0)
                 Message = IsLiked ? "Songs you like will appear here. Tap ♡ on any song."
                         : IsLocal ? "This playlist is empty. Use ⋯ → Add to playlist on any song."
@@ -382,6 +386,7 @@ public sealed partial class ArtistViewModel : ObservableObject, IPage
             Name = a.Name;
             ThumbnailUrl = a.ThumbnailUrl;
             TopSongs = Rows.From(_shell, a.TopSongs);
+            _shell.Prefetch(a.TopSongs.Take(5), Tune.Core.Streams.PrefetchPriority.Page);
             Shelves = a.Shelves;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)

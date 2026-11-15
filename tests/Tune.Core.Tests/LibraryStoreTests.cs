@@ -102,6 +102,20 @@ public class LibraryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Stream_cache_roundtrip_skips_expired_and_keeps_latest()
+    {
+        using var lib = Open();
+        var url = new Uri("https://rr.googlevideo.com/a?expire=1");
+        lib.SaveStream(new Tune.Core.Streams.CachedStream("aaaaaaaaaaa", url, T0.AddHours(5), T0.AddSeconds(4)));
+        lib.SaveStream(new Tune.Core.Streams.CachedStream("aaaaaaaaaaa", new Uri("https://rr.googlevideo.com/a2"), T0.AddHours(6), T0));
+        lib.SaveStream(new Tune.Core.Streams.CachedStream("bbbbbbbbbbb", url, T0.AddMinutes(-1), T0));
+        var loaded = lib.LoadStreams(T0);
+        var a = Assert.Single(loaded);
+        Assert.Equal("https://rr.googlevideo.com/a2", a.Url.ToString());
+        Assert.Equal(T0.AddHours(6), a.ValidUntil);
+    }
+
+    [Fact]
     public void Settings_roundtrip()
     {
         using var lib = Open();

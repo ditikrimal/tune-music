@@ -87,7 +87,7 @@ public class StreamTests : IDisposable
         var url = await new StreamResolver(tools, _runner, _clock).ResolveAsync("oyr9_tu_F2U");
         var (exe, args) = _runner.Calls.Single();
         Assert.Equal(tools.YtDlpPath, exe);
-        Assert.Equal(["-f", "bestaudio", "--no-playlist", "--no-warnings", "--no-progress",
+        Assert.Equal(["-f", "bestaudio", "--no-playlist", "--no-warnings", "--no-progress", "--ignore-config",
             "--js-runtimes", "deno:" + tools.DenoPath, "--print", "%(available_at|0)s", "--print", "%(url)s",
             "https://music.youtube.com/watch?v=oyr9_tu_F2U"], args);
         Assert.Equal("rr1.googlevideo.com", url.Host);
@@ -197,6 +197,67 @@ public class StreamTests : IDisposable
         _runner.Respond = _ => (0, "not a url", "");
         var r = new StreamResolver(Tools(), _runner, _clock);
         await Assert.ThrowsAsync<StreamResolveException>(() => r.ResolveAsync("abcdefghijk"));
+    }
+
+    [Fact]
+    public void FindPython_takes_first_real_python_on_path_and_skips_store_stub()
+    {
+        var path = @"C:\Users\x\AppData\Local\Microsoft\WindowsApps;C:\Tools;C:\Python314";
+        string[] existing = [@"C:\Users\x\AppData\Local\Microsoft\WindowsApps\python.exe", @"C:\Python314\python.exe"];
+        Assert.Equal(@"C:\Python314\python.exe", ToolManager.FindPython(path, existing.Contains));
+        Assert.Null(ToolManager.FindPython(@"C:\Users\x\AppData\Local\Microsoft\WindowsApps", existing.Contains));
+    }
+
+    [Fact]
+    public void Private_python_copies_interpreter_files_once()
+    {
+        var src = Directory.CreateTempSubdirectory("fake-python").FullName;
+        foreach (var f in new[] { "python.exe", "python3.dll", "python314.dll", "vcruntime140.dll", "vcruntime140_1.dll", "pythonw.exe" })
+            File.WriteAllText(Path.Combine(src, f), f);
+        var tools = Tools();
+        var p = tools.PreparePrivatePython(Path.Combine(src, "python.exe"));
+        Assert.Equal(Path.Combine(_dir, "py", "python.exe"), p.Exe);
+        Assert.Equal(src, p.Home);
+        Assert.Equivalent(new[] { "python.exe", "python3.dll", "python314.dll", "vcruntime140.dll", "vcruntime140_1.dll" },
+            Directory.GetFiles(Path.Combine(_dir, "py")).Select(Path.GetFileName).ToArray()); // pythonw.exe not copied
+        File.WriteAllText(p.Exe, "tampered");
+        tools.PreparePrivatePython(Path.Combine(src, "python.exe"));   // re-copies when it differs
+        Assert.Equal("python.exe", File.ReadAllText(p.Exe));
+        Directory.Delete(src, true);
+    }
+
+    [Fact]
+    public async Task PyLib_installs_with_pip_into_tunes_own_folder()
+    {
+        var tools = Tools();
+        Assert.True(await tools.EnsurePyLibAsync(@"C:\Python314\python.exe", update: false));
+        var (exe, args) = _runner.Calls.Single();
+        Assert.Equal(@"C:\Python314\python.exe", exe);
+        Assert.Equal(["-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--upgrade",
+            "--target", tools.PyLibDir, "yt-dlp"], args);
+    }
+
+    [Fact]
+    public async Task PyLib_update_is_daily_and_skipped_when_installed()
+    {
+        var tools = Tools();
+        Directory.CreateDirectory(Path.Combine(tools.PyLibDir, "yt_dlp"));
+        Assert.True(await tools.EnsurePyLibAsync("py.exe", update: false));
+        Assert.Empty(_runner.Calls);                        // already installed, no update asked
+        Assert.True(await tools.UpdatePyLibIfDueAsync("py.exe"));
+        _clock.Now = Now.AddHours(20);
+        Assert.False(await tools.UpdatePyLibIfDueAsync("py.exe"));
+        Assert.Single(_runner.Calls);
+    }
+
+    [Fact]
+    public async Task Failed_update_is_not_recorded_as_done()
+    {
+        var tools = Tools();
+        _runner.Respond = _ => (1, "", "ERROR: no network");
+        Assert.False(await tools.UpdateYtDlpIfDueAsync(force: false));
+        _runner.Respond = _ => (0, "", "");
+        Assert.True(await tools.UpdateYtDlpIfDueAsync(force: false)); // retried, not suppressed for 24 h
     }
 
     [Fact]

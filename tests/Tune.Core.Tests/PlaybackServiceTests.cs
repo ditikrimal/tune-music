@@ -71,6 +71,21 @@ public sealed class FakeResolver : IStreamResolver
     }
 
     public void Invalidate(string videoId) => Invalidated.Add(videoId);
+
+    public List<string> Prepared { get; } = [];
+
+    public Task PrepareAsync(string videoId, CancellationToken ct = default)
+    {
+        lock (Prepared) Prepared.Add(videoId);
+        return Task.CompletedTask;
+    }
+
+    public bool IsReady(string videoId) => false;
+
+    public bool IsKnown(string videoId)
+    {
+        lock (Prepared) return Prepared.Contains(videoId);
+    }
 }
 
 public sealed class FakeSponsorBlock : ISponsorBlock
@@ -185,15 +200,15 @@ public class PlaybackServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Lookahead_resolves_next_after_10s_only_once()
+    public async Task Next_two_songs_are_prepared_as_soon_as_playback_starts()
     {
-        await _svc.PlayListAsync(List("a", "b"), 0);
-        _player.At(9);
-        Assert.Equal([Id("a")], _resolver.Resolved);
-        _player.At(10);
-        _player.At(11);
+        await _svc.PlayListAsync(List("a", "b", "c", "d"), 0);
         await _svc.Background;
-        Assert.Equal([Id("a"), Id("b")], _resolver.Resolved);
+        Assert.Equal([Id("b"), Id("c")], _resolver.Prepared);
+        Assert.Equal([Id("a")], _resolver.Resolved);           // only the playing song waited for its URL
+        _player.End();
+        await _svc.Background;
+        Assert.Equal([Id("b"), Id("c"), Id("d")], _resolver.Prepared.Distinct()); // c already known, d added
     }
 
     [Fact]

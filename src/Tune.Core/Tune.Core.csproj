@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\tools\manifest.json" LogicalName="manifest.json" />
+    <EmbeddedResource Include="Streams\tune_worker.py" LogicalName="tune_worker.py" />
   </ItemGroup>
 
 </Project>
