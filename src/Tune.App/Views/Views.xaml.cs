@@ -27,21 +27,12 @@ public partial class Views : ResourceDictionary
 
     private void ShelfLeft_Click(object sender, RoutedEventArgs e)
     {
-        if (ShelfScroller(sender) is { } sv) sv.ScrollToHorizontalOffset(Math.Max(0, sv.HorizontalOffset - sv.ViewportWidth * 0.8));
+        if (ShelfScroller(sender) is { } sv) Platform.SmoothScroll.ScrollBy(sv, -sv.ViewportWidth * 0.8, horizontal: true);
     }
 
     private void ShelfRight_Click(object sender, RoutedEventArgs e)
     {
-        if (ShelfScroller(sender) is { } sv) sv.ScrollToHorizontalOffset(sv.HorizontalOffset + sv.ViewportWidth * 0.8);
-    }
-
-    /// <summary>Horizontal shelves would swallow the mouse wheel; pass it to the page's vertical scroller.</summary>
-    private void Shelf_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (e.Handled) return;
-        e.Handled = true;
-        var outer = Ancestor<ScrollViewer>(VisualTreeHelper.GetParent((DependencyObject)sender));
-        outer?.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = UIElement.MouseWheelEvent, Source = sender });
+        if (ShelfScroller(sender) is { } sv) Platform.SmoothScroll.ScrollBy(sv, sv.ViewportWidth * 0.8, horizontal: true);
     }
 
     // ---------- track rows ----------
@@ -69,6 +60,28 @@ public partial class Views : ResourceDictionary
     {
         if ((sender as FrameworkElement)?.DataContext is Tune.Core.Models.Card { Track: { } t })
             Shell.Prefetch([t], Tune.Core.Streams.PrefetchPriority.Hover);
+    }
+
+    // ---------- card quick actions ----------
+
+    private static Tune.Core.Models.Track? CardTrack(object sender) =>
+        ((sender as FrameworkElement)?.DataContext as Tune.Core.Models.Card)?.Track;
+
+    private void CardLike_Click(object sender, RoutedEventArgs e)
+    {
+        if (CardTrack(sender) is not { } t) return;
+        var liked = !Shell.Services.Library.IsLiked(t.VideoId);
+        Shell.SetLiked(t, liked);
+        Shell.ShowToast(liked ? "Saved to Liked songs" : "Removed from Liked songs");
+        if (sender is Button b) b.Content = liked ? "\uEB52" : "\uEB51";
+        e.Handled = true;
+    }
+
+    private void CardMore_Click(object sender, RoutedEventArgs e)
+    {
+        if (CardTrack(sender) is not { } t) return;
+        ShowTrackMenu((FrameworkElement)sender, new TrackRowViewModel(t, 0) { IsLiked = Shell.Services.Library.IsLiked(t.VideoId) });
+        e.Handled = true;
     }
 
     private void Like_Click(object sender, RoutedEventArgs e)

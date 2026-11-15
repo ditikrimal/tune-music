@@ -12,7 +12,19 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         StateChanged += (_, _) => OnWindowStateChanged();
-        SourceInitialized += (_, _) =>
+        // the page header fades to the playing song's colour (or the theme's)
+        Tune.App.Platform.ThemeManager.HeaderChanged += c => Dispatcher.BeginInvoke(() =>
+            HeaderStop.BeginAnimation(System.Windows.Media.GradientStop.ColorProperty,
+                new System.Windows.Media.Animation.ColorAnimation(c, TimeSpan.FromMilliseconds(700))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },
+                }));
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is ShellViewModel vm)
+                vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ShellViewModel.Page)) AnimatePageIn(); };
+        };
+                SourceInitialized += (_, _) =>
         {
             UseRoundedCorners();
             RestorePlacement();
@@ -41,6 +53,11 @@ public partial class MainWindow : Window
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         SavePlacement();
+        if (!App.IsQuitting && Vm.Services.Library.GetSetting("window.closeToTray") == "0")
+        {
+            App.Quit();
+            return;
+        }
         if (!App.IsQuitting)
         {
             // close = hide to tray; the music keeps playing
@@ -52,6 +69,15 @@ public partial class MainWindow : Window
     }
 
     private ShellViewModel Vm => (ShellViewModel)DataContext;
+
+    /// <summary>New page fades in while sliding up a little.</summary>
+    private void AnimatePageIn()
+    {
+        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+        PageHost.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+        PageSlide.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(14, 0, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });
+    }
 
     /// <summary>Raised by the mini-player button; the app wires it to the floating mini-player.</summary>
     public event Action? MiniPlayerRequested;

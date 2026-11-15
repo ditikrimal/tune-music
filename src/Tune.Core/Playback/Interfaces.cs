@@ -20,6 +20,9 @@ public interface IAudioPlayer
     void Stop();
     void Seek(TimeSpan pos);
     double Volume { get; set; }
+
+    /// <summary>Evens out loud and quiet songs (dynamic audio normalisation).</summary>
+    bool Normalize { get; set; }
     TimeSpan Position { get; }
     TimeSpan? Duration { get; }
     bool IsPaused { get; }

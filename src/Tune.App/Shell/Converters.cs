@@ -51,3 +51,36 @@ public sealed class SongCountConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>TimeSpan? → "3:45" (empty when unknown).</summary>
+public sealed class DurationConverter : IValueConverter
+{
+    public static readonly DurationConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is TimeSpan t ? Tune.App.ViewModels.PlayerBarViewModel.Format(t) : "";
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>[a, b] → true when equal (marks the selected swatch / tile).</summary>
+public sealed class SameConverter : IMultiValueConverter
+{
+    public static readonly SameConverter Instance = new();
+
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture) =>
+        values.Length == 2 && Equals(values[0], values[1]);
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>Color → SolidColorBrush (accent swatches).</summary>
+public sealed class ColorToBrushConverter : IValueConverter
+{
+    public static readonly ColorToBrushConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is System.Windows.Media.Color c ? new System.Windows.Media.SolidColorBrush(c) : System.Windows.Media.Brushes.Transparent;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

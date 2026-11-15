@@ -62,6 +62,19 @@ public sealed class MpvPlayer : IAudioPlayer, IDisposable
         }
     }
 
+    private bool _normalize;
+
+    public bool Normalize
+    {
+        get => _normalize;
+        set
+        {
+            _normalize = value;
+            // dynaudnorm: cheap, gentle loudness levelling (frame 250 ms, max gain 12)
+            MpvNative.SetPropertyString(_ctx, "af", value ? "lavfi=[dynaudnorm=f=250:g=15:m=12]" : "");
+        }
+    }
+
     public Task LoadAsync(Uri url, TimeSpan startAt)
     {
         var target = url.IsFile ? url.LocalPath : url.AbsoluteUri;

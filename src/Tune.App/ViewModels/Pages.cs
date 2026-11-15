@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tune.App.ViewModels;
+using Tune.Core.Library;
 using Tune.Core.Models;
 using Tune.Core.Util;
 
@@ -415,9 +416,16 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private readonly ShellViewModel _shell;
+    private LibraryStore Lib => _shell.Services.Library;
 
     [ObservableProperty] private bool _sponsorBlock;
+    [ObservableProperty] private bool _normalize;
     [ObservableProperty] private bool _startWithWindows;
+    [ObservableProperty] private bool _closeToTray;
+    [ObservableProperty] private bool _miniOnTop;
+    [ObservableProperty] private bool _headerFromArt;
+    [ObservableProperty] private Tune.App.Platform.AccentChoice _accent;
+    [ObservableProperty] private Tune.App.Platform.BackgroundStyle _background;
     [ObservableProperty] private string _updateResult = "";
     [ObservableProperty] private bool _isUpdating;
     [ObservableProperty] private string _cacheSize = "";
@@ -425,16 +433,52 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     public SettingsViewModel(ShellViewModel shell)
     {
         _shell = shell;
-        _sponsorBlock = shell.Services.Library.GetSetting("sponsorblock.enabled") != "0";
+        _sponsorBlock = Lib.GetSetting("sponsorblock.enabled") != "0";
+        _normalize = Lib.GetSetting("audio.normalize") == "1";
+        _closeToTray = Lib.GetSetting("window.closeToTray") != "0";
+        _miniOnTop = Lib.GetSetting("mini.topmost") != "0";
+        _headerFromArt = Tune.App.Platform.ThemeManager.HeaderFromArt;
+        _accent = Tune.App.Platform.ThemeManager.Accent;
+        _background = Tune.App.Platform.ThemeManager.Background;
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
         _startWithWindows = key?.GetValue("Tune") is not null;
         RefreshCacheSize();
     }
 
     public string? NavKey => "settings";
+    public IReadOnlyList<Tune.App.Platform.AccentChoice> Accents => Tune.App.Platform.ThemeManager.Accents;
+    public IReadOnlyList<Tune.App.Platform.BackgroundStyle> Backgrounds { get; } = Enum.GetValues<Tune.App.Platform.BackgroundStyle>();
+    public string ResolverStatus => App.ResolverStatus;
+    public string Version => typeof(SettingsViewModel).Assembly.GetName().Version?.ToString(3) ?? "?";
 
-    partial void OnSponsorBlockChanged(bool value) =>
-        _shell.Services.Library.SetSetting("sponsorblock.enabled", value ? "1" : "0");
+    partial void OnSponsorBlockChanged(bool value) => Lib.SetSetting("sponsorblock.enabled", value ? "1" : "0");
+
+    partial void OnNormalizeChanged(bool value)
+    {
+        Lib.SetSetting("audio.normalize", value ? "1" : "0");
+        _shell.Services.Playback.Player.Normalize = value;
+    }
+
+    partial void OnCloseToTrayChanged(bool value) => Lib.SetSetting("window.closeToTray", value ? "1" : "0");
+
+    partial void OnMiniOnTopChanged(bool value)
+    {
+        Lib.SetSetting("mini.topmost", value ? "1" : "0");
+        App.ApplyMiniTopmost();
+    }
+
+    partial void OnHeaderFromArtChanged(bool value) => Tune.App.Platform.ThemeManager.Set(Lib, headerFromArt: value);
+    partial void OnAccentChanged(Tune.App.Platform.AccentChoice value) => Tune.App.Platform.ThemeManager.Set(Lib, accent: value);
+    partial void OnBackgroundChanged(Tune.App.Platform.BackgroundStyle value) => Tune.App.Platform.ThemeManager.Set(Lib, background: value);
+
+    [RelayCommand]
+    private void PickAccent(Tune.App.Platform.AccentChoice? a)
+    {
+        if (a is not null) Accent = a;
+    }
+
+    [RelayCommand]
+    private void PickBackground(Tune.App.Platform.BackgroundStyle b) => Background = b;
 
     partial void OnStartWithWindowsChanged(bool value)
     {

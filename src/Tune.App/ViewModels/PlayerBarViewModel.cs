@@ -29,6 +29,16 @@ public sealed partial class PlayerBarViewModel : ObservableObject
     [ObservableProperty] private bool _isSeeking;
     [ObservableProperty] private bool _isLoading;
 
+    /// <summary>Album-tinted background for the widget (WidgetPod style).</summary>
+    [ObservableProperty] private System.Windows.Media.Brush _tint = Frozen(System.Windows.Media.Color.FromRgb(0x24, 0x24, 0x24));
+
+    public static System.Windows.Media.Brush Frozen(System.Windows.Media.Color c)
+    {
+        var b = new System.Windows.Media.SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
     public PlayerBarViewModel(PlaybackService playback, LibraryStore lib, Dispatcher ui)
     {
         _playback = playback;

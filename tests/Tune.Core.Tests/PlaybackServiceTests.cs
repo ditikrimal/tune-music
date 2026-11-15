@@ -13,6 +13,7 @@ public sealed class FakePlayer : IAudioPlayer
     public List<TimeSpan> Seeks { get; } = [];
     public bool IsPaused { get; private set; } = true;
     public double Volume { get; set; } = 1;
+    public bool Normalize { get; set; }
     public TimeSpan Position { get; set; }
     public TimeSpan? Duration { get; set; } = TimeSpan.FromMinutes(4);
     public event Action? Ended;

@@ -7,6 +7,7 @@
     <Color x:Key="CardColor">#181818</Color>
     <Color x:Key="CardHoverColor">#282828</Color>
     <Color x:Key="AccentColor">#1DB954</Color>
+    <Color x:Key="HeaderColor">#2A2140</Color>
 
     <SolidColorBrush x:Key="BaseBrush" Color="{StaticResource BaseColor}" />
     <SolidColorBrush x:Key="SidebarBrush" Color="{StaticResource SidebarColor}" />
@@ -26,7 +27,7 @@
     <!-- ===== text ===== -->
     <Style x:Key="TextBase" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
     </Style>
@@ -44,11 +45,11 @@
     </Style>
     <Style x:Key="Subtle" TargetType="TextBlock" BasedOn="{StaticResource TextBase}">
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
     </Style>
     <Style x:Key="Caption" TargetType="TextBlock" BasedOn="{StaticResource TextBase}">
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
     </Style>
 
     <!-- ===== icon buttons (Segoe Fluent Icons glyph as Content) ===== -->
@@ -57,7 +58,7 @@
         <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
         <Setter Property="FontSize" Value="16" />
-        <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Width" Value="36" />
         <Setter Property="Height" Value="36" />
@@ -71,7 +72,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="bg" Property="Opacity" Value="0.7" />
@@ -89,7 +90,7 @@
     <Style x:Key="ToggleIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
         <Style.Triggers>
             <Trigger Property="Tag" Value="On">
-                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -128,7 +129,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bg" Background="{StaticResource AccentBrush}" CornerRadius="24" RenderTransformOrigin="0.5,0.5">
+                    <Border x:Name="bg" Background="{DynamicResource AccentBrush}" CornerRadius="24" RenderTransformOrigin="0.5,0.5">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.45" />
                         </Border.Effect>
@@ -180,7 +181,7 @@
         <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
         <Setter Property="FontSize" Value="10" />
-        <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
         <Setter Property="Width" Value="46" />
         <Setter Property="Height" Value="48" />
         <Setter Property="Focusable" Value="False" />
@@ -220,7 +221,7 @@
 
     <!-- sidebar navigation entries -->
     <Style x:Key="NavButton" TargetType="Button">
-        <Setter Property="Foreground" Value="{StaticResource SubtleTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
@@ -235,11 +236,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                             <Setter TargetName="bg" Property="Background" Value="#1A1A1A" />
                         </Trigger>
                         <Trigger Property="Tag" Value="On">
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                             <Setter TargetName="bg" Property="Background" Value="#232323" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -284,7 +285,7 @@
                                 <RepeatButton x:Name="fill" Style="{StaticResource SliderRepeat}" Background="White" Command="Slider.DecreaseLarge" />
                             </Track.DecreaseRepeatButton>
                             <Track.IncreaseRepeatButton>
-                                <RepeatButton Style="{StaticResource SliderRepeat}" Background="{StaticResource TrackBrush}" Command="Slider.IncreaseLarge" />
+                                <RepeatButton Style="{StaticResource SliderRepeat}" Background="{DynamicResource TrackBrush}" Command="Slider.IncreaseLarge" />
                             </Track.IncreaseRepeatButton>
                             <Track.Thumb>
                                 <Thumb x:Name="thumb" Style="{StaticResource ThumbStyle}" />
@@ -293,7 +294,7 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="fill" Property="Background" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="fill" Property="Background" Value="{DynamicResource AccentBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -358,9 +359,9 @@
     <Style x:Key="SearchBox" TargetType="TextBox">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        <Setter Property="CaretBrush" Value="{StaticResource TextBrush}" />
-        <Setter Property="SelectionBrush" Value="{StaticResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
@@ -440,6 +441,7 @@
         </Setter>
     </Style>
     <Style TargetType="ToolTip">
+        <Setter Property="ToolTipService.InitialShowDelay" Value="700" />
         <Setter Property="Background" Value="#282828" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="BorderThickness" Value="0" />

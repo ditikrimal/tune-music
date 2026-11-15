@@ -39,7 +39,9 @@ public sealed partial class ShellViewModel : ObservableObject
         Queue = new QueueViewModel(this, ui);
         Player.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(PlayerBarViewModel.Track)) MarkCurrentRows();
+            if (e.PropertyName != nameof(PlayerBarViewModel.Track)) return;
+            MarkCurrentRows();
+            _ = TintHeaderAsync(Player.ArtUrl);
         };
         services.Playback.Notice += msg => _ui.BeginInvoke(() => ShowToast(msg));
         ReloadPlaylists();
@@ -105,6 +107,15 @@ public sealed partial class ShellViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleQueue() => IsQueueOpen = !IsQueueOpen;
+
+    private async Task TintHeaderAsync(string? artUrl)
+    {
+        var art = artUrl is null ? null : await Services.Art.GetAsync(artUrl, 96);
+        Tune.App.Platform.ThemeManager.SetArt(art);
+        Player.Tint = PlayerBarViewModel.Frozen(art is null
+            ? System.Windows.Media.Color.FromRgb(0x24, 0x24, 0x24)
+            : Tune.App.Platform.AlbumColor.ForWidget(Tune.App.Platform.AlbumColor.FromBitmap(art)));
+    }
 
     public void ReloadPlaylists()
     {

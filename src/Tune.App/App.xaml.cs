@@ -29,6 +29,23 @@ public partial class App : Application
     private EventWaitHandle? _activate;
     private MpvPlayer? _player;
     private static volatile PythonWorkerBackend? _worker;
+
+    /// <summary>Shown in Settings → About.</summary>
+    public static string ResolverStatus { get; private set; } = "Standard (yt-dlp.exe)";
+
+    public static void SetMiniStyle(Tune.App.Mini.WidgetStyle style)
+    {
+        ShowMini();
+        _mini?.ApplyStyle(style);
+    }
+
+    public static Tune.App.Mini.WidgetStyle MiniStyle =>
+        Enum.TryParse<Tune.App.Mini.WidgetStyle>(Services.Library.GetSetting("mini.style"), out var s) ? s : Tune.App.Mini.WidgetStyle.Compact;
+
+    public static void ApplyMiniTopmost()
+    {
+        if (_mini is not null) _mini.Topmost = Services.Library.GetSetting("mini.topmost") != "0";
+    }
     private static string? _python;
 
     /// <summary>
@@ -76,6 +93,7 @@ public partial class App : Application
             _worker = fresh;
             if (restart) old?.Dispose();
             Log.Info($"fast resolver ready (yt-dlp {version})");
+            ResolverStatus = $"Fast (yt-dlp {version}, songs prepared ahead)";
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -92,9 +110,8 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        // Software rendering: halves WPF's memory on this laptop (the Direct3D device costs ~50 MB of driver
-        // memory) and keeps the dedicated GPU asleep. A static music UI renders cheaply on the CPU.
-        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        // GPU rendering (default) — software rendering saved ~50 MB but made scrolling choppy.
+        SmoothScroll.Register();
 
         _mutex = new Mutex(true, MutexName, out var first);
         if (!first)
@@ -133,7 +150,7 @@ public partial class App : Application
         var backend = new FallbackBackend(() => _worker, new YtDlpExeBackend(tools, runner));
         var resolver = new StreamResolver(backend, clock, store: _library);
         var prefetcher = new StreamPrefetcher(resolver, maxConcurrent: 3);
-        _player = new MpvPlayer();
+        _player = new MpvPlayer { Normalize = _library.GetSetting("audio.normalize") == "1" };
         var lib = _library;
         var sponsorBlock = new SponsorBlockClient(http, () => lib.GetSetting("sponsorblock.enabled") != "0");
         var playback = new PlaybackService(new PlayQueue(), resolver, _player, _library, sponsorBlock, api,
@@ -143,6 +160,7 @@ public partial class App : Application
         Task.Run(art.Trim);
 
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher);
+        ThemeManager.Load(_library);
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();
         MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Window };
@@ -190,7 +208,14 @@ public partial class App : Application
             _mini = new MiniPlayerWindow(Services.Library) { DataContext = Shell.Player };
             _mini.ExpandRequested += ShowMain;
             _mini.HideRequested += HideMini;
+            _mini.PinToggled += () =>
+            {
+                var lib = Services.Library;
+                lib.SetSetting("mini.topmost", lib.GetSetting("mini.topmost") == "0" ? "1" : "0");
+                ApplyMiniTopmost();
+            };
         }
+        ApplyMiniTopmost();
         _mini.Show();
         Services.Library.SetSetting("mini.visible", "1");
         SyncUpdates();

@@ -24,14 +24,14 @@
                     <Setter TargetName="remove" Property="Opacity" Value="1" />
                 </Trigger>
                 <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                    <Setter TargetName="title" Property="Foreground" Value="{StaticResource AccentBrush}" />
+                    <Setter TargetName="title" Property="Foreground" Value="{DynamicResource AccentBrush}" />
                     <Setter TargetName="remove" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </UserControl.Resources>
 
-    <Border Background="#0E0E0E" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
+    <Border Background="#0E0E0E" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6" />
         </Border.Effect>

@@ -6,7 +6,7 @@
         xmlns:sh="clr-namespace:Tune.App.Shell"
         xmlns:views="clr-namespace:Tune.App.Views"
         Title="Tune" Width="1280" Height="800" MinWidth="900" MinHeight="600"
-        Background="{StaticResource BaseBrush}" Foreground="White"
+        Background="{DynamicResource BaseBrush}" Foreground="White"
         FontFamily="{StaticResource UiFont}"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
@@ -42,7 +42,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- ===================== sidebar ===================== -->
-        <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource SidebarBrush}">
+        <Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource SidebarBrush}">
             <DockPanel Margin="12,0,12,8">
                 <StackPanel DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" Height="48" Margin="12,0,0,8">
@@ -73,7 +73,7 @@
                         </StackPanel>
                     </Button>
 
-                    <Border Height="1" Background="{StaticResource DividerBrush}" Margin="8,14" />
+                    <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="8,14" />
                     <DockPanel Margin="12,0,4,6">
                         <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE710;" FontSize="13" Width="28" Height="28"
                                 ToolTip="New playlist" Click="NewPlaylist_Click" />
@@ -119,8 +119,8 @@
         <Grid Grid.Row="0" Grid.Column="1" ClipToBounds="True">
             <Grid.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#2A2140" Offset="0" />
-                    <GradientStop Color="#121212" Offset="0.45" />
+                    <GradientStop x:Name="HeaderStop" Color="#2A2140" Offset="0" />
+                    <GradientStop Color="{DynamicResource BaseColor}" Offset="0.45" />
                 </LinearGradientBrush>
             </Grid.Background>
             <Grid.RowDefinitions>
@@ -142,7 +142,11 @@
                         Command="{Binding GoBackCommand}" IsEnabled="{Binding CanGoBack}" ToolTip="Back" />
             </DockPanel>
 
-            <ContentControl Grid.Row="1" Content="{Binding Page}" Focusable="False" />
+            <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding Page}" Focusable="False">
+                <ContentControl.RenderTransform>
+                    <TranslateTransform x:Name="PageSlide" />
+                </ContentControl.RenderTransform>
+            </ContentControl>
 
             <!-- queue panel slides in over the right edge -->
             <views:QueuePanel x:Name="QueueHost" Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Right" Width="360"
@@ -158,7 +162,7 @@
         </Grid>
 
         <!-- ===================== player bar ===================== -->
-        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{StaticResource PlayerBarBrush}" BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0"
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource PlayerBarBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0"
                 DataContext="{Binding Player}">
             <Grid Margin="16,0">
                 <Grid.ColumnDefinitions>
@@ -216,7 +220,7 @@
                             Command="{Binding DataContext.ToggleQueueCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             Tag="{Binding DataContext.IsQueueOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:BoolToOnConverter.Instance}}" />
                     <Button x:Name="MiniButton" Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Mini-player" Click="Mini_Click" />
-                    <TextBlock Text="&#xE767;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{StaticResource SubtleTextBrush}"
+                    <TextBlock Text="&#xE767;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="8,0" />
                     <Slider Width="100" Style="{StaticResource ThinSlider}" Minimum="0" Maximum="1" Value="{Binding Volume}" VerticalAlignment="Center" />
                 </StackPanel>
@@ -230,7 +234,7 @@
                 <TextBlock Text="Setting up Tune" Style="{StaticResource Title1}" HorizontalAlignment="Center" />
                 <TextBlock Text="{Binding SetupText}" Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,12,0,18" />
                 <ProgressBar Height="4" Value="{Binding SetupProgress}" IsIndeterminate="{Binding SetupIndeterminate}"
-                             Foreground="{StaticResource AccentBrush}" Background="#333" BorderThickness="0" />
+                             Foreground="{DynamicResource AccentBrush}" Background="#333" BorderThickness="0" />
                 <TextBlock Text="This only happens once." Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0,12,0,0" />
                 <StackPanel Visibility="{Binding SetupError, Converter={StaticResource NullToVis}}" Margin="0,18,0,0">
                     <TextBlock Text="{Binding SetupError}" Style="{StaticResource Subtle}" Foreground="#FF8A80" TextWrapping="Wrap" TextAlignment="Center" />
