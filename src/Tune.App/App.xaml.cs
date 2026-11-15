@@ -1,13 +1,116 @@
-﻿using System.Configuration;
-using System.Data;
+﻿using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Windows;
+using System.Windows.Threading;
+using Tune.App.Audio;
+using Tune.App.Platform;
+using Tune.App.Shell;
+using Tune.App.ViewModels;
+using Tune.Core.Feed;
+using Tune.Core.Library;
+using Tune.Core.Playback;
+using Tune.Core.SponsorBlock;
+using Tune.Core.Streams;
+using Tune.Core.Util;
+using Tune.Core.YtMusic;
 
 namespace Tune.App;
 
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
 public partial class App : Application
 {
-}
+    private const string MutexName = "Tune.SingleInstance";
+    private const string ActivateEventName = "Tune.Activate";
 
+    private Mutex? _mutex;
+    private EventWaitHandle? _activate;
+    private MpvPlayer? _player;
+    private LibraryStore? _library;
+
+    public static AppServices Services { get; private set; } = null!;
+    public static ShellViewModel Shell { get; private set; } = null!;
+    public static MainWindow? MainWin { get; private set; }
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        _mutex = new Mutex(true, MutexName, out var first);
+        if (!first)
+        {
+            // second launch: bring the running instance forward and leave
+            try { EventWaitHandle.OpenExisting(ActivateEventName).Set(); } catch (WaitHandleCannotBeOpenedException) { }
+            Shutdown();
+            return;
+        }
+
+        var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tune");
+        Directory.CreateDirectory(dataDir);
+        Log.Init(Path.Combine(dataDir, "logs", "tune.log"));
+        Log.Info("Tune starting");
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log.Error("Unhandled UI exception", args.Exception);
+            args.Handled = true;
+        };
+
+        var http = new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            AutomaticDecompression = DecompressionMethods.All,
+        }) { Timeout = TimeSpan.FromSeconds(30) };
+        // tool downloads can take many minutes on slow links: no overall timeout
+        var toolsHttp = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+
+        _library = new LibraryStore(Path.Combine(dataDir, "tune.db"));
+        var clock = new SystemClock();
+        var runner = new ProcessRunner();
+        var api = new YtMusicApi(new InnerTubeClient(http));
+        var tools = new ToolManager(Path.Combine(dataDir, "tools"), toolsHttp, runner, _library, clock, ToolManifest.Load());
+        var resolver = new StreamResolver(tools, runner, clock);
+        _player = new MpvPlayer();
+        var lib = _library;
+        var sponsorBlock = new SponsorBlockClient(http, () => lib.GetSetting("sponsorblock.enabled") != "0");
+        var playback = new PlaybackService(new PlayQueue(), resolver, _player, _library, sponsorBlock, api,
+            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock);
+        var art = new ArtCache(Path.Combine(dataDir, "art"), http);
+        Art.Cache = art;
+        Task.Run(art.Trim);
+
+        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir);
+        Shell = new ShellViewModel(Services, Dispatcher);
+        MainWin = new MainWindow { DataContext = Shell };
+        MainWin.Show();
+        Shell.GoToCommand.Execute("home");
+        _ = Shell.EnsureToolsAsync();
+
+        _activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
+        new Thread(() =>
+        {
+            while (_activate.WaitOne())
+                Dispatcher.BeginInvoke(ShowMain);
+        }) { IsBackground = true, Name = "single-instance" }.Start();
+    }
+
+    public static void ShowMain()
+    {
+        if (MainWin is null) return;
+        MainWin.Show();
+        if (MainWin.WindowState == WindowState.Minimized) MainWin.WindowState = WindowState.Normal;
+        MainWin.Activate();
+    }
+
+    public static void Quit()
+    {
+        Log.Info("Tune quitting");
+        Current.Shutdown();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _player?.Dispose();
+        _library?.Dispose();
+        _mutex?.Dispose();
+        base.OnExit(e);
+    }
+}

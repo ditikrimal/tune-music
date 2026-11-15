@@ -1,0 +1,18 @@
+using Tune.App.Platform;
+using Tune.Core.Feed;
+using Tune.Core.Library;
+using Tune.Core.Playback;
+using Tune.Core.Streams;
+
+namespace Tune.App;
+
+/// <summary>Everything the UI needs, created once in <see cref="App.OnStartup"/>.</summary>
+public sealed record AppServices(
+    LibraryStore Library,
+    IYtMusic Api,
+    PlaybackService Playback,
+    FeedBuilder Feed,
+    ToolManager Tools,
+    ArtCache Art,
+    IClock Clock,
+    string DataDir);
