@@ -102,7 +102,7 @@
                         <Button Style="{StaticResource CardOverlayButton}" Content="&#xEB51;" ToolTip="Save to Liked songs" Click="CardLike_Click" Margin="0,0,6,0" />
                         <Button Style="{StaticResource CardOverlayButton}" Content="&#xE712;" ToolTip="More options" Click="CardMore_Click" />
                     </StackPanel>
-                    <Button x:Name="play" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="Black"
+                    <Button x:Name="play" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}"
                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8" Opacity="0"
                             ToolTip="Play"
                             Command="{Binding DataContext.PlayCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
@@ -219,7 +219,7 @@
                             </Image.Clip>
                         </Image>
                     </Border>
-                    <Button x:Name="play" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="Black"
+                    <Button x:Name="play" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}"
                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Opacity="0" ToolTip="Play"
                             Command="{Binding DataContext.PlayCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
                 </Grid>
@@ -446,7 +446,7 @@
                 </StackPanel>
             </Grid>
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="32,24,24,12">
-                <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="Black" Width="56" Height="56" FontSize="20"
+                <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}" Width="56" Height="56" FontSize="20"
                         Command="{Binding PlayCommand}" ToolTip="Play" />
                 <Button Style="{StaticResource IconButton}" Content="&#xE8B1;" FontSize="24" Width="48" Height="48" Margin="16,0,0,0"
                         Command="{Binding ShufflePlayCommand}" ToolTip="Shuffle play" />
@@ -487,7 +487,7 @@
                         <TextBlock Text="{Binding Name}" Style="{StaticResource Title1}" FontSize="52" FontWeight="Black" Margin="0,6,0,0" />
                     </StackPanel>
                 </StackPanel>
-                <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="Black" Width="56" Height="56" FontSize="20"
+                <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}" Width="56" Height="56" FontSize="20"
                         HorizontalAlignment="Left" Margin="0,24,0,0" Command="{Binding PlayCommand}" ToolTip="Play top songs" />
                 <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" Margin="0,16,0,0" Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
                 <TextBlock Text="Popular" Style="{StaticResource SectionTitle}" />
@@ -566,8 +566,101 @@
                                 </MultiBinding>
                             </DataTrigger.Binding>
                             <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
-                            <Setter Property="Foreground" Value="Black" />
+                            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
                         </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <BooleanToVisibilityConverter x:Key="SettingsBoolVis" />
+    <Style x:Key="SettingGroup" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="Padding" Value="20,4" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+    <Style x:Key="SettingRow" TargetType="DockPanel">
+        <Setter Property="Margin" Value="0,16" />
+        <Setter Property="LastChildFill" Value="True" />
+    </Style>
+    <Style x:Key="SettingDivider" TargetType="Border">
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+        <Setter Property="Margin" Value="58,0,0,0" />
+    </Style>
+    <Style x:Key="SettingIconTile" TargetType="Border">
+        <Setter Property="DockPanel.Dock" Value="Left" />
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        <Setter Property="Margin" Value="0,0,18,0" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style x:Key="SettingGlyph" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="ColorThumb" TargetType="Thumb">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Grid Width="22" Height="22" Background="Transparent">
+                        <Ellipse Fill="#40000000" Margin="-1,1,-1,-1" />
+                        <Ellipse Stroke="White" StrokeThickness="3" Fill="{DynamicResource AccentBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="ColorSlider" TargetType="Slider">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsMoveToPointEnabled" Value="True" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Margin" Value="0,6,0,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid Height="24">
+                        <Border Height="12" CornerRadius="6" Background="{TemplateBinding Background}" BorderBrush="#26FFFFFF" BorderThickness="1" Margin="2,0" />
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource SliderRepeat}" Background="Transparent" Command="Slider.DecreaseLarge" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource SliderRepeat}" Background="Transparent" Command="Slider.IncreaseLarge" />
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ColorThumb}" />
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="HexBox" TargetType="TextBox">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="CaretBrush" Value="White" />
+        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Width" Value="96" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="b" Background="#1AFFFFFF" CornerRadius="10" Padding="8,6" BorderThickness="1" BorderBrush="Transparent">
+                        <ScrollViewer x:Name="PART_ContentHost" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -593,7 +686,7 @@
                                 </MultiBinding>
                             </DataTrigger.Binding>
                             <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
-                            <Setter Property="Foreground" Value="Black" />
+                            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
                         </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -603,240 +696,380 @@
 
     <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
-            <StackPanel MaxWidth="780" HorizontalAlignment="Left" Width="780">
-                <TextBlock Text="Settings" Style="{StaticResource Title1}" Margin="0,0,0,4" />
+            <StackPanel MaxWidth="820" HorizontalAlignment="Left" Width="820">
+                <TextBlock Text="Settings" Style="{StaticResource Title1}" />
+                <TextBlock Text="Make Tune look and play the way you like." Style="{StaticResource Subtle}" FontSize="14" Margin="0,6,0,0" />
+                <!-- live preview of the current theme -->
+                <Border CornerRadius="22" Margin="0,18,0,0" Background="{DynamicResource CardBrush}" ClipToBounds="True">
+                    <Grid>
+                        <Border Background="{DynamicResource AccentBrush}" Opacity="0.28">
+                            <Border.OpacityMask>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="Black" Offset="0" />
+                                    <GradientStop Color="Transparent" Offset="0.85" />
+                                </LinearGradientBrush>
+                            </Border.OpacityMask>
+                        </Border>
+                        <DockPanel Margin="26,24">
+                            <Border Width="104" Height="104" CornerRadius="18" Background="{DynamicResource AccentBrush}" DockPanel.Dock="Left">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.5" />
+                                </Border.Effect>
+                                <Image Source="{x:Static p:AppIcon.Logo}" Width="56" Height="56" />
+                            </Border>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}"
+                                    Width="56" Height="56" FontSize="20" VerticalAlignment="Center" IsHitTestVisible="False" Focusable="False" />
+                            <StackPanel Margin="24,0,24,0" VerticalAlignment="Center">
+                                <TextBlock Text="YOUR THEME" Style="{StaticResource SectionLabel}" />
+                                <TextBlock Style="{StaticResource Title1}" FontSize="30" Margin="0,4,0,0">
+                                    <Run Text="{Binding Accent.Name, Mode=OneWay}" /><Run Text=" on " Foreground="{DynamicResource SubtleTextBrush}" /><Run Text="{Binding Background, Mode=OneWay}" />
+                                </TextBlock>
+                                <Grid Margin="0,16,0,0" Height="4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="3*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.ColumnSpan="2" Background="{DynamicResource TrackBrush}" CornerRadius="2" />
+                                    <Border Background="{DynamicResource AccentBrush}" CornerRadius="2" />
+                                </Grid>
+                                <TextBlock Text="Changes apply instantly across Tune and the mini-player." Style="{StaticResource Subtle}" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Grid>
+                </Border>
 
-                <!-- ===== Appearance ===== -->
                 <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSection}" />
-                <Border Style="{StaticResource SettingCard}">
+                <Border Style="{StaticResource SettingGroup}">
                     <StackPanel>
-                        <TextBlock Text="Accent colour" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                        <TextBlock Text="Buttons, progress bars, the playing song and switches." Style="{StaticResource Subtle}" Margin="0,4,0,14" />
-                        <ItemsControl ItemsSource="{Binding Accents}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button Cursor="Hand" Focusable="False" Margin="0,0,14,6" ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}"
-                                            Command="{Binding DataContext.PickAccentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
-                                        <Button.Template>
-                                            <ControlTemplate TargetType="Button">
-                                                <Grid Width="40" Height="40">
-                                                    <Ellipse x:Name="ring" Stroke="White" StrokeThickness="2" Opacity="0" />
-                                                    <Ellipse Margin="5" Fill="{Binding Color, Converter={x:Static sh:ColorToBrushConverter.Instance}}" />
-                                                    <TextBlock x:Name="tick" Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="Black"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
-                                                </Grid>
-                                                <ControlTemplate.Triggers>
-                                                    <DataTrigger Value="True">
-                                                        <DataTrigger.Binding>
-                                                            <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
-                                                                <Binding />
-                                                                <Binding Path="DataContext.Accent" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
-                                                            </MultiBinding>
-                                                        </DataTrigger.Binding>
-                                                        <Setter TargetName="ring" Property="Opacity" Value="1" />
-                                                        <Setter TargetName="tick" Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ring" Property="Opacity" Value="0.5" />
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Button.Template>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Text="Background" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,18,0,0" />
-                        <TextBlock Text="Dark is classic, Black is pure black (great on OLED), Midnight is a deep blue." Style="{StaticResource Subtle}" Margin="0,4,0,14" />
-                        <ItemsControl ItemsSource="{Binding Backgrounds}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button Cursor="Hand" Focusable="False" Margin="0,0,12,0" AutomationProperties.Name="{Binding}"
-                                            Command="{Binding DataContext.PickBackgroundCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
-                                        <Button.Template>
-                                            <ControlTemplate TargetType="Button">
-                                                <StackPanel>
-                                                    <Border x:Name="tile" Width="128" Height="76" CornerRadius="10" BorderThickness="2" BorderBrush="#3A3A3A" ClipToBounds="True">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="30" />
-                                                                <ColumnDefinition />
-                                                            </Grid.ColumnDefinitions>
-                                                            <Border x:Name="side" Background="#000" CornerRadius="8,0,0,8" />
-                                                            <Border x:Name="main" Grid.Column="1" Background="#121212" CornerRadius="0,8,8,0">
-                                                                <StackPanel Margin="10,12" Orientation="Horizontal">
-                                                                    <Border x:Name="card1" Width="22" Height="22" CornerRadius="4" Background="#282828" Margin="0,0,6,0" />
-                                                                    <Border x:Name="card2" Width="22" Height="22" CornerRadius="4" Background="#282828" Margin="0,0,6,0" />
-                                                                    <Border Width="22" Height="22" CornerRadius="4" Background="{DynamicResource AccentBrush}" />
-                                                                </StackPanel>
-                                                            </Border>
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE790;" /></Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Accent colour" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="Buttons, progress, the playing song and switches. Pick a preset or any colour you like." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                <ItemsControl ItemsSource="{Binding Accents}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Cursor="Hand" Focusable="False" Margin="0,0,8,0" ToolTip="{Binding Name}" AutomationProperties.Name="{Binding Name}"
+                                                    Command="{Binding DataContext.PickAccentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Grid Width="42" Height="42" Background="Transparent">
+                                                            <Ellipse x:Name="ring" Stroke="White" StrokeThickness="2" Opacity="0" />
+                                                            <Ellipse x:Name="dot" Margin="5" Fill="{Binding Color, Converter={x:Static sh:ColorToBrushConverter.Instance}}" />
+                                                            <TextBlock x:Name="tick" Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                                                       Foreground="{Binding Color, Converter={x:Static sh:OnColorBrushConverter.Instance}}"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
                                                         </Grid>
-                                                    </Border>
-                                                    <TextBlock Text="{Binding}" Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,8,0,0" />
-                                                </StackPanel>
-                                                <ControlTemplate.Triggers>
-                                                    <DataTrigger Binding="{Binding}" Value="Black">
-                                                        <Setter TargetName="main" Property="Background" Value="#000" />
-                                                        <Setter TargetName="card1" Property="Background" Value="#1C1C1C" />
-                                                        <Setter TargetName="card2" Property="Background" Value="#1C1C1C" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding}" Value="Midnight">
-                                                        <Setter TargetName="side" Property="Background" Value="#050812" />
-                                                        <Setter TargetName="main" Property="Background" Value="#0B1020" />
-                                                        <Setter TargetName="card1" Property="Background" Value="#1E2742" />
-                                                        <Setter TargetName="card2" Property="Background" Value="#1E2742" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Value="True">
-                                                        <DataTrigger.Binding>
-                                                            <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
-                                                                <Binding />
-                                                                <Binding Path="DataContext.Background" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
-                                                            </MultiBinding>
-                                                        </DataTrigger.Binding>
-                                                        <Setter TargetName="tile" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                                                    </DataTrigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="tile" Property="Opacity" Value="0.85" />
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Button.Template>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                                                        <ControlTemplate.Triggers>
+                                                            <DataTrigger Value="True">
+                                                                <DataTrigger.Binding>
+                                                                    <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
+                                                                        <Binding />
+                                                                        <Binding Path="DataContext.Accent" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                                                    </MultiBinding>
+                                                                </DataTrigger.Binding>
+                                                                <Setter TargetName="ring" Property="Opacity" Value="1" />
+                                                                <Setter TargetName="tick" Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="ring" Property="Opacity" Value="0.5" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- free colour: rainbow swatch opens the picker -->
+                                <Button Cursor="Hand" Focusable="False" ToolTip="Pick any colour" AutomationProperties.Name="Custom colour"
+                                        Command="{Binding ToggleCustomCommand}">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Grid Width="42" Height="42" Background="Transparent">
+                                                <Ellipse x:Name="ring" Stroke="White" StrokeThickness="2" Opacity="0" />
+                                                <Ellipse Margin="5">
+                                                    <Ellipse.Fill>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#FF4D4D" Offset="0" />
+                                                            <GradientStop Color="#FFD34D" Offset="0.25" />
+                                                            <GradientStop Color="#4DFF88" Offset="0.5" />
+                                                            <GradientStop Color="#4DA6FF" Offset="0.75" />
+                                                            <GradientStop Color="#C04DFF" Offset="1" />
+                                                        </LinearGradientBrush>
+                                                    </Ellipse.Fill>
+                                                </Ellipse>
+                                                <Ellipse Margin="13" Fill="#CC000000" />
+                                                <TextBlock Text="&#xE710;" FontFamily="{StaticResource IconFont}" FontSize="12" Foreground="White"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsCustom}" Value="True">
+                                                    <Setter TargetName="ring" Property="Opacity" Value="1" />
+                                                </DataTrigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ring" Property="Opacity" Value="0.5" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- the free colour picker -->
+                            <Border Visibility="{Binding ShowPicker, Converter={StaticResource SettingsBoolVis}}" Margin="0,16,0,0"
+                                    Background="#0DFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" CornerRadius="16" Padding="20,18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,24,0" VerticalAlignment="Center">
+                                        <Border Width="84" Height="84" CornerRadius="42" Background="{DynamicResource AccentBrush}">
+                                            <Border.Effect>
+                                                <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="{DynamicResource AccentColor}" />
+                                            </Border.Effect>
+                                            <TextBlock Text="Aa" FontFamily="{StaticResource UiFont}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource OnAccentBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBox Style="{StaticResource HexBox}" Text="{Binding Hex, UpdateSourceTrigger=PropertyChanged}" Margin="0,14,0,0"
+                                                 AutomationProperties.Name="Hex colour" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Hue" Style="{StaticResource Caption}" />
+                                        <Slider Style="{StaticResource ColorSlider}" Minimum="0" Maximum="359.9" Value="{Binding Hue}" AutomationProperties.Name="Hue">
+                                            <Slider.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#FF0000" Offset="0" />
+                                                    <GradientStop Color="#FFFF00" Offset="0.1667" />
+                                                    <GradientStop Color="#00FF00" Offset="0.3333" />
+                                                    <GradientStop Color="#00FFFF" Offset="0.5" />
+                                                    <GradientStop Color="#0000FF" Offset="0.6667" />
+                                                    <GradientStop Color="#FF00FF" Offset="0.8333" />
+                                                    <GradientStop Color="#FF0000" Offset="1" />
+                                                </LinearGradientBrush>
+                                            </Slider.Background>
+                                        </Slider>
+                                        <TextBlock Text="Saturation" Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                                        <Slider Style="{StaticResource ColorSlider}" Minimum="0" Maximum="1" Value="{Binding Sat}" Background="{Binding SatTrack}" AutomationProperties.Name="Saturation" />
+                                        <TextBlock Text="Brightness" Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                                        <Slider Style="{StaticResource ColorSlider}" Minimum="0" Maximum="1" Value="{Binding Val}" Background="{Binding ValTrack}" AutomationProperties.Name="Brightness" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE771;" /></Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Background" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="Dark is classic, Black is pure black (great on OLED), Midnight is a deep blue." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                            <Border Height="16" />
+                            <ItemsControl ItemsSource="{Binding Backgrounds}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Cursor="Hand" Focusable="False" Margin="0,0,12,0" AutomationProperties.Name="{Binding}"
+                                                Command="{Binding DataContext.PickBackgroundCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <StackPanel>
+                                                        <Border x:Name="tile" Width="128" Height="76" CornerRadius="10" BorderThickness="2" BorderBrush="#3A3A3A" ClipToBounds="True">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="30" />
+                                                                    <ColumnDefinition />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border x:Name="side" Background="#000" CornerRadius="8,0,0,8" />
+                                                                <Border x:Name="main" Grid.Column="1" Background="#121212" CornerRadius="0,8,8,0">
+                                                                    <StackPanel Margin="10,12" Orientation="Horizontal">
+                                                                        <Border x:Name="card1" Width="22" Height="22" CornerRadius="4" Background="#282828" Margin="0,0,6,0" />
+                                                                        <Border x:Name="card2" Width="22" Height="22" CornerRadius="4" Background="#282828" Margin="0,0,6,0" />
+                                                                        <Border Width="22" Height="22" CornerRadius="4" Background="{DynamicResource AccentBrush}" />
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </Grid>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding}" Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,8,0,0" />
+                                                    </StackPanel>
+                                                    <ControlTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding}" Value="Black">
+                                                            <Setter TargetName="main" Property="Background" Value="#000" />
+                                                            <Setter TargetName="card1" Property="Background" Value="#1C1C1C" />
+                                                            <Setter TargetName="card2" Property="Background" Value="#1C1C1C" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding}" Value="Midnight">
+                                                            <Setter TargetName="side" Property="Background" Value="#050812" />
+                                                            <Setter TargetName="main" Property="Background" Value="#0B1020" />
+                                                            <Setter TargetName="card1" Property="Background" Value="#1E2742" />
+                                                            <Setter TargetName="card2" Property="Background" Value="#1E2742" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Value="True">
+                                                            <DataTrigger.Binding>
+                                                                <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
+                                                                    <Binding />
+                                                                    <Binding Path="DataContext.Background" RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                                                </MultiBinding>
+                                                            </DataTrigger.Binding>
+                                                            <Setter TargetName="tile" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                                        </DataTrigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="tile" Property="Opacity" Value="0.85" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE7F4;" /></Border>
                         <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding Translucent}" VerticalAlignment="Center" AutomationProperties.Name="Translucent window" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Translucent window" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="Frosted-glass window showing your desktop's colours (Windows 11)." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
+                            <TextBlock Text="Frosted glass that lets your desktop's colours show through (Windows 11)." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                         </StackPanel>
                     </DockPanel>
-                </Border>
-                <Border Style="{StaticResource SettingCard}">
-                    <StackPanel>
-                        <TextBlock Text="Colour at the top of pages" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                        <TextBlock Text="None keeps every page one consistent colour." Style="{StaticResource Subtle}" Margin="0,4,0,14" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource HeaderPill}" Tag="None" Content="None" AutomationProperties.Name="Header none"
-                                    Command="{Binding PickHeaderCommand}" CommandParameter="None" />
-                            <Button Style="{StaticResource HeaderPill}" Tag="Accent" Content="Accent colour" AutomationProperties.Name="Header accent"
-                                    Command="{Binding PickHeaderCommand}" CommandParameter="Accent" />
-                            <Button Style="{StaticResource HeaderPill}" Tag="AlbumArt" Content="Album art" AutomationProperties.Name="Header album art"
-                                    Command="{Binding PickHeaderCommand}" CommandParameter="AlbumArt" />
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE8B9;" /></Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Colour at the top of pages" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="None keeps every page one consistent colour." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button Style="{StaticResource HeaderPill}" Tag="None" Content="None" AutomationProperties.Name="Header none"
+                                        Command="{Binding PickHeaderCommand}" CommandParameter="None" />
+                                <Button Style="{StaticResource HeaderPill}" Tag="Accent" Content="Accent colour" AutomationProperties.Name="Header accent"
+                                        Command="{Binding PickHeaderCommand}" CommandParameter="Accent" />
+                                <Button Style="{StaticResource HeaderPill}" Tag="AlbumArt" Content="Album art" AutomationProperties.Name="Header album art"
+                                        Command="{Binding PickHeaderCommand}" CommandParameter="AlbumArt" />
+                            </StackPanel>
                         </StackPanel>
+                    </DockPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- ===== Mini-player ===== -->
                 <TextBlock Text="MINI-PLAYER" Style="{StaticResource SettingsSection}" />
-                <Border Style="{StaticResource SettingCard}">
+                <Border Style="{StaticResource SettingGroup}">
                     <StackPanel>
-                        <TextBlock Text="Style" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                        <TextBlock Text="The floating player you can keep anywhere on screen. You can also right-click it to switch."
-                                   Style="{StaticResource Subtle}" Margin="0,4,0,14" />
-                        <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource SegmentPill}" Tag="Compact" Content="Compact bar" AutomationProperties.Name="Compact bar"
-                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Compact" />
-                            <Button Style="{StaticResource SegmentPill}" Tag="Card" Content="Card with controls" AutomationProperties.Name="Card with controls"
-                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Card" />
-                            <Button Style="{StaticResource SegmentPill}" Tag="Square" Content="Album art tile" AutomationProperties.Name="Album art tile"
-                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Square" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE8A7;" /></Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Mini-player style" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="The floating player you can keep anywhere on screen. Right-click it to switch too." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button Style="{StaticResource SegmentPill}" Tag="Compact" Content="Compact bar" AutomationProperties.Name="Compact bar"
+                                        Command="{Binding PickWidgetStyleCommand}" CommandParameter="Compact" />
+                                <Button Style="{StaticResource SegmentPill}" Tag="Card" Content="Card with controls" AutomationProperties.Name="Card with controls"
+                                        Command="{Binding PickWidgetStyleCommand}" CommandParameter="Card" />
+                                <Button Style="{StaticResource SegmentPill}" Tag="Square" Content="Album art tile" AutomationProperties.Name="Album art tile"
+                                        Command="{Binding PickWidgetStyleCommand}" CommandParameter="Square" />
+                            </StackPanel>
                         </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE718;" /></Border>
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding MiniOnTop}" VerticalAlignment="Center" AutomationProperties.Name="Mini-player on top" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Always on top" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="The floating player stays above other windows." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                        </StackPanel>
+                    </DockPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- ===== Playback ===== -->
                 <TextBlock Text="PLAYBACK" Style="{StaticResource SettingsSection}" />
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                <Border Style="{StaticResource SettingGroup}">
+                    <StackPanel>
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE767;" /></Border>
                         <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding Normalize}" VerticalAlignment="Center" AutomationProperties.Name="Normalize volume" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Normalize volume" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="Quiet and loud songs play at a similar level." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
+                            <TextBlock Text="Quiet and loud songs play at a similar level." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                         </StackPanel>
                     </DockPanel>
-                </Border>
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE893;" /></Border>
                         <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding SponsorBlock}" VerticalAlignment="Center" AutomationProperties.Name="Skip non-music parts" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Skip non-music parts" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="Skips talking intros, skits and outros in music videos (SponsorBlock). Only a short code — never the song — is sent to sponsor.ajay.app."
-                                       Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,4,48,0" />
+                            <TextBlock Text="Skips talking intros, skits and outros in music videos (SponsorBlock). Only a short video code is sent to sponsor.ajay.app." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                         </StackPanel>
                     </DockPanel>
+                    </StackPanel>
                 </Border>
 
-                <!-- ===== Window ===== -->
                 <TextBlock Text="WINDOW &amp; STARTUP" Style="{StaticResource SettingsSection}" />
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                <Border Style="{StaticResource SettingGroup}">
+                    <StackPanel>
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE768;" /></Border>
                         <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding CloseToTray}" VerticalAlignment="Center" AutomationProperties.Name="Keep playing when closed" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Keep playing when closed" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="The close button hides Tune to the tray. Off: the close button quits." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
+                            <TextBlock Text="The close button hides Tune to the tray. Off: the close button quits." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                         </StackPanel>
                     </DockPanel>
-                </Border>
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
-                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding MiniOnTop}" VerticalAlignment="Center" AutomationProperties.Name="Mini-player on top" />
-                        <StackPanel>
-                            <TextBlock Text="Mini-player always on top" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="The floating bar stays above other windows." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE7E8;" /></Border>
                         <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding StartWithWindows}" VerticalAlignment="Center" AutomationProperties.Name="Start with Windows" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Start with Windows" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="Opens quietly in the tray (with the mini-player) when you sign in." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
+                            <TextBlock Text="Opens quietly in the tray (with the mini-player) when you sign in." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                         </StackPanel>
                     </DockPanel>
+                    </StackPanel>
                 </Border>
 
-                <!-- ===== Storage & about ===== -->
                 <TextBlock Text="STORAGE &amp; ABOUT" Style="{StaticResource SettingsSection}" />
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                <Border Style="{StaticResource SettingGroup}">
+                    <StackPanel>
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE8B7;" /></Border>
                         <Button DockPanel.Dock="Right" Content="Clear" VerticalAlignment="Center" Command="{Binding ClearCacheCommand}" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Album art cache" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding CacheSize, StringFormat=Using {0} (kept under 200 MB automatically)}" Style="{StaticResource Subtle}" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding CacheSize, StringFormat=Using {0} (kept under 200 MB automatically)}" Style="{StaticResource Subtle}" Margin="0,3,0,0" />
                         </StackPanel>
                     </DockPanel>
-                </Border>
-                <Border Style="{StaticResource SettingCard}">
-                    <DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE895;" /></Border>
                         <Button DockPanel.Dock="Right" Content="Update now" VerticalAlignment="Center" Command="{Binding UpdateYtDlpCommand}" />
-                        <StackPanel>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="YouTube helper" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding ResolverStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0" />
-                            <TextBlock Text="Updates itself daily. If songs stop playing, update it now." Style="{StaticResource Subtle}" Margin="0,2,0,0" />
+                            <TextBlock Text="{Binding ResolverStatus}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                            <TextBlock Text="Updates itself. If songs stop playing, update it now." Style="{StaticResource Subtle}" Margin="0,2,0,0" />
                             <TextBlock Text="{Binding UpdateResult}" Style="{StaticResource Subtle}" Foreground="{DynamicResource AccentBrush}" Margin="0,4,0,0" />
                         </StackPanel>
                     </DockPanel>
+                    </StackPanel>
                 </Border>
-                <TextBlock Style="{StaticResource Caption}" Margin="4,14,0,0">
-                    <Run Text="Tune" /><Run Text="{Binding Version, Mode=OneWay, StringFormat=' {0}'}" /><Run Text=" · no account, nothing leaves this PC except YouTube requests" />
-                </TextBlock>
+                <StackPanel Orientation="Horizontal" Margin="4,22,0,0">
+                    <Image Source="{x:Static p:AppIcon.Logo}" Width="28" Height="28" VerticalAlignment="Center" />
+                    <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <Run Text="Tune" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /><Run Text="{Binding Version, Mode=OneWay, StringFormat=' {0}'}" /><Run Text=" · no account, nothing leaves this PC except YouTube requests" />
+                    </TextBlock>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </DataTemplate>

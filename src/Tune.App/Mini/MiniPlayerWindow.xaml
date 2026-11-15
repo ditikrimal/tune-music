@@ -24,7 +24,7 @@
                     <Setter Property="Content" Value="&#xE841;" />
                     <Setter Property="Opacity" Value="1" />
                     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                    <Setter Property="Foreground" Value="Black" />
+                    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
                     <Setter Property="ToolTip" Value="Keep on top: on" />
                 </DataTrigger>
             </Style.Triggers>

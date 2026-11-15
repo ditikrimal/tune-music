@@ -103,7 +103,13 @@ public static class ThemeManager
         new("Orange", Color.FromRgb(0xF9, 0x73, 0x16)),
         new("Red", Color.FromRgb(0xEF, 0x44, 0x44)),
         new("Teal", Color.FromRgb(0x14, 0xB8, 0xA6)),
+        new("Yellow", Color.FromRgb(0xFA, 0xCC, 0x15)),
+        new("Indigo", Color.FromRgb(0x81, 0x8C, 0xF8)),
+        new("Silver", Color.FromRgb(0xD4, 0xD4, 0xD8)),
     ];
+
+    /// <summary>A colour the user picked freely (kept visible on a dark UI).</summary>
+    public static AccentChoice CustomAccent(Color c) => new("Custom", ColorMath.ReadableAccent(c));
 
     public static Palette Palette(BackgroundStyle bg, Color accent) => bg switch
     {
@@ -123,14 +129,16 @@ public static class ThemeManager
 
     public static void Load(LibraryStore lib)
     {
-        Accent = Accents.FirstOrDefault(a => a.Name == lib.GetSetting("theme.accent")) ?? Accents[0];
+        var saved = lib.GetSetting("theme.accent");
+        Accent = Accents.FirstOrDefault(a => a.Name == saved)
+                 ?? (ColorMath.TryParseHex(saved, out var custom) ? CustomAccent(custom) : Accents[0]);
         Background = Enum.TryParse<BackgroundStyle>(lib.GetSetting("theme.background"), out var bg) ? bg : BackgroundStyle.Dark;
         Header = Enum.TryParse<HeaderTint>(lib.GetSetting("theme.header"), out var h) ? h : HeaderTint.None;
         Translucent = lib.GetSetting("theme.translucent") != "0";
         Apply();
     }
 
-    public static void Set(LibraryStore lib, AccentChoice? accent = null, BackgroundStyle? background = null, HeaderTint? header = null, bool? translucent = null)
+    public static void Set(LibraryStore lib, AccentChoice? accent = null, BackgroundStyle? background = null, HeaderTint? header = null, bool? translucent = null, bool persist = true)
     {
         if (translucent is not null)
         {
@@ -138,11 +146,14 @@ public static class ThemeManager
             lib.SetSetting("theme.translucent", translucent.Value ? "1" : "0");
             TranslucencyChanged?.Invoke();
         }
-        if (accent is not null) { Accent = accent; lib.SetSetting("theme.accent", accent.Name); }
+        if (accent is not null) { Accent = accent; if (persist) SaveAccent(lib); }
         if (background is not null) { Background = background.Value; lib.SetSetting("theme.background", background.Value.ToString()); }
         if (header is not null) { Header = header.Value; lib.SetSetting("theme.header", header.Value.ToString()); }
         Apply();
     }
+
+    public static void SaveAccent(LibraryStore lib) =>
+        lib.SetSetting("theme.accent", Accent.Name == "Custom" ? ColorMath.ToHex(Accent.Color) : Accent.Name);
 
     private static Color _artHeader = Colors.Transparent;
 
@@ -175,6 +186,8 @@ public static class ThemeManager
         SetBrush("DividerBrush", p.Divider);
         SetBrush("AccentBrush", Accent.Color);
         SetColor("AccentColor", Accent.Color);
+        SetBrush("AccentSoftBrush", Color.FromArgb(0x2E, Accent.Color.R, Accent.Color.G, Accent.Color.B));
+        SetBrush("OnAccentBrush", ColorMath.OnAccent(Accent.Color));
         SetColor("HeaderColor", CurrentHeader(), animate: true);
     }
 

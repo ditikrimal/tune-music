@@ -16,6 +16,8 @@
     <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}" />
     <SolidColorBrush x:Key="CardHoverBrush" Color="{StaticResource CardHoverColor}" />
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#2E1DB954" />
+    <SolidColorBrush x:Key="OnAccentBrush" Color="Black" />
     <SolidColorBrush x:Key="TextBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="SubtleTextBrush" Color="#B3B3B3" />
     <SolidColorBrush x:Key="FaintTextBrush" Color="#7A7A7A" />
@@ -257,7 +259,7 @@
                         <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}, Converter={x:Static sh2:NavIsOn.Instance}}" Value="True">
                             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                             <Setter TargetName="tile" Property="Background" Value="{DynamicResource AccentBrush}" />
-                            <Setter TargetName="icon" Property="Foreground" Value="Black" />
+                            <Setter TargetName="icon" Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
                             <Setter TargetName="tile" Property="Effect">
                                 <Setter.Value>
                                     <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="22" ShadowDepth="0" Opacity="0.85" />

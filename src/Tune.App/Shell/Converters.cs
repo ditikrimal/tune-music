@@ -75,6 +75,17 @@ public sealed class SameConverter : IMultiValueConverter
 }
 
 /// <summary>Color → SolidColorBrush (accent swatches).</summary>
+/// <summary>Black or white, whichever reads better on the given colour.</summary>
+public sealed class OnColorBrushConverter : System.Windows.Data.IValueConverter
+{
+    public static readonly OnColorBrushConverter Instance = new();
+    public object Convert(object value, Type t, object p, System.Globalization.CultureInfo c) =>
+        value is System.Windows.Media.Color col
+            ? new System.Windows.Media.SolidColorBrush(Tune.App.Platform.ColorMath.OnAccent(col))
+            : System.Windows.Media.Brushes.Black;
+    public object ConvertBack(object v, Type t, object p, System.Globalization.CultureInfo c) => throw new NotSupportedException();
+}
+
 public sealed class ColorToBrushConverter : IValueConverter
 {
     public static readonly ColorToBrushConverter Instance = new();

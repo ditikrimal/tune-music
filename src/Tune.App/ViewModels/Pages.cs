@@ -457,6 +457,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         _miniOnTop = Lib.GetSetting("mini.topmost") != "0";
 
         _accent = Tune.App.Platform.ThemeManager.Accent;
+        SyncPicker(_accent.Color);
+        _saveAccent.Tick += (_, _) => { _saveAccent.Stop(); Tune.App.Platform.ThemeManager.SaveAccent(Lib); };
         _background = Tune.App.Platform.ThemeManager.Background;
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
         _startWithWindows = key?.GetValue("Tune") is not null;
@@ -486,7 +488,70 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     }
 
 
-    partial void OnAccentChanged(Tune.App.Platform.AccentChoice value) => Tune.App.Platform.ThemeManager.Set(Lib, accent: value);
+    // ---- accent: presets + a free HSV/hex picker; applied live, saved once the user stops dragging ----
+    private readonly System.Windows.Threading.DispatcherTimer _saveAccent = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private bool _syncing;
+    [ObservableProperty] private double _hue;
+    [ObservableProperty] private double _sat;
+    [ObservableProperty] private double _val;
+    [ObservableProperty] private string _hex = "";
+    [ObservableProperty] private bool _showPicker;
+
+    public bool IsCustom => Accent.Name == "Custom";
+
+    public System.Windows.Media.Brush SatTrack => Frozen(new System.Windows.Media.LinearGradientBrush(
+        Tune.App.Platform.ColorMath.FromHsv(Hue, 0, Math.Max(Val, 0.35)), Tune.App.Platform.ColorMath.FromHsv(Hue, 1, Math.Max(Val, 0.35)), 0));
+
+    public System.Windows.Media.Brush ValTrack => Frozen(new System.Windows.Media.LinearGradientBrush(
+        System.Windows.Media.Colors.Black, Tune.App.Platform.ColorMath.FromHsv(Hue, Sat, 1), 0));
+
+    private static System.Windows.Media.Brush Frozen(System.Windows.Media.Brush b) { b.Freeze(); return b; }
+
+    partial void OnHueChanged(double value) => FromPicker();
+    partial void OnSatChanged(double value) => FromPicker();
+    partial void OnValChanged(double value) => FromPicker();
+
+    private void FromPicker()
+    {
+        OnPropertyChanged(nameof(SatTrack));
+        OnPropertyChanged(nameof(ValTrack));
+        if (_syncing) return;
+        var c = Tune.App.Platform.ColorMath.FromHsv(Hue, Sat, Val);
+        _syncing = true;
+        Hex = Tune.App.Platform.ColorMath.ToHex(c);
+        _syncing = false;
+        Accent = Tune.App.Platform.ThemeManager.CustomAccent(c);
+    }
+
+    partial void OnHexChanged(string value)
+    {
+        if (_syncing || !Tune.App.Platform.ColorMath.TryParseHex(value, out var c)) return;
+        SyncPicker(c, keepHex: true);
+        Accent = Tune.App.Platform.ThemeManager.CustomAccent(c);
+    }
+
+    private void SyncPicker(System.Windows.Media.Color c, bool keepHex = false)
+    {
+        _syncing = true;
+        (Hue, Sat, Val) = Tune.App.Platform.ColorMath.ToHsv(c);
+        if (!keepHex) Hex = Tune.App.Platform.ColorMath.ToHex(c);
+        _syncing = false;
+    }
+
+    [RelayCommand]
+    private void ToggleCustom()
+    {
+        ShowPicker = !ShowPicker;
+    }
+
+    partial void OnAccentChanged(Tune.App.Platform.AccentChoice value)
+    {
+        Tune.App.Platform.ThemeManager.Set(Lib, accent: value, persist: false);
+        _saveAccent.Stop();
+        _saveAccent.Start();
+        OnPropertyChanged(nameof(IsCustom));
+        if (!_syncing && value.Name != "Custom") SyncPicker(value.Color);
+    }
     partial void OnBackgroundChanged(Tune.App.Platform.BackgroundStyle value) => Tune.App.Platform.ThemeManager.Set(Lib, background: value);
 
     [RelayCommand]

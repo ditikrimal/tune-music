@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-// Tune logo "B": the letter T built from equalizer bars on a dark rounded tile.
+// Tune logo: the letter T built from equalizer bars, silver on a graphite tile (no colour accent).
 // Writes a multi-size .ico (PNG entries) plus a 512 px PNG for docs.
 // Small sizes use a simplified 3-bar T drawn on whole pixels so it stays crisp in the taskbar/tray.
 
@@ -24,9 +24,16 @@ static BitmapSource Render(int size)
     using (var dc = v.RenderOpen())
     {
         double u = size / 512.0;                       // design grid is 512×512
-        var tile = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x12));
-        var green = new LinearGradientBrush(Color.FromRgb(0x2B, 0xE0, 0x7A), Color.FromRgb(0x14, 0xA0, 0x48), 90);
+        // dark mark: graphite tile with a soft top sheen, silver-white bars
+        var tile = new LinearGradientBrush(Color.FromRgb(0x2C, 0x2C, 0x31), Color.FromRgb(0x08, 0x08, 0x0A), 90);
+        var green = new LinearGradientBrush(Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0x9C, 0x9C, 0xA6), 90); // bar fill
         dc.DrawRoundedRectangle(tile, null, new Rect(0, 0, size, size), 116 * u, 116 * u);
+        if (size >= 48)
+        {
+            var rim = new Pen(new LinearGradientBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x08, 0xFF, 0xFF, 0xFF), 90), Math.Max(1, 6 * u));
+            var inset = rim.Thickness / 2;
+            dc.DrawRoundedRectangle(null, rim, new Rect(inset, inset, size - 2 * inset, size - 2 * inset), 116 * u - inset, 116 * u - inset);
+        }
 
         if (size >= 32)
         {
