@@ -32,6 +32,9 @@ public partial class MainWindow : Window
                 SourceInitialized += (_, _) =>
         {
             UseRoundedCorners();
+            Tune.App.Platform.Backdrop.Apply(this, Tune.App.Platform.ThemeManager.Translucent);
+            Tune.App.Platform.ThemeManager.TranslucencyChanged += () =>
+                Tune.App.Platform.Backdrop.Apply(this, Tune.App.Platform.ThemeManager.Translucent);
             RestorePlacement();
         };
     }

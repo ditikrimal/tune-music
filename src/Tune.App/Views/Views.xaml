@@ -58,7 +58,7 @@
 
     <!-- ================= card (album / playlist / artist / song) ================= -->
     <DataTemplate x:Key="CardTemplate" DataType="{x:Type m:Card}">
-        <Button x:Name="card" Width="196" Margin="0,0,12,0" Cursor="Hand" Focusable="False" MouseEnter="Card_MouseEnter"
+        <Button x:Name="card" Width="196" Margin="0,0,12,0" Cursor="Hand" Focusable="False" MouseEnter="Card_MouseEnter" RenderTransformOrigin="0.5,0.5"
                 Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
@@ -68,6 +68,11 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bg" Property="Background" Value="{DynamicResource CardHoverBrush}" />
+                            <Setter Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="1.03" ScaleY="1.03" />
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -124,16 +129,16 @@
 
     <!-- ================= horizontal shelf with ‹ › scroll buttons ================= -->
     <DataTemplate x:Key="ShelfTemplate" DataType="{x:Type m:Shelf}">
-        <StackPanel>
+        <StackPanel x:Name="shelf" Background="Transparent">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,10">
+                <StackPanel x:Name="arrows" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,10" Opacity="0">
                     <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Click="ShelfLeft_Click" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Margin="8,0,0,0" Click="ShelfRight_Click" />
                 </StackPanel>
                 <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
             </DockPanel>
             <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False"
-                         >
+                          Padding="14,14,14,20" Margin="-14,-14,-14,-12">
                 <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource CardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -143,6 +148,11 @@
                 </ItemsControl>
             </ScrollViewer>
         </StackPanel>
+        <DataTemplate.Triggers>
+            <Trigger SourceName="shelf" Property="IsMouseOver" Value="True">
+                <Setter TargetName="arrows" Property="Opacity" Value="1" />
+            </Trigger>
+        </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- ================= featured card: tall, tinted with the art's own colour ================= -->
@@ -218,15 +228,16 @@
     </DataTemplate>
 
     <DataTemplate x:Key="FeaturedShelfTemplate" DataType="{x:Type m:Shelf}">
-        <StackPanel>
+        <StackPanel x:Name="shelf" Background="Transparent">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,10">
+                <StackPanel x:Name="arrows" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,10" Opacity="0">
                     <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Click="ShelfLeft_Click" ToolTip="Scroll left" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Margin="8,0,0,0" Click="ShelfRight_Click" ToolTip="Scroll right" />
                 </StackPanel>
                 <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
             </DockPanel>
-            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" Padding="0,4,0,14">
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False"
+                          Padding="16,18,16,26" Margin="-16,-14,-16,-10">
                 <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource FeaturedCardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -236,6 +247,11 @@
                 </ItemsControl>
             </ScrollViewer>
         </StackPanel>
+        <DataTemplate.Triggers>
+            <Trigger SourceName="shelf" Property="IsMouseOver" Value="True">
+                <Setter TargetName="arrows" Property="Opacity" Value="1" />
+            </Trigger>
+        </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- ================= one track row ================= -->
@@ -377,7 +393,7 @@
     <DataTemplate x:Key="CardRowTemplate">
         <StackPanel x:Name="panel">
             <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=ContentControl}}" Style="{StaticResource SectionTitle}" />
-            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Padding="14,14,14,20" Margin="-14,-14,-14,-12">
                 <ItemsControl ItemsSource="{Binding}" ItemTemplate="{StaticResource CardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -672,6 +688,15 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
+                </Border>
+                <Border Style="{StaticResource SettingCard}">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding Translucent}" VerticalAlignment="Center" AutomationProperties.Name="Translucent window" />
+                        <StackPanel>
+                            <TextBlock Text="Translucent window" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="Frosted-glass sidebar showing your desktop's colours (Windows 11)." Style="{StaticResource Subtle}" Margin="0,4,48,0" />
+                        </StackPanel>
+                    </DockPanel>
                 </Border>
                 <Border Style="{StaticResource SettingCard}">
                     <DockPanel>

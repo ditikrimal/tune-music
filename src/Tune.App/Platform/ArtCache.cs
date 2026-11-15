@@ -28,7 +28,8 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
     public static string Sized(string url, int px)
     {
         if (GoogleSize().IsMatch(url)) return GoogleSize().Replace(url, $"=w{px}-h{px}");
-        if (YtImgSize().IsMatch(url)) return YtImgSize().Replace(url, px <= 120 ? "/mqdefault.jpg" : "/hqdefault.jpg");
+        if (YtImgSize().IsMatch(url))
+            return YtImgSize().Replace(url, px <= 120 ? "/mqdefault.jpg" : px <= 200 ? "/hqdefault.jpg" : "/maxresdefault.jpg");
         return url;
     }
 
@@ -83,7 +84,7 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
         try
         {
             Directory.CreateDirectory(dir);
-            var bytes = await http.GetByteArrayAsync(url).ConfigureAwait(false);
+            var bytes = await GetWithFallbackAsync(url).ConfigureAwait(false);
             var tmp = file + ".part";
             await File.WriteAllBytesAsync(tmp, bytes).ConfigureAwait(false);
             File.Move(tmp, file, overwrite: true);
@@ -93,6 +94,23 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
         {
             Log.Warn("Art download failed", e);
             return null;
+        }
+    }
+
+    /// <summary>Not every video has an HD frame: maxresdefault → hq720 → hqdefault.</summary>
+    private async Task<byte[]> GetWithFallbackAsync(string url)
+    {
+        string[] chain = url.Contains("/maxresdefault.jpg", StringComparison.Ordinal)
+            ? [url, url.Replace("/maxresdefault.jpg", "/hq720.jpg"), url.Replace("/maxresdefault.jpg", "/hqdefault.jpg")]
+            : [url];
+        for (var i = 0; ; i++)
+        {
+            using var resp = await http.GetAsync(chain[i]).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode || i == chain.Length - 1)
+            {
+                resp.EnsureSuccessStatusCode();
+                return await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            }
         }
     }
 

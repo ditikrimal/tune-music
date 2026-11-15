@@ -113,16 +113,28 @@ public static class ThemeManager
     public static BackgroundStyle Background { get; private set; }
     public static bool HeaderFromArt { get; private set; } = true;
 
+    /// <summary>Windows 11 acrylic behind the window; the sidebar becomes see-through glass.</summary>
+    public static bool Translucent { get; private set; } = true;
+
+    public static event Action? TranslucencyChanged;
+
     public static void Load(LibraryStore lib)
     {
         Accent = Accents.FirstOrDefault(a => a.Name == lib.GetSetting("theme.accent")) ?? Accents[0];
         Background = Enum.TryParse<BackgroundStyle>(lib.GetSetting("theme.background"), out var bg) ? bg : BackgroundStyle.Dark;
         HeaderFromArt = lib.GetSetting("theme.headerFromArt") != "0";
+        Translucent = lib.GetSetting("theme.translucent") != "0";
         Apply();
     }
 
-    public static void Set(LibraryStore lib, AccentChoice? accent = null, BackgroundStyle? background = null, bool? headerFromArt = null)
+    public static void Set(LibraryStore lib, AccentChoice? accent = null, BackgroundStyle? background = null, bool? headerFromArt = null, bool? translucent = null)
     {
+        if (translucent is not null)
+        {
+            Translucent = translucent.Value;
+            lib.SetSetting("theme.translucent", translucent.Value ? "1" : "0");
+            TranslucencyChanged?.Invoke();
+        }
         if (accent is not null) { Accent = accent; lib.SetSetting("theme.accent", accent.Name); }
         if (background is not null) { Background = background.Value; lib.SetSetting("theme.background", background.Value.ToString()); }
         if (headerFromArt is not null) { HeaderFromArt = headerFromArt.Value; lib.SetSetting("theme.headerFromArt", headerFromArt.Value ? "1" : "0"); }
@@ -146,7 +158,8 @@ public static class ThemeManager
         var p = Palette(Background, Accent.Color);
         SetBrush("BaseBrush", p.Base);
         SetColor("BaseColor", p.Base);
-        SetBrush("SidebarBrush", p.Sidebar);
+        // see-through sidebar over the acrylic backdrop (a light tint of the palette keeps it on-theme)
+        SetBrush("SidebarBrush", Translucent && Backdrop.Supported ? Color.FromArgb(0x70, p.Sidebar.R, p.Sidebar.G, p.Sidebar.B) : p.Sidebar);
         SetBrush("CardBrush", p.Card);
         SetBrush("CardHoverBrush", p.CardHover);
         SetBrush("PlayerBarBrush", p.PlayerBar);

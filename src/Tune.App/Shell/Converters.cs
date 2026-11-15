@@ -97,3 +97,31 @@ public sealed class FirstItemTemplateSelector : System.Windows.Controls.DataTemp
         return owner is not null && owner.Items.Count > 0 && ReferenceEquals(owner.Items[0], item) ? First : Rest;
     }
 }
+
+/// <summary>Sidebar tag "glyph|On" → glyph.</summary>
+public sealed class NavGlyph : IValueConverter
+{
+    public static readonly NavGlyph Instance = new();
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => (value as string)?.Split('|')[0] ?? "";
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>Sidebar tag "glyph|On" → true.</summary>
+public sealed class NavIsOn : IValueConverter
+{
+    public static readonly NavIsOn Instance = new();
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => (value as string)?.EndsWith("|On", StringComparison.Ordinal) == true;
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>[NavKey, key, glyph] → "glyph|On/Off" for the big sidebar items.</summary>
+public sealed class NavTagConverter : IValueConverter
+{
+    public static readonly NavTagConverter Instance = new();
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var p = (parameter as string ?? "|").Split('|'); // "home|&#xE80F;"
+        return $"{p[1]}|{(Equals(value as string, p[0]) ? "On" : "Off")}";
+    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

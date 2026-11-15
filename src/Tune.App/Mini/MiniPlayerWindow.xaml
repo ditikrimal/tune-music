@@ -12,14 +12,20 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <!-- pin: filled while "always on top" is on -->
+        <!-- pinned: filled pin on an accent circle; not pinned: faint outline pin -->
         <Style x:Key="PinButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
             <Setter Property="Content" Value="&#xE718;" />
-            <Setter Property="ToolTip" Value="Keep on top" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#E0303030" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="ToolTip" Value="Keep on top: off" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Topmost, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                    <Setter Property="Content" Value="&#xE840;" />
-                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-                    <Setter Property="ToolTip" Value="Stop keeping on top" />
+                    <Setter Property="Content" Value="&#xE841;" />
+                    <Setter Property="Opacity" Value="1" />
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                    <Setter Property="Foreground" Value="Black" />
+                    <Setter Property="ToolTip" Value="Keep on top: on" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -105,7 +111,7 @@
                          Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position, Mode=OneWay}" Foreground="White"
                          Visibility="{Binding HasTrack, Converter={StaticResource BoolToVis}}" />
             <StackPanel x:Name="CompactCorner" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-8,-6,0" Opacity="0">
-                <Button Style="{StaticResource PinButton}" Width="22" Height="22" FontSize="9" Foreground="White" Background="#E0303030" Click="Pin_Click" />
+                <Button Style="{StaticResource PinButton}" Width="22" Height="22" FontSize="9" Click="Pin_Click" />
                 <Button Style="{StaticResource IconButton}" Content="&#xE740;" Width="22" Height="22" FontSize="9" Foreground="White" Background="#E0303030" Margin="4,0,0,0" Click="Expand_Click" ToolTip="Open Tune" />
                 <Button Style="{StaticResource IconButton}" Content="&#xE711;" Width="22" Height="22" FontSize="9" Foreground="White" Background="#E0303030" Margin="4,0,0,0" Click="Hide_Click" ToolTip="Hide mini-player" />
             </StackPanel>
@@ -134,7 +140,7 @@
                 </Grid.RowDefinitions>
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Style="{StaticResource PinButton}" Width="26" Height="26" FontSize="11" Foreground="#CCFFFFFF" Click="Pin_Click" />
+                        <Button Style="{StaticResource PinButton}" Width="26" Height="26" FontSize="11" Click="Pin_Click" />
                         <Button Style="{StaticResource IconButton}" Content="&#xE740;" Width="26" Height="26" FontSize="11" Foreground="#CCFFFFFF" Click="Expand_Click" ToolTip="Open Tune" />
                         <Button Style="{StaticResource IconButton}" Content="&#xE711;" Width="26" Height="26" FontSize="11" Foreground="#CCFFFFFF" Click="Hide_Click" ToolTip="Hide mini-player" />
                     </StackPanel>
@@ -232,7 +238,7 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,10,0">
                             <Button Style="{StaticResource ToggleIconButton}" Content="{Binding LikeGlyph}" Width="28" Height="28" FontSize="13" Foreground="White"
                                     Tag="{Binding IsLiked, Converter={x:Static sh:BoolToOnConverter.Instance}}" Command="{Binding ToggleLikeCommand}" ToolTip="Save to Liked songs" />
-                            <Button Style="{StaticResource PinButton}" Width="28" Height="28" FontSize="12" Foreground="White" Click="Pin_Click" />
+                            <Button Style="{StaticResource PinButton}" Width="28" Height="28" FontSize="12" Click="Pin_Click" />
                             <Button Style="{StaticResource IconButton}" Content="&#xE740;" Width="28" Height="28" FontSize="12" Foreground="White" Click="Expand_Click" ToolTip="Open Tune" />
                             <Button Style="{StaticResource IconButton}" Content="&#xE711;" Width="28" Height="28" FontSize="12" Foreground="White" Click="Hide_Click" ToolTip="Hide mini-player" />
                         </StackPanel>

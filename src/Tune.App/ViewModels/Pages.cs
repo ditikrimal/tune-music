@@ -84,7 +84,8 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
         {
             var feed = await _shell.Services.Feed.BuildAsync();
             Shelves.Clear();
-            foreach (var s in feed.Shelves) Shelves.Add(s);
+            // a calm Home: at most 6 rows of 12 — the rest is noise
+            foreach (var s in feed.Shelves.Take(6)) Shelves.Add(s with { Items = s.Items.Take(12).ToList() });
             Offline = feed.Offline;
             _shell.Prefetch(feed.Shelves.SelectMany(sh => sh.Items.Take(6)).Where(c => c.Track is not null).Select(c => c.Track!).Take(12),
                 Tune.Core.Streams.PrefetchPriority.Page);
@@ -424,6 +425,9 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     [ObservableProperty] private bool _closeToTray;
     [ObservableProperty] private bool _miniOnTop;
     [ObservableProperty] private bool _headerFromArt;
+    [ObservableProperty] private bool _translucent = Tune.App.Platform.ThemeManager.Translucent;
+
+    partial void OnTranslucentChanged(bool value) => Tune.App.Platform.ThemeManager.Set(Lib, translucent: value);
     [ObservableProperty] private Tune.App.Platform.AccentChoice _accent;
     [ObservableProperty] private Tune.App.Platform.BackgroundStyle _background;
     [ObservableProperty] private string _updateResult = "";
