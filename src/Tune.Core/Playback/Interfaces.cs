@@ -2,6 +2,16 @@ using Tune.Core.Models;
 
 namespace Tune.Core.Playback;
 
+public interface IClock
+{
+    DateTimeOffset Now { get; }
+}
+
+public sealed class SystemClock : IClock
+{
+    public DateTimeOffset Now => DateTimeOffset.Now;
+}
+
 public interface IYtMusic
 {
     Task<SearchResults> SearchAsync(string query, CancellationToken ct = default);
