@@ -143,7 +143,12 @@ public partial class App : Application
         _library = new LibraryStore(Path.Combine(dataDir, "tune.db"));
         var clock = new SystemClock();
         var runner = new ProcessRunner();
-        var api = new YtMusicApi(new InnerTubeClient(http));
+        var innerTube = new InnerTubeClient(http);
+        var api = new YtMusicApi(innerTube);
+        var lyricsHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        lyricsHttp.DefaultRequestHeaders.UserAgent.ParseAdd("Tune/1.0");
+        var lyrics = new Tune.Core.Lyrics.LyricsService(innerTube, new Tune.Core.Lyrics.LrcLibClient(lyricsHttp),
+            () => _library!.GetSetting("lyrics.synced") != "0");
         var tools = new ToolManager(Path.Combine(dataDir, "tools"), toolsHttp, runner, _library, clock, ToolManifest.Load());
         // fast path: one long-lived Python worker with yt-dlp loaded; yt-dlp.exe per song is the fallback
         _python = ToolManager.FindPython(Environment.GetEnvironmentVariable("PATH"), File.Exists);
@@ -159,7 +164,7 @@ public partial class App : Application
         Art.Cache = art;
         Task.Run(art.Trim);
 
-        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher);
+        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics);
         ThemeManager.Load(_library);
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();

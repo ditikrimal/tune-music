@@ -283,7 +283,7 @@
                                 <ToolTip Style="{StaticResource DetailsTip}" Content="{Binding Track}" />
                             </TextBlock.ToolTip>
                         </TextBlock>
-                        <TextBlock Text="{Binding ArtistLine}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
+                        <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Grid.Column="2" Text="{Binding AlbumTitle}" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="12,0" />

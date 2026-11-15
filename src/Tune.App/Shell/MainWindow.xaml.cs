@@ -117,6 +117,12 @@ public partial class MainWindow : Window
             case Key.Right when alt:
                 Vm.GoForwardCommand.Execute(null);
                 break;
+            case Key.F when !ctrl && !alt && !typing:
+                Vm.NowPlaying.ToggleCommand.Execute(null);
+                break;
+            case Key.Escape when !typing && Vm.NowPlaying.IsOpen:
+                Vm.NowPlaying.IsOpen = false;
+                break;
             case Key.Escape when typing:
                 Keyboard.ClearFocus();
                 break;
@@ -175,6 +181,8 @@ public partial class MainWindow : Window
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Mini_Click(object sender, RoutedEventArgs e) => MiniPlayerRequested?.Invoke();
+
+    private void Disc_Click(object sender, MouseButtonEventArgs e) => Vm.NowPlaying.ToggleCommand.Execute(null);
 
     private void Seek_MouseDown(object sender, MouseButtonEventArgs e) => Vm.Player.BeginSeek();
 

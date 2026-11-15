@@ -14,7 +14,7 @@
                     </Border>
                     <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                         <TextBlock x:Name="title" Text="{Binding Title}" Style="{StaticResource Body}" />
-                        <TextBlock Text="{Binding ArtistLine}" Style="{StaticResource Caption}" FontSize="12" />
+                        <p:ArtistLinks Artists="{Binding Artists}" Style="{StaticResource Caption}" FontSize="12" />
                     </StackPanel>
                 </DockPanel>
             </Border>

@@ -21,7 +21,8 @@
             <Setter Property="ToolTip" Value="Keep on top: off" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Topmost, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                    <Setter Property="Content" Value="&#xE841;" />
+                    <Setter Property="Content" Value="&#xE718;" />
+                    <Setter Property="FontWeight" Value="Bold" />
                     <Setter Property="Opacity" Value="1" />
                     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
                     <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
@@ -43,7 +44,6 @@
         </Style>
         <Style x:Key="ArtistText" TargetType="TextBlock" BasedOn="{StaticResource WidgetText}">
             <Setter Property="Foreground" Value="#CCFFFFFF" />
-            <Setter Property="Text" Value="{Binding ArtistLine}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding HasTrack}" Value="False">
                     <Setter Property="Text" Value="Pick a song in Tune" />
@@ -97,7 +97,7 @@
                 </Border>
                 <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
                     <TextBlock Style="{StaticResource TitleText}" FontSize="14" ToolTip="{Binding Title}" />
-                    <TextBlock Style="{StaticResource ArtistText}" FontSize="12" Margin="0,2,0,0" />
+                    <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource ArtistText}" FontSize="12" Margin="0,2,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Style="{StaticResource ToggleIconButton}" Content="{Binding LikeGlyph}" Width="30" Height="30" FontSize="14" Foreground="White"
@@ -171,7 +171,7 @@
                                     Tag="{Binding IsLiked, Converter={x:Static sh:BoolToOnConverter.Instance}}" Command="{Binding ToggleLikeCommand}" ToolTip="Save to Liked songs" />
                             <StackPanel>
                                 <TextBlock Style="{StaticResource TitleText}" FontSize="17" FontWeight="Bold" ToolTip="{Binding Title}" />
-                                <TextBlock Style="{StaticResource ArtistText}" FontSize="13" Margin="0,3,0,0" />
+                                <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource ArtistText}" FontSize="13" Margin="0,3,0,0" />
                             </StackPanel>
                         </DockPanel>
                         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -224,7 +224,7 @@
                     </Border>
                     <StackPanel VerticalAlignment="Bottom" Margin="16,0,16,16">
                         <TextBlock Style="{StaticResource TitleText}" FontSize="16" FontWeight="Bold" />
-                        <TextBlock Style="{StaticResource ArtistText}" FontSize="13" Margin="0,2,0,0" />
+                        <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource ArtistText}" FontSize="13" Margin="0,2,0,0" />
                     </StackPanel>
                     <ProgressBar Template="{StaticResource ThinProgress}" VerticalAlignment="Bottom" Height="3" Margin="16,0,16,8"
                                  Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position, Mode=OneWay}" Foreground="White"

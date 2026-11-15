@@ -61,6 +61,7 @@ public sealed partial class ShellViewModel : ObservableObject
         _ui = ui;
         Player = new PlayerBarViewModel(services.Playback, services.Library, ui);
         Queue = new QueueViewModel(this, ui);
+        NowPlaying = new NowPlayingViewModel(Player, services.Lyrics);
         Player.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(PlayerBarViewModel.Track)) return;
@@ -74,6 +75,7 @@ public sealed partial class ShellViewModel : ObservableObject
     public AppServices Services { get; }
     public PlayerBarViewModel Player { get; }
     public QueueViewModel Queue { get; }
+    public NowPlayingViewModel NowPlaying { get; }
     public ObservableCollection<PlaylistInfo> Playlists { get; } = [];
     public bool CanGoBack => _back.Count > 0;
     public string? NavKey => Page?.NavKey;
@@ -113,6 +115,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public void Navigate(IPage page)
     {
+        NowPlaying.IsOpen = false; // going somewhere (e.g. an artist link) leaves the full-screen player
         if (Page is not null) _back.Push(Page);
         _forward.Clear();
         Page = page;

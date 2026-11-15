@@ -164,7 +164,7 @@
                             <Grid.RenderTransform>
                                 <RotateTransform x:Name="DiscSpin" CenterX="31" CenterY="31" />
                             </Grid.RenderTransform>
-                            <Image x:Name="Disc" Width="62" Height="62" Stretch="UniformToFill" p:Art.Url="{Binding ArtUrl}">
+                            <Image x:Name="Disc" Width="62" Height="62" Stretch="UniformToFill" p:Art.Url="{Binding ArtUrl}" Cursor="Hand" ToolTip="Now playing and lyrics" MouseLeftButtonUp="Disc_Click">
                                 <Image.Clip>
                                     <EllipseGeometry Center="31,31" RadiusX="31" RadiusY="31" />
                                 </Image.Clip>
@@ -175,7 +175,7 @@
                     </Grid>
                     <StackPanel Margin="14,0,8,0" VerticalAlignment="Center" MaxWidth="220">
                         <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" FontWeight="SemiBold" ToolTip="{Binding Title}" />
-                        <TextBlock Text="{Binding ArtistLine}" Style="{StaticResource Caption}" FontSize="12" Margin="0,2,0,0" />
+                        <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource Caption}" FontSize="12" Margin="0,2,0,0" />
                     </StackPanel>
                     <Button Style="{StaticResource ToggleIconButton}" Content="{Binding LikeGlyph}" Command="{Binding ToggleLikeCommand}"
                             ToolTip="Save to Liked songs">
@@ -215,6 +215,8 @@
                     <Button Style="{StaticResource ToggleIconButton}" Content="&#xE8FD;" ToolTip="Queue"
                             Command="{Binding DataContext.ToggleQueueCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             Tag="{Binding DataContext.IsQueueOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:BoolToOnConverter.Instance}}" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE740;" ToolTip="Now playing and lyrics (F)"
+                            Command="{Binding DataContext.NowPlaying.ToggleCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <Button x:Name="MiniButton" Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Mini-player" Click="Mini_Click" />
                     <TextBlock Text="&#xE767;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="8,0" />
@@ -238,5 +240,8 @@
                 </StackPanel>
             </StackPanel>
         </Grid>
+        <!-- full-screen now playing + lyrics -->
+        <views:NowPlayingView Grid.ColumnSpan="2" DataContext="{Binding NowPlaying}"
+                              Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}" />
     </Grid>
 </Window>

@@ -16,4 +16,5 @@ public sealed record AppServices(
     ArtCache Art,
     IClock Clock,
     string DataDir,
-    StreamPrefetcher Prefetcher);
+    StreamPrefetcher Prefetcher,
+    Tune.Core.Lyrics.LyricsService Lyrics);
