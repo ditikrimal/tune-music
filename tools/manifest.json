@@ -1,0 +1,10 @@
+{
+  "deno": {
+    "version": "v2.9.8",
+    "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip",
+    "sha256": "CBA84B26E0DF5AE7F74FC66B86A95B866872A86292EBD84FA1E959927EDD93BF"
+  },
+  "ytdlp": {
+    "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+  }
+}
