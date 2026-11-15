@@ -84,3 +84,16 @@ public sealed class ColorToBrushConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Uses <see cref="First"/> for the first item of a list and <see cref="Rest"/> for the others.</summary>
+public sealed class FirstItemTemplateSelector : System.Windows.Controls.DataTemplateSelector
+{
+    public DataTemplate? First { get; set; }
+    public DataTemplate? Rest { get; set; }
+
+    public override DataTemplate? SelectTemplate(object? item, DependencyObject container)
+    {
+        var owner = System.Windows.Controls.ItemsControl.ItemsControlFromItemContainer(container);
+        return owner is not null && owner.Items.Count > 0 && ReferenceEquals(owner.Items[0], item) ? First : Rest;
+    }
+}

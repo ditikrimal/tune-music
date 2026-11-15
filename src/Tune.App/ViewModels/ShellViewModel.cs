@@ -19,6 +19,30 @@ public sealed record PlaceholderPage(string Title, string? NavKey) : IPage;
 public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly Stack<IPage> _back = new();
+    private readonly Stack<IPage> _forward = new();
+    private bool _syncingSearch;
+
+    [ObservableProperty] private string _searchText = "";
+
+    /// <summary>Typing in the top search box opens Search with that text.</summary>
+    partial void OnSearchTextChanged(string value)
+    {
+        if (_syncingSearch) return;
+        if (PageFactory("search") is SearchViewModel s) s.Query = value; // the search page is cached
+        if (Page is not SearchViewModel) GoToCommand.Execute("search");
+    }
+
+    public bool CanGoForward => _forward.Count > 0;
+
+    [RelayCommand]
+    private void GoForward()
+    {
+        if (_forward.Count == 0) return;
+        if (Page is not null) _back.Push(Page);
+        Page = _forward.Pop();
+        OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
+    }
     private readonly Dispatcher _ui;
     private DispatcherTimer? _toastTimer;
 
@@ -59,6 +83,10 @@ public sealed partial class ShellViewModel : ObservableObject
 
     partial void OnPageChanged(IPage? value)
     {
+        // keep the top search box showing the search page's text (and empty elsewhere)
+        _syncingSearch = true;
+        SearchText = value is SearchViewModel s ? s.Query : "";
+        _syncingSearch = false;
         OnPropertyChanged(nameof(NavKey));
         if (value is HomeViewModel home) home.OnShown();
         MarkCurrentRows();
@@ -86,8 +114,10 @@ public sealed partial class ShellViewModel : ObservableObject
     public void Navigate(IPage page)
     {
         if (Page is not null) _back.Push(Page);
+        _forward.Clear();
         Page = page;
         OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
     }
 
     [RelayCommand]
@@ -101,8 +131,10 @@ public sealed partial class ShellViewModel : ObservableObject
     private void GoBack()
     {
         if (_back.Count == 0) return;
+        if (Page is not null) _forward.Push(Page);
         Page = _back.Pop();
         OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
     }
 
     [RelayCommand]

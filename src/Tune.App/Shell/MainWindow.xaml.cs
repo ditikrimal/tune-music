@@ -21,8 +21,13 @@ public partial class MainWindow : Window
                 }));
         DataContextChanged += (_, _) =>
         {
-            if (DataContext is ShellViewModel vm)
-                vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ShellViewModel.Page)) AnimatePageIn(); };
+            if (DataContext is not ShellViewModel vm) return;
+            vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ShellViewModel.Page)) AnimatePageIn(); };
+            vm.Player.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(PlayerBarViewModel.IsPlaying)) UpdateSpin(vm.Player.IsPlaying);
+            };
+            Loaded += (_, _) => UpdateSpin(vm.Player.IsPlaying);
         };
                 SourceInitialized += (_, _) =>
         {
@@ -69,6 +74,72 @@ public partial class MainWindow : Window
     }
 
     private ShellViewModel Vm => (ShellViewModel)DataContext;
+
+    /// <summary>Keyboard shortcuts (Spotify-like). Space is left alone while typing in a text box.</summary>
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
+        var typing = Keyboard.FocusedElement is System.Windows.Controls.TextBox;
+        var p = Vm.Player;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        switch (key)
+        {
+            case Key.K or Key.F when ctrl:
+                TopSearch.Focus();
+                TopSearch.SelectAll();
+                break;
+            case Key.Space when !typing:
+                p.PlayPauseCommand.Execute(null);
+                break;
+            case Key.Right when ctrl:
+                p.NextCommand.Execute(null);
+                break;
+            case Key.Left when ctrl:
+                p.PreviousCommand.Execute(null);
+                break;
+            case Key.Up when ctrl:
+                p.Volume = Math.Min(1, p.Volume + 0.05);
+                break;
+            case Key.Down when ctrl:
+                p.Volume = Math.Max(0, p.Volume - 0.05);
+                break;
+            case Key.L when ctrl:
+                p.ToggleLikeCommand.Execute(null);
+                break;
+            case Key.Left when alt:
+                Vm.GoBackCommand.Execute(null);
+                break;
+            case Key.Right when alt:
+                Vm.GoForwardCommand.Execute(null);
+                break;
+            case Key.Escape when typing:
+                Keyboard.ClearFocus();
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+    }
+
+    private System.Windows.Media.Animation.AnimationClock? _spin;
+
+    /// <summary>The now-playing disc turns slowly while music plays and stops where it is on pause.</summary>
+    private void UpdateSpin(bool playing)
+    {
+        if (_spin is null)
+        {
+            var anim = new System.Windows.Media.Animation.DoubleAnimation(0, 360, TimeSpan.FromSeconds(14))
+            {
+                RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            };
+            _spin = anim.CreateClock();
+            DiscSpin.ApplyAnimationClock(System.Windows.Media.RotateTransform.AngleProperty, _spin);
+        }
+        if (playing) _spin.Controller?.Resume();
+        else _spin.Controller?.Pause();
+    }
 
     /// <summary>New page fades in while sliding up a little.</summary>
     private void AnimatePageIn()

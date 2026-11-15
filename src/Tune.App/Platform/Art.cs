@@ -30,4 +30,28 @@ public static class Art
         var bmp = await Cache.GetAsync(url, px);
         if (GetUrl(img) == url) img.Source = bmp; // still showing the same item (virtualized rows get reused)
     }
+
+    // ---------- Art.TintFrom: paints a Border with the art's own colour (featured cards) ----------
+
+    private static readonly Dictionary<string, Brush> Tints = [];
+
+    public static readonly DependencyProperty TintFromProperty = DependencyProperty.RegisterAttached(
+        "TintFrom", typeof(string), typeof(Art), new PropertyMetadata(null, OnTintFromChanged));
+
+    public static string? GetTintFrom(DependencyObject d) => (string?)d.GetValue(TintFromProperty);
+    public static void SetTintFrom(DependencyObject d, string? value) => d.SetValue(TintFromProperty, value);
+
+    private static async void OnTintFromChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not System.Windows.Controls.Border border || Cache is null || e.NewValue is not string url || url.Length == 0) return;
+        if (!Tints.TryGetValue(url, out var brush))
+        {
+            var bmp = await Cache.GetAsync(url, 48);
+            if (bmp is null) return;
+            var b = new SolidColorBrush(AlbumColor.ForCard(AlbumColor.FromBitmap(bmp)));
+            b.Freeze();
+            Tints[url] = brush = b;
+        }
+        if (GetTintFrom(border) == url) border.Background = brush;
+    }
 }

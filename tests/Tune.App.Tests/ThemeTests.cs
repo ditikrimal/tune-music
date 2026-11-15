@@ -42,6 +42,19 @@ public class ThemeTests
     }
 
     [Fact]
+    public void Card_colour_is_vivid_but_keeps_white_text_readable()
+    {
+        // featured Home cards: bright like the reference ("Chill Hits" blue, "Accustics" orange)
+        foreach (var art in new[] { Color.FromRgb(90, 160, 250), Color.FromRgb(250, 170, 40), Color.FromRgb(20, 20, 60), Color.FromRgb(240, 240, 240) })
+        {
+            var c = AlbumColor.ForCard(art);
+            Assert.InRange(AlbumColor.Luminance(c), 0.07, 0.3);
+        }
+        var orange = AlbumColor.ForCard(Color.FromRgb(250, 170, 40));
+        Assert.True(orange.R > orange.B * 2, "keeps the hue");
+    }
+
+    [Fact]
     public void All_grey_art_gives_neutral_header()
     {
         var c = AlbumColor.Dominant(Pixels(100, (Color.FromRgb(90, 90, 90), 1)));

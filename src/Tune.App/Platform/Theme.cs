@@ -66,6 +66,17 @@ public static class AlbumColor
         return x;
     }
 
+    /// <summary>Featured card colour: vivid like the art, but dark enough for white titles.</summary>
+    public static Color ForCard(Color c)
+    {
+        var x = c;
+        for (var i = 0; i < 40 && Luminance(x) > 0.28; i++)
+            x = Color.FromRgb((byte)(x.R * 0.92), (byte)(x.G * 0.92), (byte)(x.B * 0.92));
+        for (var i = 0; i < 40 && Luminance(x) < 0.08; i++)
+            x = Color.FromRgb((byte)Math.Min(255, x.R + 8), (byte)Math.Min(255, x.G + 8), (byte)Math.Min(255, x.B + 10));
+        return x;
+    }
+
     public static Color FromBitmap(BitmapSource bmp)
     {
         var small = new FormatConvertedBitmap(new TransformedBitmap(bmp, new ScaleTransform(48.0 / bmp.PixelWidth, 48.0 / bmp.PixelHeight)),

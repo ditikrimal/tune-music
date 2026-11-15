@@ -480,6 +480,20 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     [RelayCommand]
     private void PickBackground(Tune.App.Platform.BackgroundStyle b) => Background = b;
 
+    [ObservableProperty] private Tune.App.Mini.WidgetStyle _widgetStyle = App.MiniStyle;
+
+    [RelayCommand]
+    private void PickWidgetStyle(string style)
+    {
+        if (!Enum.TryParse<Tune.App.Mini.WidgetStyle>(style, out var s)) return;
+        WidgetStyle = s;
+        App.SetMiniStyle(s);
+    }
+
+    public string WidgetStyleName => WidgetStyle.ToString();
+
+    partial void OnWidgetStyleChanged(Tune.App.Mini.WidgetStyle value) => OnPropertyChanged(nameof(WidgetStyleName));
+
     partial void OnStartWithWindowsChanged(bool value)
     {
         using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey);

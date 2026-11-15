@@ -62,7 +62,7 @@
                 Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bg" Background="{DynamicResource CardBrush}" CornerRadius="8" Padding="12">
+                    <Border x:Name="bg" Background="Transparent" CornerRadius="14" Padding="12">
                         <ContentPresenter />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -78,14 +78,18 @@
                         <ToolTip Style="{StaticResource DetailsTip}" Content="{Binding Track}"
                                  Visibility="{Binding Track, Converter={StaticResource NullToVis}}" />
                     </Grid.ToolTip>
-                    <Border x:Name="artBorder" CornerRadius="6" Background="#282828" ClipToBounds="True">
+                    <Border x:Name="artBorder" CornerRadius="12" Background="#282828" ClipToBounds="True">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="14" ShadowDepth="4" Opacity="0.4" />
                         </Border.Effect>
                         <Grid>
                             <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource IconFont}" FontSize="40" Foreground="#555"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            <Image Width="172" Height="172" Stretch="UniformToFill" p:Art.Url="{Binding ThumbnailUrl}" />
+                            <Image x:Name="art" Width="172" Height="172" Stretch="UniformToFill" p:Art.Url="{Binding ThumbnailUrl}">
+                                <Image.Clip>
+                                    <RectangleGeometry Rect="0,0,172,172" RadiusX="12" RadiusY="12" />
+                                </Image.Clip>
+                            </Image>
                         </Grid>
                     </Border>
                     <StackPanel x:Name="quick" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Opacity="0"
@@ -109,6 +113,11 @@
             </Trigger>
             <DataTrigger Binding="{Binding Kind}" Value="Artist">
                 <Setter TargetName="artBorder" Property="CornerRadius" Value="86" />
+                <Setter TargetName="art" Property="Clip">
+                    <Setter.Value>
+                        <EllipseGeometry Center="86,86" RadiusX="86" RadiusY="86" />
+                    </Setter.Value>
+                </Setter>
             </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>
@@ -126,6 +135,99 @@
             <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False"
                          >
                 <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource CardTemplate}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- ================= featured card: tall, tinted with the art's own colour ================= -->
+    <DataTemplate x:Key="FeaturedCardTemplate" DataType="{x:Type m:Card}">
+        <Button x:Name="card" Width="210" Height="292" Margin="0,0,18,0" Cursor="Hand" Focusable="False" RenderTransformOrigin="0.5,0.5"
+                MouseEnter="Card_MouseEnter" AutomationProperties.Name="{Binding Title}"
+                Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
+            <Button.RenderTransform>
+                <ScaleTransform x:Name="lift" />
+            </Button.RenderTransform>
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="tint" CornerRadius="26" Background="{DynamicResource CardHoverBrush}" p:Art.TintFrom="{Binding ThumbnailUrl}">
+                        <Border.Effect>
+                            <DropShadowEffect x:Name="glow" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
+                        </Border.Effect>
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.03" Duration="0:0:0.15" />
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.03" Duration="0:0:0.15" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.2" />
+                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.2" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+            <Grid Margin="16,18,16,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource TextBase}" FontSize="18" FontWeight="Bold" TextAlignment="Center"
+                               TextWrapping="Wrap" MaxHeight="48" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource TextBase}" FontSize="12" Foreground="#CCFFFFFF" TextAlignment="Center" Margin="0,4,0,0" />
+                </StackPanel>
+                <Grid Grid.Row="1" Width="168" Height="168" VerticalAlignment="Bottom">
+                    <Border CornerRadius="18" Background="#30000000" ClipToBounds="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.45" />
+                        </Border.Effect>
+                        <Image Width="168" Height="168" Stretch="UniformToFill" p:Art.Url="{Binding ThumbnailUrl}">
+                            <Image.Clip>
+                                <RectangleGeometry Rect="0,0,168,168" RadiusX="18" RadiusY="18" />
+                            </Image.Clip>
+                        </Image>
+                    </Border>
+                    <Button x:Name="play" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="Black"
+                            HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Opacity="0" ToolTip="Play"
+                            Command="{Binding DataContext.PlayCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                </Grid>
+            </Grid>
+        </Button>
+        <DataTemplate.Triggers>
+            <Trigger SourceName="card" Property="IsMouseOver" Value="True">
+                <Setter TargetName="play" Property="Opacity" Value="1" />
+            </Trigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="FeaturedShelfTemplate" DataType="{x:Type m:Shelf}">
+        <StackPanel>
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,10">
+                    <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Click="ShelfLeft_Click" ToolTip="Scroll left" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Margin="8,0,0,0" Click="ShelfRight_Click" ToolTip="Scroll right" />
+                </StackPanel>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
+            </DockPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" Padding="0,4,0,14">
+                <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource FeaturedCardTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" />
@@ -214,7 +316,7 @@
 
     <!-- ================= Home ================= -->
     <DataTemplate DataType="{x:Type vm:HomeViewModel}">
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,24">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
             <StackPanel>
                 <TextBlock Text="{Binding Greeting}" Style="{StaticResource Title1}" Margin="0,0,0,4" />
                 <Border Visibility="{Binding Offline, Converter={StaticResource BoolToVis}}" Background="#2A1F1F" CornerRadius="8" Padding="16,12" Margin="0,16,0,0">
@@ -225,7 +327,11 @@
                 </Border>
                 <TextBlock Text="Loading your music…" Style="{StaticResource Subtle}" Margin="0,24,0,0"
                            Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
-                <ItemsControl ItemsSource="{Binding Shelves}" ItemTemplate="{StaticResource ShelfTemplate}" />
+                <ItemsControl ItemsSource="{Binding Shelves}">
+                    <ItemsControl.ItemTemplateSelector>
+                        <sh:FirstItemTemplateSelector First="{StaticResource FeaturedShelfTemplate}" Rest="{StaticResource ShelfTemplate}" />
+                    </ItemsControl.ItemTemplateSelector>
+                </ItemsControl>
             </StackPanel>
         </ScrollViewer>
     </DataTemplate>
@@ -233,7 +339,7 @@
     <!-- ================= Search ================= -->
     <DataTemplate DataType="{x:Type vm:SearchViewModel}">
         <DockPanel Margin="32,0,24,0">
-            <Grid DockPanel.Dock="Top" MaxWidth="480" HorizontalAlignment="Left" Width="480">
+            <Grid DockPanel.Dock="Top" MaxWidth="480" HorizontalAlignment="Left" Width="480" Visibility="Collapsed">
                 <TextBox x:Name="box" Style="{StaticResource SearchBox}" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
                          Loaded="SearchBox_Loaded">
                     <TextBox.InputBindings>
@@ -243,8 +349,8 @@
                 <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" Foreground="{DynamicResource SubtleTextBrush}" FontSize="16"
                            VerticalAlignment="Center" Margin="16,0,0,0" IsHitTestVisible="False" />
             </Grid>
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,16,0,0">
-                <StackPanel Margin="0,0,0,24">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+                <StackPanel Margin="0,0,0,120">
                     <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" FontSize="15" Margin="0,24,0,0"
                                Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
                     <StackPanel Visibility="{Binding HasResults, Converter={StaticResource BoolToVis}}">
@@ -328,7 +434,7 @@
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding Message}" Style="{StaticResource Subtle}" FontSize="15" Margin="44,12,0,0"
                        Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
-            <ListBox x:Name="tracks" ItemsSource="{Binding Tracks}" Style="{StaticResource TrackList}" Margin="20,0,12,0"
+            <ListBox x:Name="tracks" ItemsSource="{Binding Tracks}" Style="{StaticResource TrackList}" Margin="20,0,12,0" Padding="0,0,0,110"
                      AllowDrop="{Binding IsLocal}" PreviewMouseLeftButtonDown="Tracks_PreviewMouseDown" PreviewMouseMove="Tracks_PreviewMouseMove"
                      Drop="Tracks_Drop" />
         </DockPanel>
@@ -342,7 +448,7 @@
 
     <!-- ================= Artist ================= -->
     <DataTemplate DataType="{x:Type vm:ArtistViewModel}">
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,24">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Border Width="200" Height="200" CornerRadius="100" Background="#282828" ClipToBounds="True">
@@ -414,8 +520,44 @@
         </StackPanel>
     </DataTemplate>
 
+
+    <!-- segmented pill button: highlighted when its Tag equals the bound selection -->
+    <Style x:Key="SegmentPill" TargetType="Button">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b" CornerRadius="18" Padding="18,9" Background="#2A2A2A">
+                        <ContentPresenter HorizontalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="#3A3A3A" />
+                        </Trigger>
+                        <DataTrigger Value="True">
+                            <DataTrigger.Binding>
+                                <MultiBinding Converter="{x:Static sh:SameConverter.Instance}">
+                                    <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
+                                    <Binding Path="DataContext.WidgetStyleName" RelativeSource="{RelativeSource AncestorType=ScrollViewer}" />
+                                </MultiBinding>
+                            </DataTrigger.Binding>
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
+                            <Setter Property="Foreground" Value="Black" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,32">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
             <StackPanel MaxWidth="780" HorizontalAlignment="Left" Width="780">
                 <TextBlock Text="Settings" Style="{StaticResource Title1}" Margin="0,0,0,4" />
 
@@ -539,6 +681,24 @@
                             <TextBlock Text="The top of every page fades to the colours of the song that's playing." Style="{StaticResource Subtle}" Margin="0,4,48,0" TextWrapping="Wrap" />
                         </StackPanel>
                     </DockPanel>
+                </Border>
+
+                <!-- ===== Mini-player ===== -->
+                <TextBlock Text="MINI-PLAYER" Style="{StaticResource SettingsSection}" />
+                <Border Style="{StaticResource SettingCard}">
+                    <StackPanel>
+                        <TextBlock Text="Style" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Text="The floating player you can keep anywhere on screen. You can also right-click it to switch."
+                                   Style="{StaticResource Subtle}" Margin="0,4,0,14" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource SegmentPill}" Tag="Compact" Content="Compact bar" AutomationProperties.Name="Compact bar"
+                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Compact" />
+                            <Button Style="{StaticResource SegmentPill}" Tag="Card" Content="Card with controls" AutomationProperties.Name="Card with controls"
+                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Card" />
+                            <Button Style="{StaticResource SegmentPill}" Tag="Square" Content="Album art tile" AutomationProperties.Name="Album art tile"
+                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Square" />
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
 
                 <!-- ===== Playback ===== -->
