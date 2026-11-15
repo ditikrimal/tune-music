@@ -8,7 +8,7 @@
         <sh:NullToVisibilityConverter x:Key="NpNullVis" />
     </UserControl.Resources>
 
-    <Grid ClipToBounds="True" Background="{DynamicResource BaseBrush}">
+    <Grid x:Name="Panel" ClipToBounds="True" Background="{DynamicResource BaseBrush}" SizeChanged="Panel_SizeChanged">
         <!-- blurred album art backdrop -->
         <Image Stretch="UniformToFill" p:Art.Url="{Binding Player.ArtUrl}" Opacity="0.6" Margin="-120"
                RenderOptions.BitmapScalingMode="LowQuality">
@@ -25,7 +25,7 @@
             </Border.Background>
         </Border>
 
-        <Grid Margin="48,20,48,28">
+        <Grid Margin="40,16,40,24">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -40,28 +40,28 @@
             </DockPanel>
 
             <!-- art + lyrics -->
-            <Grid Grid.Row="1" Margin="0,16,0,16">
+            <Grid Grid.Row="1" Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="5*" />
                     <ColumnDefinition Width="6*" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440">
-                    <Viewbox MaxWidth="440" MaxHeight="440" Stretch="Uniform">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="380">
+                    <Viewbox MaxWidth="380" MaxHeight="380" Stretch="Uniform">
                         <Grid Width="440" Height="440">
                             <Border CornerRadius="24" Background="#202020" Margin="6">
                                 <Border.Effect>
                                     <DropShadowEffect BlurRadius="48" ShadowDepth="10" Opacity="0.6" />
                                 </Border.Effect>
                             </Border>
-                            <Image Stretch="UniformToFill" p:Art.Url="{Binding Player.ArtUrl}">
+                            <Image Width="440" Height="440" Stretch="UniformToFill" p:Art.Url="{Binding Player.ArtUrl}">
                                 <Image.Clip>
                                     <RectangleGeometry Rect="0,0,440,440" RadiusX="24" RadiusY="24" />
                                 </Image.Clip>
                             </Image>
                         </Grid>
                     </Viewbox>
-                    <TextBlock Text="{Binding Player.Title}" Style="{StaticResource Title1}" FontSize="32" TextWrapping="Wrap" TextTrimming="None" Margin="0,26,0,0" />
+                    <TextBlock Text="{Binding Player.Title}" Style="{StaticResource Title1}" FontSize="28" TextWrapping="Wrap" TextTrimming="None" Margin="0,26,0,0" />
                     <p:ArtistLinks Artists="{Binding Player.Track.Artists}" Style="{StaticResource Subtle}" FontSize="18" Margin="0,6,0,0" />
                 </StackPanel>
 
@@ -77,7 +77,7 @@
                                 <GradientStop Color="Transparent" Offset="1" />
                             </LinearGradientBrush>
                         </ScrollViewer.OpacityMask>
-                        <ItemsControl x:Name="LyricsList" ItemsSource="{Binding Lines}" Margin="0,160,0,320">
+                        <ItemsControl x:Name="LyricsList" ItemsSource="{Binding Lines}" Margin="0,120,0,260">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button Cursor="Hand" Focusable="False" HorizontalAlignment="Left" ToolTip="Play from here"
@@ -85,7 +85,7 @@
                                             CommandParameter="{Binding}">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
-                                                <TextBlock x:Name="t" Text="{Binding Text}" FontFamily="{StaticResource UiFont}" FontSize="30" FontWeight="Bold"
+                                                <TextBlock x:Name="t" Text="{Binding Text}" FontFamily="{StaticResource UiFont}" FontSize="26" FontWeight="Bold"
                                                            TextWrapping="Wrap" Foreground="#59FFFFFF" Margin="0,9" Background="Transparent" />
                                                 <ControlTemplate.Triggers>
                                                     <DataTrigger Binding="{Binding State}" Value="Past">
@@ -118,37 +118,6 @@
                 </Grid>
             </Grid>
 
-            <!-- controls -->
-            <StackPanel Grid.Row="2" DataContext="{Binding Player}" MaxWidth="900">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="64" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="64" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding PositionText}" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <Slider x:Name="NpSeek" Grid.Column="1" Style="{StaticResource ThinSlider}" Minimum="0"
-                            Maximum="{Binding Duration}" Value="{Binding Position, Mode=OneWay}" VerticalAlignment="Center"
-                            PreviewMouseLeftButtonDown="Seek_MouseDown" PreviewMouseLeftButtonUp="Seek_MouseUp" />
-                    <TextBlock Grid.Column="2" Text="{Binding DurationText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0" />
-                </Grid>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
-                    <Button Style="{StaticResource ToggleIconButton}" Content="&#xE8B1;" Tag="{Binding ShuffleTag}"
-                            Command="{Binding ToggleShuffleCommand}" ToolTip="Shuffle" />
-                    <Button Style="{StaticResource IconButton}" Content="&#xE892;" Command="{Binding PreviousCommand}" Margin="14,0" ToolTip="Previous" />
-                    <Button Style="{StaticResource AccentPlayButton}" Content="{Binding PlayGlyph}" Command="{Binding PlayPauseCommand}" ToolTip="Play/Pause"
-                            Foreground="{DynamicResource OnAccentBrush}" Width="62" Height="62" FontSize="22" />
-                    <Button Style="{StaticResource IconButton}" Content="&#xE893;" Command="{Binding NextCommand}" Margin="14,0" ToolTip="Next" />
-                    <Button Style="{StaticResource ToggleIconButton}" Content="{Binding RepeatGlyph}" Tag="{Binding RepeatTag}"
-                            Command="{Binding CycleRepeatCommand}" ToolTip="{Binding RepeatTip}" />
-                    <Button Style="{StaticResource ToggleIconButton}" Content="{Binding LikeGlyph}" Command="{Binding ToggleLikeCommand}"
-                            ToolTip="Save to Liked songs" Margin="14,0,0,0">
-                        <Button.Tag>
-                            <Binding Path="IsLiked" Converter="{x:Static sh:BoolToOnConverter.Instance}" />
-                        </Button.Tag>
-                    </Button>
-                </StackPanel>
-            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>

@@ -40,7 +40,7 @@ public partial class NowPlayingView : UserControl
         Platform.SmoothScroll.ScrollBy(LyricsScroll, target - LyricsScroll.VerticalOffset);
     }
 
-    private void Seek_MouseDown(object sender, MouseButtonEventArgs e) => _vm?.Player.BeginSeek();
-
-    private void Seek_MouseUp(object sender, MouseButtonEventArgs e) => _vm?.Player.CommitSeek(NpSeek.Value);
+    /// <summary>Rounded corners for the panel (children are clipped too).</summary>
+    private void Panel_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        Panel.Clip = new RectangleGeometry(new Rect(e.NewSize), 24, 24);
 }

@@ -142,6 +142,10 @@
             </Border>
         </Grid>
 
+        <!-- now playing + lyrics: fills the content area; sidebar, top bar and the floating player stay usable -->
+        <views:NowPlayingView Grid.Column="1" DataContext="{Binding NowPlaying}" Margin="4,52,16,114"
+                              Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}" />
+
         <!-- ===================== player bar ===================== -->
         <Border Grid.ColumnSpan="2" VerticalAlignment="Bottom" Height="88" Margin="14,0,14,14" CornerRadius="22"
                 Background="#EE161616" BorderBrush="#22FFFFFF" BorderThickness="1" DataContext="{Binding Player}">
@@ -240,8 +244,5 @@
                 </StackPanel>
             </StackPanel>
         </Grid>
-        <!-- full-screen now playing + lyrics -->
-        <views:NowPlayingView Grid.ColumnSpan="2" DataContext="{Binding NowPlaying}"
-                              Visibility="{Binding IsOpen, Converter={StaticResource BoolToVis}}" />
     </Grid>
 </Window>
