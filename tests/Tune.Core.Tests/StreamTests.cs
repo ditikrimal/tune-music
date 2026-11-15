@@ -81,9 +81,38 @@ public class StreamTests : IDisposable
         var url = await new StreamResolver(tools, _runner, _clock).ResolveAsync("oyr9_tu_F2U");
         var (exe, args) = _runner.Calls.Single();
         Assert.Equal(tools.YtDlpPath, exe);
-        Assert.Equal(["-f", "bestaudio", "-g", "--no-playlist", "--no-warnings", "--no-progress",
-            "--js-runtimes", "deno:" + tools.DenoPath, "https://music.youtube.com/watch?v=oyr9_tu_F2U"], args);
+        Assert.Equal(["-f", "bestaudio", "--no-playlist", "--no-warnings", "--no-progress",
+            "--js-runtimes", "deno:" + tools.DenoPath, "--print", "%(available_at|0)s", "--print", "%(url)s",
+            "https://music.youtube.com/watch?v=oyr9_tu_F2U"], args);
         Assert.Equal("rr1.googlevideo.com", url.Host);
+    }
+
+    [Fact]
+    public async Task Resolve_waits_until_stream_is_available()
+    {
+        // YouTube locks the stream for the length of the skipped pre-roll ad (403 until available_at)
+        var waits = new List<TimeSpan>();
+        _runner.Respond = _ => (0, $"{Now.AddSeconds(4).ToUnixTimeSeconds()}\n{Url(Now.AddHours(6))}\n", "");
+        var r = new StreamResolver(Tools(), _runner, _clock, (d, _) => { waits.Add(d); return Task.CompletedTask; });
+        await r.ResolveAsync("abcdefghijk");
+        Assert.Equal([TimeSpan.FromSeconds(4.5)], waits); // + 0.5 s margin
+        _clock.Now = Now.AddSeconds(10);
+        await r.ResolveAsync("abcdefghijk"); // cached and already available: no wait
+        Assert.Single(waits);
+    }
+
+    [Fact]
+    public async Task Resolve_does_not_wait_when_available_at_is_missing_or_past()
+    {
+        var waits = new List<TimeSpan>();
+        var r = new StreamResolver(Tools(), _runner, _clock, (d, _) => { waits.Add(d); return Task.CompletedTask; });
+        _runner.Respond = _ => (0, $"0\n{Url(Now.AddHours(6))}\n", "");
+        await r.ResolveAsync("aaaaaaaaaaa");
+        _runner.Respond = _ => (0, $"{Now.AddSeconds(-3).ToUnixTimeSeconds()}\n{Url(Now.AddHours(6))}\n", "");
+        await r.ResolveAsync("bbbbbbbbbbb");
+        _runner.Respond = _ => (0, $"NA\n{Url(Now.AddHours(6))}\n", "");
+        await r.ResolveAsync("ccccccccccc");
+        Assert.Empty(waits);
     }
 
     [Fact]
@@ -153,6 +182,24 @@ public class StreamTests : IDisposable
         Assert.Equal("fake yt-dlp", File.ReadAllText(tools.YtDlpPath));
         await tools.EnsureInstalledAsync(); // already present: no new downloads
         Assert.Equal(2, handler.Requests.Count);
+    }
+
+    private sealed class SyncProgress(List<ToolProgress> sink) : IProgress<ToolProgress>
+    {
+        public void Report(ToolProgress value) { lock (sink) sink.Add(value); }
+    }
+
+    [Fact]
+    public async Task EnsureInstalled_reports_progress_per_tool()
+    {
+        var tgz = DenoTgz();
+        var manifest = ToolManifest.Load() with { DenoIntegrity = Integrity(tgz) };
+        var handler = new BytesHandler(u => u.AbsolutePath.EndsWith(".tgz") ? tgz : new byte[200_000]);
+        var reports = new List<ToolProgress>();
+        await Tools(handler, manifest).EnsureInstalledAsync(new SyncProgress(reports));
+        Assert.Contains(reports, r => r.Tool == "yt-dlp" && r.Fraction is 1.0);
+        Assert.Contains(reports, r => r.Tool == "deno" && r.Fraction is 1.0);
+        Assert.All(reports, r => Assert.InRange(r.Fraction ?? 0, 0, 1));
     }
 
     [Fact]
