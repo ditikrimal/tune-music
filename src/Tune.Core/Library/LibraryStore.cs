@@ -1,0 +1,248 @@
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using Tune.Core.Models;
+
+namespace Tune.Core.Library;
+
+public sealed record PlaylistInfo(long Id, string Name, int Count, string? ThumbnailUrl);
+
+public sealed record PlayStat(Track Track, int Plays);
+
+/// <summary>Everything the app remembers locally: play history, likes, playlists and settings.</summary>
+public sealed class LibraryStore : IDisposable
+{
+    private static readonly JsonSerializerOptions JsonOptions = new() { IgnoreReadOnlyProperties = true };
+    private readonly SqliteConnection _db;
+    private readonly Lock _gate = new();
+
+    public LibraryStore(string dbPath)
+    {
+        _db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = dbPath }.ToString());
+        _db.Open();
+        Exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
+        Exec("""
+            CREATE TABLE IF NOT EXISTS tracks (video_id TEXT PRIMARY KEY, json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS plays (id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT NOT NULL, at INTEGER NOT NULL);
+            CREATE INDEX IF NOT EXISTS plays_at ON plays(at);
+            CREATE TABLE IF NOT EXISTS likes (seq INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT NOT NULL UNIQUE);
+            CREATE TABLE IF NOT EXISTS playlists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS playlist_items (
+                playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL, video_id TEXT NOT NULL, PRIMARY KEY (playlist_id, position));
+            CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            PRAGMA user_version=1;
+            """);
+    }
+
+    public void Dispose() => _db.Dispose();
+
+    // ---------- history ----------
+
+    public void RecordPlay(Track t, DateTimeOffset at)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            SaveTrack(t);
+            Exec("INSERT INTO plays (video_id, at) VALUES ($v, $at)", ("$v", t.VideoId), ("$at", at.ToUnixTimeMilliseconds()));
+            tx.Commit();
+        }
+    }
+
+    public IReadOnlyList<Track> GetRecent(int max) =>
+        QueryTracks("""
+            SELECT t.json FROM (SELECT video_id, MAX(id) AS last FROM plays GROUP BY video_id) p
+            JOIN tracks t ON t.video_id = p.video_id ORDER BY p.last DESC LIMIT $n
+            """, ("$n", max));
+
+    public IReadOnlyList<PlayStat> GetTopTracks(DateTimeOffset since, int max)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("""
+                SELECT t.json, COUNT(*) AS n, MAX(p.id) AS last FROM plays p JOIN tracks t ON t.video_id = p.video_id
+                WHERE p.at >= $since GROUP BY p.video_id ORDER BY n DESC, last DESC LIMIT $n
+                """, ("$since", since.ToUnixTimeMilliseconds()), ("$n", max));
+            using var r = cmd.ExecuteReader();
+            var list = new List<PlayStat>();
+            while (r.Read())
+                if (Deserialize(r.GetString(0)) is { } t) list.Add(new PlayStat(t, r.GetInt32(1)));
+            return list;
+        }
+    }
+
+    public IReadOnlyList<(ArtistRef Artist, int Plays)> GetTopArtists(DateTimeOffset since, int max) =>
+        GetTopTracks(since, int.MaxValue)
+            .SelectMany(s => s.Track.Artists.Select(a => (Artist: a, s.Plays)))
+            .GroupBy(x => x.Artist.BrowseId ?? x.Artist.Name)
+            .Select(g => (g.First().Artist, Plays: g.Sum(x => x.Plays)))
+            .OrderByDescending(x => x.Plays)
+            .Take(max)
+            .ToList();
+
+    // ---------- likes ----------
+
+    public bool IsLiked(string videoId) => Scalar("SELECT 1 FROM likes WHERE video_id = $v", ("$v", videoId)) is not null;
+
+    public void SetLiked(Track t, bool liked)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            Exec("DELETE FROM likes WHERE video_id = $v", ("$v", t.VideoId));
+            if (liked)
+            {
+                SaveTrack(t);
+                Exec("INSERT INTO likes (video_id) VALUES ($v)", ("$v", t.VideoId));
+            }
+            tx.Commit();
+        }
+    }
+
+    public IReadOnlyList<Track> GetLiked() =>
+        QueryTracks("SELECT t.json FROM likes l JOIN tracks t ON t.video_id = l.video_id ORDER BY l.seq DESC");
+
+    // ---------- playlists ----------
+
+    public long CreatePlaylist(string name)
+    {
+        lock (_gate)
+        {
+            Exec("INSERT INTO playlists (name) VALUES ($n)", ("$n", name));
+            return (long)Scalar("SELECT last_insert_rowid()")!;
+        }
+    }
+
+    public void RenamePlaylist(long id, string name) => Exec("UPDATE playlists SET name = $n WHERE id = $id", ("$n", name), ("$id", id));
+
+    public void DeletePlaylist(long id) => Exec("DELETE FROM playlists WHERE id = $id", ("$id", id));
+
+    public IReadOnlyList<PlaylistInfo> GetPlaylists()
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("""
+                SELECT p.id, p.name, COUNT(i.video_id),
+                       (SELECT t.json FROM playlist_items f JOIN tracks t ON t.video_id = f.video_id
+                        WHERE f.playlist_id = p.id ORDER BY f.position LIMIT 1)
+                FROM playlists p LEFT JOIN playlist_items i ON i.playlist_id = p.id
+                GROUP BY p.id ORDER BY p.id
+                """);
+            using var r = cmd.ExecuteReader();
+            var list = new List<PlaylistInfo>();
+            while (r.Read())
+            {
+                var first = r.IsDBNull(3) ? null : Deserialize(r.GetString(3));
+                list.Add(new PlaylistInfo(r.GetInt64(0), r.GetString(1), r.GetInt32(2), first?.ThumbnailUrl));
+            }
+            return list;
+        }
+    }
+
+    public void AddToPlaylist(long id, Track t)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            SaveTrack(t);
+            Exec("""
+                INSERT INTO playlist_items (playlist_id, position, video_id)
+                VALUES ($id, (SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_items WHERE playlist_id = $id), $v)
+                """, ("$id", id), ("$v", t.VideoId));
+            tx.Commit();
+        }
+    }
+
+    public void RemoveFromPlaylist(long id, int position) =>
+        Rewrite(id, ids => { if (position >= 0 && position < ids.Count) ids.RemoveAt(position); });
+
+    public void MoveInPlaylist(long id, int from, int to) =>
+        Rewrite(id, ids =>
+        {
+            if (from < 0 || from >= ids.Count || to < 0 || to >= ids.Count) return;
+            var item = ids[from];
+            ids.RemoveAt(from);
+            ids.Insert(to, item);
+        });
+
+    public IReadOnlyList<Track> GetPlaylistTracks(long id) =>
+        QueryTracks("""
+            SELECT t.json FROM playlist_items i JOIN tracks t ON t.video_id = i.video_id
+            WHERE i.playlist_id = $id ORDER BY i.position
+            """, ("$id", id));
+
+    private void Rewrite(long id, Action<List<string>> change)
+    {
+        lock (_gate)
+        {
+            var ids = new List<string>();
+            using (var cmd = Command("SELECT video_id FROM playlist_items WHERE playlist_id = $id ORDER BY position", ("$id", id)))
+            using (var r = cmd.ExecuteReader())
+                while (r.Read()) ids.Add(r.GetString(0));
+            change(ids);
+            using var tx = _db.BeginTransaction();
+            Exec("DELETE FROM playlist_items WHERE playlist_id = $id", ("$id", id));
+            for (var i = 0; i < ids.Count; i++)
+                Exec("INSERT INTO playlist_items (playlist_id, position, video_id) VALUES ($id, $p, $v)", ("$id", id), ("$p", i), ("$v", ids[i]));
+            tx.Commit();
+        }
+    }
+
+    // ---------- settings ----------
+
+    public string? GetSetting(string key) => Scalar("SELECT value FROM settings WHERE key = $k", ("$k", key)) as string;
+
+    public void SetSetting(string key, string value) =>
+        Exec("INSERT INTO settings (key, value) VALUES ($k, $v) ON CONFLICT(key) DO UPDATE SET value = excluded.value", ("$k", key), ("$v", value));
+
+    // ---------- helpers ----------
+
+    private void SaveTrack(Track t) =>
+        Exec("INSERT INTO tracks (video_id, json) VALUES ($v, $j) ON CONFLICT(video_id) DO UPDATE SET json = excluded.json",
+            ("$v", t.VideoId), ("$j", JsonSerializer.Serialize(t, JsonOptions)));
+
+    private static Track? Deserialize(string json)
+    {
+        try { return JsonSerializer.Deserialize<Track>(json, JsonOptions); }
+        catch (JsonException) { return null; }
+    }
+
+    private IReadOnlyList<Track> QueryTracks(string sql, params (string, object)[] args)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command(sql, args);
+            using var r = cmd.ExecuteReader();
+            var list = new List<Track>();
+            while (r.Read())
+                if (Deserialize(r.GetString(0)) is { } t) list.Add(t);
+            return list;
+        }
+    }
+
+    private SqliteCommand Command(string sql, params (string Name, object Value)[] args)
+    {
+        var cmd = _db.CreateCommand();
+        cmd.CommandText = sql;
+        foreach (var (name, value) in args) cmd.Parameters.AddWithValue(name, value);
+        return cmd;
+    }
+
+    private void Exec(string sql, params (string, object)[] args)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command(sql, args);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private object? Scalar(string sql, params (string, object)[] args)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command(sql, args);
+            return cmd.ExecuteScalar();
+        }
+    }
+}
