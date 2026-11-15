@@ -41,6 +41,13 @@ public partial class MainWindow : Window
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         SavePlacement();
+        if (!App.IsQuitting)
+        {
+            // close = hide to tray; the music keeps playing
+            e.Cancel = true;
+            Hide();
+            App.OnMainClosedToTray();
+        }
         base.OnClosing(e);
     }
 
@@ -54,7 +61,7 @@ public partial class MainWindow : Window
         // a WindowChrome window overhangs the screen by the resize border when maximized
         Root.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
         MaxButton.Content = WindowState == WindowState.Maximized ? "" : "";
-        Vm.Player.UpdatesEnabled = WindowState != WindowState.Minimized || MiniVisible;
+        App.SyncUpdates();
     }
 
     /// <summary>Set by the mini-player so position updates keep flowing while the main window is minimised.</summary>
@@ -79,12 +86,6 @@ public partial class MainWindow : Window
         var id = lib.CreatePlaylist($"My playlist #{lib.GetPlaylists().Count + 1}");
         Vm.ReloadPlaylists();
         Vm.GoToCommand.Execute($"playlist:{id}");
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        base.OnClosed(e);
-        App.Quit();
     }
 
     // Windows 11 rounded window corners for our borderless chrome

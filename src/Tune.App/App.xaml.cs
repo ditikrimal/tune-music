@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using Tune.App.Audio;
+using Tune.App.Mini;
 using Tune.App.Platform;
 using Tune.App.Shell;
 using Tune.App.ViewModels;
@@ -22,6 +23,8 @@ public partial class App : Application
     private const string MutexName = "Tune.SingleInstance";
     private const string ActivateEventName = "Tune.Activate";
 
+    private static bool _quitting;
+    public static bool IsQuitting => _quitting;
     private Mutex? _mutex;
     private EventWaitHandle? _activate;
     private MpvPlayer? _player;
@@ -80,9 +83,14 @@ public partial class App : Application
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir);
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();
-        MainWin = new MainWindow { DataContext = Shell };
-        MainWin.Show();
+        MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Create(64) };
+        MainWin.MiniPlayerRequested += ToggleMini;
         Shell.GoToCommand.Execute("home");
+        _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
+
+        var startHidden = e.Args.Contains("--minimized");
+        if (!startHidden) MainWin.Show();
+        if (_library.GetSetting("mini.visible") == "1" || startHidden) ShowMini();
         _ = Shell.EnsureToolsAsync();
 
         _activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
@@ -93,17 +101,72 @@ public partial class App : Application
         }) { IsBackground = true, Name = "single-instance" }.Start();
     }
 
+    private static MiniPlayerWindow? _mini;
+    private static TrayIcon? _tray;
+
+    public static void ToggleMini()
+    {
+        if (_mini?.IsVisible == true) HideMini();
+        else ShowMini();
+    }
+
+    private static void ShowMini()
+    {
+        if (_mini is null)
+        {
+            _mini = new MiniPlayerWindow(Services.Library) { DataContext = Shell.Player };
+            _mini.ExpandRequested += ShowMain;
+            _mini.HideRequested += HideMini;
+        }
+        _mini.Show();
+        Services.Library.SetSetting("mini.visible", "1");
+        SyncUpdates();
+    }
+
+    private static void HideMini()
+    {
+        if (_mini is null) return;
+        _mini.SavePlacement();
+        _mini.Hide();
+        Services.Library.SetSetting("mini.visible", "0");
+        SyncUpdates();
+    }
+
+    /// <summary>Position ticks only flow to the UI while something visible shows them.</summary>
+    public static void SyncUpdates()
+    {
+        var mainShowing = MainWin is { IsVisible: true } m && m.WindowState != WindowState.Minimized;
+        var miniShowing = _mini?.IsVisible == true;
+        if (MainWin is not null) MainWin.MiniVisible = miniShowing;
+        Shell.Player.UpdatesEnabled = mainShowing || miniShowing;
+        if (Shell.Player.UpdatesEnabled) Shell.Player.Refresh();
+    }
+
+    /// <summary>Closing the main window only hides it — music keeps playing from the tray.</summary>
+    public static void OnMainClosedToTray()
+    {
+        SyncUpdates();
+        if (Services.Library.GetSetting("tray.hinted") == "1") return;
+        Services.Library.SetSetting("tray.hinted", "1");
+        _tray?.ShowHint("Tune is still playing", "It lives in the tray now. Right-click the icon to quit.");
+    }
+
     public static void ShowMain()
     {
         if (MainWin is null) return;
         MainWin.Show();
         if (MainWin.WindowState == WindowState.Minimized) MainWin.WindowState = WindowState.Normal;
         MainWin.Activate();
+        SyncUpdates();
     }
 
     public static void Quit()
     {
         Log.Info("Tune quitting");
+        _mini?.SavePlacement();
+        MainWin?.SavePlacement();
+        _quitting = true;
+        _tray?.Dispose();
         Current.Shutdown();
     }
 
