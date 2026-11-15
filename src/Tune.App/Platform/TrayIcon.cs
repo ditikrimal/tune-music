@@ -37,7 +37,7 @@ public sealed class TrayIcon : IDisposable
 
         _icon = new TaskbarIcon
         {
-            IconSource = AppIcon.Create(32),
+            Icon = AppIcon.CreateTrayIcon(32),
             ToolTipText = "Tune",
             ContextMenu = menu,
             MenuActivation = PopupActivationMode.RightClick,
