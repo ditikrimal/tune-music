@@ -12,6 +12,28 @@ public sealed class SystemClock : IClock
     public DateTimeOffset Now => DateTimeOffset.Now;
 }
 
+public interface IAudioPlayer
+{
+    Task LoadAsync(Uri url, TimeSpan startAt);
+    void Play();
+    void Pause();
+    void Stop();
+    void Seek(TimeSpan pos);
+    double Volume { get; set; }
+    TimeSpan Position { get; }
+    TimeSpan? Duration { get; }
+    bool IsPaused { get; }
+
+    /// <summary>The song reached its end.</summary>
+    event Action? Ended;
+
+    /// <summary>The stream could not be opened or broke mid-way.</summary>
+    event Action<string>? Failed;
+
+    /// <summary>Raised a few times per second while playing.</summary>
+    event Action? PositionChanged;
+}
+
 public interface IYtMusic
 {
     Task<SearchResults> SearchAsync(string query, CancellationToken ct = default);
