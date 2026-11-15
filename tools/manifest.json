@@ -4,6 +4,12 @@
     "url": "https://registry.npmjs.org/@deno/win32-x64/-/win32-x64-2.9.6.tgz",
     "integrity": "sha512-qRGnmVz/Ea6UWPht/S3xFRK17UZ/ls38DSVfgGB17fpASLxPkksqzWUI/BzL9YYoOknYzfc94mySGyInZu/JXw=="
   },
+  "libmpv": {
+    "file": "mpv-dev-x86_64-v3-20261108-git-55d3feb45c.7z",
+    "url": "https://sourceforge.net/projects/mpv-player-windows/files/libmpv/mpv-dev-x86_64-v3-20261108-git-55d3feb45c.7z/download",
+    "archiveSha256": "821A0B08B2424C8BB5972F3A5FC3BE42C377A8646F815B55F42F1F0B125AD821",
+    "dllSha256": "00428C236BF68A26CD1A88B2E63A4F7A5D6DD51B4BA4D9F4B664828195F3845B"
+  },
   "ytdlp": {
     "url": "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
   }
