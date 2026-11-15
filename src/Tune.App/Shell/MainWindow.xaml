@@ -46,10 +46,8 @@
             <DockPanel Margin="12,0,12,8">
                 <StackPanel DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" Height="48" Margin="12,0,0,8">
-                        <Border Width="28" Height="28" CornerRadius="14" Background="{StaticResource AccentBrush}" VerticalAlignment="Center">
-                            <TextBlock Text="&#xE8D6;" FontFamily="{StaticResource IconFont}" FontSize="14" Foreground="Black"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        <Image Source="{x:Static p:AppIcon.Logo}" Width="30" Height="30" VerticalAlignment="Center"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
                         <TextBlock Text="Tune" FontSize="20" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center" Style="{StaticResource TextBase}" />
                     </StackPanel>
 

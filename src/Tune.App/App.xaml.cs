@@ -87,7 +87,7 @@ public partial class App : Application
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir);
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();
-        MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Create(64) };
+        MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Window };
         MainWin.MiniPlayerRequested += ToggleMini;
         Shell.GoToCommand.Execute("home");
         _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
