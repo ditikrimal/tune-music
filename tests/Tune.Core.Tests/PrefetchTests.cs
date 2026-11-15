@@ -76,6 +76,40 @@ public class ResolverPrepareTests
     }
 }
 
+public class BrokenLinkFallbackTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 15, 12, 0, 0, TimeSpan.Zero);
+
+    private sealed class Tagged(string source) : IStreamBackend
+    {
+        public int Calls;
+
+        public Task<ExtractedStream> ExtractAsync(string videoId, CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(new ExtractedStream(new Uri($"https://rr.googlevideo.com/{source}/{videoId}"), 0, source));
+        }
+    }
+
+    [Fact]
+    public async Task Broken_worker_link_switches_to_fallback_for_30_minutes()
+    {
+        var clock = new FakeClock(Now);
+        var worker = new Tagged("worker");
+        var exe = new Tagged("exe");
+        var r = new StreamResolver(new FallbackBackend(() => worker, exe, clock), clock);
+
+        Assert.Contains("/worker/", (await r.ResolveAsync("aaaaaaaaaaa")).ToString());
+        Assert.True(r.ReportBroken("aaaaaaaaaaa"));           // a different path will be used next time
+        Assert.Contains("/exe/", (await r.ResolveAsync("aaaaaaaaaaa")).ToString());
+        Assert.Contains("/exe/", (await r.ResolveAsync("bbbbbbbbbbb")).ToString());
+        Assert.False(r.ReportBroken("bbbbbbbbbbb"));          // exe link broken: nothing else to try
+
+        clock.Now = Now.AddMinutes(31);
+        Assert.Contains("/worker/", (await r.ResolveAsync("ccccccccccc")).ToString());
+    }
+}
+
 public class PythonWorkerLiveTests
 {
     [Fact]

@@ -85,6 +85,21 @@ public class FeedBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task Top_artists_get_pictures_from_their_artist_pages_cached()
+    {
+        foreach (var (id, n) in new[] { ("a", 1), ("b", 2), ("c", 3) })
+        {
+            _lib.RecordPlay(T(id, "Artist" + n, "UC" + n), Now);
+            _api.ArtistPictures["UC" + n] = $"https://lh3.googleusercontent.com/artist{n}=w120-h120";
+        }
+        var builder = Builder();
+        var shelf = (await builder.BuildAsync()).Shelves.Single(s => s.Title == "Your top artists");
+        Assert.All(shelf.Items, c => Assert.StartsWith("https://lh3.googleusercontent.com/artist", c.ThumbnailUrl));
+        await builder.BuildAsync();
+        Assert.Equal(3, _api.ArtistCalls);                    // pictures cached, not refetched
+    }
+
+    [Fact]
     public async Task Top_artists_shelf_needs_three_artists_with_ids()
     {
         _lib.RecordPlay(T("a", "A1", "UC1"), Now);

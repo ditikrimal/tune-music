@@ -19,6 +19,12 @@ public interface IStreamResolver
     bool IsKnown(string videoId);
 
     void Invalidate(string videoId);
+
+    /// <summary>
+    /// The song's link didn't play. Forgets it and tells the backend; true when the next lookup will use a
+    /// different path (so retrying right away makes sense).
+    /// </summary>
+    bool ReportBroken(string videoId);
 }
 
 public sealed class StreamResolveException(string videoId, string reason) : Exception(reason)
@@ -26,7 +32,7 @@ public sealed class StreamResolveException(string videoId, string reason) : Exce
     public string VideoId { get; } = videoId;
 }
 
-public sealed record CachedStream(string VideoId, Uri Url, DateTimeOffset ValidUntil, DateTimeOffset AvailableAt);
+public sealed record CachedStream(string VideoId, Uri Url, DateTimeOffset ValidUntil, DateTimeOffset AvailableAt, string Source = "exe");
 
 /// <summary>Keeps prepared links across restarts (they stay valid for hours).</summary>
 public interface IStreamCacheStore
@@ -138,7 +144,7 @@ public sealed class StreamResolver : IStreamResolver
             ? DateTimeOffset.FromUnixTimeSeconds(expire) - Safety
             : _clock.Now + DefaultLifetime;
         var availableAt = raw.AvailableAtUnix > 0 ? DateTimeOffset.FromUnixTimeSeconds(raw.AvailableAtUnix) : DateTimeOffset.MinValue;
-        var s = new CachedStream(videoId, raw.Url, validUntil, availableAt);
+        var s = new CachedStream(videoId, raw.Url, validUntil, availableAt, raw.Source);
         _cache[videoId] = s;
         _store?.SaveStream(s);
         return s;
@@ -161,4 +167,10 @@ public sealed class StreamResolver : IStreamResolver
     }
 
     public void Invalidate(string videoId) => _cache.TryRemove(videoId, out _);
+
+    public bool ReportBroken(string videoId)
+    {
+        var source = _cache.TryRemove(videoId, out var c) ? c.Source : "exe";
+        return _backend is IBrokenLinkSink sink && sink.LinkBroken(source);
+    }
 }

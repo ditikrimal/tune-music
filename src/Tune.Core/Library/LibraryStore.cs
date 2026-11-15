@@ -30,9 +30,15 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
                 position INTEGER NOT NULL, video_id TEXT NOT NULL, PRIMARY KEY (playlist_id, position));
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            """);
+        // v3: stream_cache gains "source" (worker/exe). Links saved before may be bound to a VPN route
+        // (see ToolManager.PreparePrivatePython), so the old table is simply dropped — it's only a cache.
+        if (Convert.ToInt64(Scalar("PRAGMA user_version"), System.Globalization.CultureInfo.InvariantCulture) < 3)
+            Exec("DROP TABLE IF EXISTS stream_cache;");
+        Exec("""
             CREATE TABLE IF NOT EXISTS stream_cache (video_id TEXT PRIMARY KEY, url TEXT NOT NULL,
-                valid_until INTEGER NOT NULL, available_at INTEGER NOT NULL);
-            PRAGMA user_version=2;
+                valid_until INTEGER NOT NULL, available_at INTEGER NOT NULL, source TEXT NOT NULL DEFAULT 'exe');
+            PRAGMA user_version=3;
             """);
     }
 
@@ -194,17 +200,18 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
 
     public void SaveStream(Tune.Core.Streams.CachedStream s) =>
         Exec("""
-            INSERT INTO stream_cache (video_id, url, valid_until, available_at) VALUES ($v, $u, $until, $at)
-            ON CONFLICT(video_id) DO UPDATE SET url = excluded.url, valid_until = excluded.valid_until, available_at = excluded.available_at
+            INSERT INTO stream_cache (video_id, url, valid_until, available_at, source) VALUES ($v, $u, $until, $at, $src)
+            ON CONFLICT(video_id) DO UPDATE SET url = excluded.url, valid_until = excluded.valid_until,
+                available_at = excluded.available_at, source = excluded.source
             """, ("$v", s.VideoId), ("$u", s.Url.ToString()), ("$until", s.ValidUntil.ToUnixTimeMilliseconds()),
-            ("$at", s.AvailableAt == DateTimeOffset.MinValue ? 0L : s.AvailableAt.ToUnixTimeMilliseconds()));
+            ("$at", s.AvailableAt == DateTimeOffset.MinValue ? 0L : s.AvailableAt.ToUnixTimeMilliseconds()), ("$src", s.Source));
 
     public IReadOnlyList<Tune.Core.Streams.CachedStream> LoadStreams(DateTimeOffset now)
     {
         lock (_gate)
         {
             Exec("DELETE FROM stream_cache WHERE valid_until <= $now", ("$now", now.ToUnixTimeMilliseconds()));
-            using var cmd = Command("SELECT video_id, url, valid_until, available_at FROM stream_cache");
+            using var cmd = Command("SELECT video_id, url, valid_until, available_at, source FROM stream_cache");
             using var r = cmd.ExecuteReader();
             var list = new List<Tune.Core.Streams.CachedStream>();
             while (r.Read())
@@ -213,7 +220,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 var at = r.GetInt64(3);
                 list.Add(new Tune.Core.Streams.CachedStream(r.GetString(0), url,
                     DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(2)),
-                    at == 0 ? DateTimeOffset.MinValue : DateTimeOffset.FromUnixTimeMilliseconds(at)));
+                    at == 0 ? DateTimeOffset.MinValue : DateTimeOffset.FromUnixTimeMilliseconds(at), r.GetString(4)));
             }
             return list;
         }

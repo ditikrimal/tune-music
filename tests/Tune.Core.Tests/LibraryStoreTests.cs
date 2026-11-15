@@ -113,6 +113,32 @@ public class LibraryStoreTests : IDisposable
         var a = Assert.Single(loaded);
         Assert.Equal("https://rr.googlevideo.com/a2", a.Url.ToString());
         Assert.Equal(T0.AddHours(6), a.ValidUntil);
+        Assert.Equal("exe", a.Source);
+        lib.SaveStream(new Tune.Core.Streams.CachedStream("ccccccccccc", url, T0.AddHours(5), T0, "worker"));
+        Assert.Equal("worker", lib.LoadStreams(T0).Single(s => s.VideoId == "ccccccccccc").Source);
+    }
+
+    [Fact]
+    public void Upgrade_from_v2_drops_old_stream_cache_and_keeps_everything_else()
+    {
+        var path = Path.Combine(_dir, "tune.db");
+        using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO settings VALUES ('volume', '0.5');
+                CREATE TABLE stream_cache (video_id TEXT PRIMARY KEY, url TEXT NOT NULL, valid_until INTEGER NOT NULL, available_at INTEGER NOT NULL);
+                INSERT INTO stream_cache VALUES ('aaaaaaaaaaa', 'https://x/vpn-bound', 99999999999999, 0);
+                PRAGMA user_version=2;
+                """;
+            cmd.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        using var lib = Open();
+        Assert.Empty(lib.LoadStreams(T0));                     // possibly broken links from before are gone
+        Assert.Equal("0.5", lib.GetSetting("volume"));         // user data untouched
     }
 
     [Fact]

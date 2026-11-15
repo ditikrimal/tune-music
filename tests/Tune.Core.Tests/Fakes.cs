@@ -33,5 +33,12 @@ public sealed class FakeYtMusic : IYtMusic
     public Task<SearchResults> SearchAsync(string query, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Collection> GetAlbumAsync(string browseId, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Collection> GetPlaylistAsync(string playlistId, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Dictionary<string, string> ArtistPictures { get; } = [];
+    public int ArtistCalls;
+
+    public Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default)
+    {
+        Interlocked.Increment(ref ArtistCalls);
+        return Task.FromResult(new ArtistPage(browseId, ArtistPictures.GetValueOrDefault(browseId), [], []));
+    }
 }

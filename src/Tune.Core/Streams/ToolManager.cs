@@ -137,14 +137,20 @@ public sealed class ToolManager(string toolsDir, HttpClient http, IProcessRunner
                                  || (n.StartsWith("python3", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                                  || (n.StartsWith("vcruntime", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))))
         {
-            var dst = Path.Combine(dir, Path.GetFileName(src));
+            // renamed: VPN split-tunnel rules may match "python.exe" by name, not only by path
+            var name = Path.GetFileName(src).Equals("python.exe", StringComparison.OrdinalIgnoreCase) ? PrivatePythonName : Path.GetFileName(src);
+            var dst = Path.Combine(dir, name);
             var s = new FileInfo(src);
             var d = new FileInfo(dst);
             if (!d.Exists || d.Length != s.Length || d.LastWriteTimeUtc < s.LastWriteTimeUtc)
                 File.Copy(src, dst, overwrite: true);
         }
-        return new PrivatePython(Path.Combine(dir, "python.exe"), home);
+        var stale = Path.Combine(dir, "python.exe");
+        if (File.Exists(stale)) File.Delete(stale);
+        return new PrivatePython(Path.Combine(dir, PrivatePythonName), home);
     }
+
+    private const string PrivatePythonName = "tune-resolver.exe";
 
     /// <summary>Installs (or with <paramref name="update"/> upgrades) yt-dlp into <see cref="PyLibDir"/> with pip.</summary>
     public async Task<bool> EnsurePyLibAsync(string python, bool update, CancellationToken ct = default)

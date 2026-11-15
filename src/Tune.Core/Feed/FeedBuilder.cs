@@ -45,9 +45,10 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
                 shelves.Add(new Shelf("Because you played " + seeds[i].Title, items, IsLocal: true));
         }
 
-        var artists = lib.GetTopArtists(now - ArtistWindow, TopArtists)
-            .Where(a => a.Artist.BrowseId is not null)
-            .Select(a => new Card(CardKind.Artist, a.Artist.Name, "Artist", null, null, a.Artist.BrowseId, null, null))
+        var top = lib.GetTopArtists(now - ArtistWindow, TopArtists).Where(a => a.Artist.BrowseId is not null).ToList();
+        var pictures = await Task.WhenAll(top.Select(a => ArtistPictureAsync(a.Artist.BrowseId!, now, ct))).ConfigureAwait(false);
+        var artists = top
+            .Select((a, i) => new Card(CardKind.Artist, a.Artist.Name, "Artist", pictures[i], null, a.Artist.BrowseId, null, null))
             .ToList();
         if (artists.Count >= MinRowItems)
             shelves.Add(new Shelf("Your top artists", artists, IsLocal: true));
@@ -82,6 +83,26 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
         catch (Exception e) when (e is not OperationCanceledException)
         {
             Log.Warn($"Radio for {videoId} unavailable", e);
+            return null;
+        }
+    }
+
+    private static readonly TimeSpan PictureTtl = TimeSpan.FromHours(24);
+    private readonly ConcurrentDictionary<string, (DateTimeOffset At, string? Url)> _artistPictures = new();
+
+    /// <summary>History only knows artist names; the picture comes from the artist page (cached a day).</summary>
+    private async Task<string?> ArtistPictureAsync(string browseId, DateTimeOffset now, CancellationToken ct)
+    {
+        if (_artistPictures.TryGetValue(browseId, out var hit) && now - hit.At < PictureTtl) return hit.Url;
+        try
+        {
+            var page = await api.GetArtistAsync(browseId, ct).ConfigureAwait(false);
+            _artistPictures[browseId] = (now, page.ThumbnailUrl);
+            return page.ThumbnailUrl;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            Log.Warn($"Artist picture for {browseId} unavailable", e);
             return null;
         }
     }

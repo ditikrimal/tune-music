@@ -72,6 +72,18 @@ public sealed class FakeResolver : IStreamResolver
 
     public void Invalidate(string videoId) => Invalidated.Add(videoId);
 
+    public List<string> ReportedBroken { get; } = [];
+    public bool BrokenLinkHasAlternative { get; set; }
+
+    public bool ReportBroken(string videoId)
+    {
+        ReportedBroken.Add(videoId);
+        Invalidated.Add(videoId);
+        var alt = BrokenLinkHasAlternative;
+        BrokenLinkHasAlternative = false;                     // the alternative is used only once
+        return alt;
+    }
+
     public List<string> Prepared { get; } = [];
 
     public Task PrepareAsync(string videoId, CancellationToken ct = default)
@@ -434,6 +446,21 @@ public class PlaybackServiceTests : IDisposable
         await _svc.Background;
         Assert.True(_svc.IsPlaying);
         Assert.Equal(TimeSpan.FromSeconds(95), _player.Loads[^1].StartAt);
+    }
+
+    [Fact]
+    public async Task Broken_fast_path_link_is_retried_on_fallback_without_skipping()
+    {
+        _resolver.BrokenLinkHasAlternative = true;            // link came from the worker; exe can retry
+        await _svc.PlayListAsync(List("a", "b"), 0);
+        _player.Fail("http 403");                             // fails right at the start
+        await _svc.Background;
+        Assert.Equal([Id("a")], _resolver.ReportedBroken);
+        Assert.Equal(Id("a"), _svc.Current!.VideoId);        // same song, not skipped
+        Assert.Equal(2, _player.Loads.Count);
+        Assert.True(_svc.IsPlaying);
+        Assert.Equal(0, _updates);
+        Assert.Empty(_notices);
     }
 
     [Fact]

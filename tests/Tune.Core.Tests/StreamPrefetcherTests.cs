@@ -29,6 +29,7 @@ public class StreamPrefetcherTests
         public bool IsReady(string videoId) => Known.Contains(videoId);
         public Task<Uri> ResolveAsync(string videoId, CancellationToken ct = default) => throw new NotSupportedException();
         public void Invalidate(string videoId) { }
+        public bool ReportBroken(string videoId) => false;
     }
 
     private static async Task Settle() => await Task.Delay(50);

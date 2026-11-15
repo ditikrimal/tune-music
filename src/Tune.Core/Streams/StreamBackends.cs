@@ -8,7 +8,8 @@ using Tune.Core.Util;
 namespace Tune.Core.Streams;
 
 /// <summary>Raw stream lookup for one video: the audio URL plus YouTube's "available at" moment (0 = now).</summary>
-public sealed record ExtractedStream(Uri Url, long AvailableAtUnix);
+/// <remarks><paramref name="Source"/> says which path produced the link ("worker" or "exe").</remarks>
+public sealed record ExtractedStream(Uri Url, long AvailableAtUnix, string Source = "exe");
 
 /// <summary>Something that can ask YouTube for a song's audio URL (yt-dlp in one form or another).</summary>
 public interface IStreamBackend
@@ -129,7 +130,7 @@ public sealed class WorkerProtocol
                     && Uri.TryCreate((string?)msg["url"], UriKind.Absolute, out var url))
                 {
                     var at = msg["available_at"] is JsonValue a && a.TryGetValue<double>(out var d) ? (long)d : 0;
-                    p.Reply.TrySetResult(new ExtractedStream(url, at));
+                    p.Reply.TrySetResult(new ExtractedStream(url, at, "worker"));
                 }
                 else
                 {
@@ -240,12 +241,35 @@ public sealed class PythonWorkerBackend : IStreamBackend, IDisposable
     }
 }
 
-/// <summary>Uses the fast backend when it's available, otherwise (or when it breaks) the fallback.</summary>
-public sealed class FallbackBackend(Func<IStreamBackend?> primary, IStreamBackend fallback) : IStreamBackend
+/// <summary>Told when a link a backend produced turned out not to play.</summary>
+public interface IBrokenLinkSink
 {
+    /// <summary>Returns true when a different path will be used for the next lookup.</summary>
+    bool LinkBroken(string source);
+}
+
+/// <summary>
+/// Uses the fast backend when it's available, otherwise (or when it breaks) the fallback.
+/// If a fast-path link fails to play (e.g. a VPN rule changed its route), the fast path is benched for 30 min.
+/// </summary>
+public sealed class FallbackBackend(Func<IStreamBackend?> primary, IStreamBackend fallback, Tune.Core.Playback.IClock? clock = null)
+    : IStreamBackend, IBrokenLinkSink
+{
+    private static readonly TimeSpan Bench = TimeSpan.FromMinutes(30);
+    private readonly Tune.Core.Playback.IClock _clock = clock ?? new Tune.Core.Playback.SystemClock();
+    private DateTimeOffset _benchedUntil = DateTimeOffset.MinValue;
+
+    public bool LinkBroken(string source)
+    {
+        if (source != "worker") return false;
+        _benchedUntil = _clock.Now + Bench;
+        Log.Warn("A fast-resolver link didn't play; using yt-dlp.exe for 30 minutes");
+        return true;
+    }
+
     public async Task<ExtractedStream> ExtractAsync(string videoId, CancellationToken ct)
     {
-        if (primary() is { } fast)
+        if (_clock.Now >= _benchedUntil && primary() is { } fast)
         {
             try
             {

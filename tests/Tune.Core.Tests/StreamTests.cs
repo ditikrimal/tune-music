@@ -216,9 +216,9 @@ public class StreamTests : IDisposable
             File.WriteAllText(Path.Combine(src, f), f);
         var tools = Tools();
         var p = tools.PreparePrivatePython(Path.Combine(src, "python.exe"));
-        Assert.Equal(Path.Combine(_dir, "py", "python.exe"), p.Exe);
+        Assert.Equal(Path.Combine(_dir, "py", "tune-resolver.exe"), p.Exe);
         Assert.Equal(src, p.Home);
-        Assert.Equivalent(new[] { "python.exe", "python3.dll", "python314.dll", "vcruntime140.dll", "vcruntime140_1.dll" },
+        Assert.Equivalent(new[] { "tune-resolver.exe", "python3.dll", "python314.dll", "vcruntime140.dll", "vcruntime140_1.dll" },
             Directory.GetFiles(Path.Combine(_dir, "py")).Select(Path.GetFileName).ToArray()); // pythonw.exe not copied
         File.WriteAllText(p.Exe, "tampered");
         tools.PreparePrivatePython(Path.Combine(src, "python.exe"));   // re-copies when it differs

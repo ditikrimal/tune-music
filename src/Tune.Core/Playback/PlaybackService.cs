@@ -52,6 +52,7 @@ public sealed class PlaybackService
     private bool _recorded;
     private bool _lookaheadDone;
     private bool _reloadTried;
+    private bool _altPathTried;
     private IReadOnlyList<SkipSegment> _segments = [];
 
     public PlaybackService(PlayQueue queue, IStreamResolver resolver, IAudioPlayer player, LibraryStore lib,
@@ -200,6 +201,7 @@ public sealed class PlaybackService
             _recorded = false;
             _lookaheadDone = false;
             _reloadTried = false;
+            _altPathTried = false;
             _segments = [];
         }
         StateChanged?.Invoke();
@@ -324,6 +326,14 @@ public sealed class PlaybackService
     {
         if (gen != _generation) return;
         Log.Warn($"Playback failed for {track.VideoId}: {reason}");
+
+        // the link came from the fast path and a different path exists: retry this song at once
+        if (!_altPathTried && _resolver.ReportBroken(track.VideoId))
+        {
+            _altPathTried = true;
+            await PlayCurrentAsync(TimeSpan.Zero, resetTrackState: false).ConfigureAwait(false);
+            return;
+        }
 
         var now = _clock.Now;
         if (_lastToolUpdate is not { } last || now - last >= ToolUpdateEvery)
