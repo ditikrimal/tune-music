@@ -198,7 +198,7 @@
                     </StackPanel>
                     <Grid Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="44" />
+                            <ColumnDefinition Width="64" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="44" />
                         </Grid.ColumnDefinitions>

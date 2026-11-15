@@ -10,6 +10,11 @@ namespace Tune.Core.Playback;
 /// Orchestrates playback: resolves streams, drives the audio player, appends radio, records history,
 /// skips SponsorBlock segments and recovers from failures. Events may fire on any thread.
 /// </summary>
+/// <remarks>
+/// Every load gets a new <em>generation</em> with its own cancellation token: starting another song cancels
+/// the previous resolve (killing its yt-dlp), and player events that arrive while nothing is loaded — late
+/// ticks or the end of the song that was just replaced — are ignored.
+/// </remarks>
 public sealed class PlaybackService
 {
     private static readonly TimeSpan RecordAfter = TimeSpan.FromSeconds(30);
@@ -17,6 +22,7 @@ public sealed class PlaybackService
     private static readonly TimeSpan RestartThreshold = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan HealthyAfter = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ReloadAfterPause = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan ToolUpdateEvery = TimeSpan.FromHours(6);
     private const int MaxConsecutiveFailures = 3;
 
     private readonly IStreamResolver _resolver;
@@ -29,16 +35,23 @@ public sealed class PlaybackService
 
     private readonly Lock _pendingGate = new();
     private readonly List<Task> _pending = [];
-    private readonly HashSet<string> _radioFetched = [];
 
     private int _generation;
-    private bool _updatedTools;
+    private CancellationTokenSource _loadCts = new();
+    private volatile bool _loaded;           // a file for the current generation is in the player
+    private DateTimeOffset? _lastToolUpdate;
     private int _failures;
     private DateTimeOffset? _pausedAt;
+
+    // radio is tied to the queue it was asked for: a new list/radio start bumps the epoch
+    private int _queueEpoch;
+    private (int Epoch, string Seed)? _radioKey;
+    private Task? _radioTask;
 
     // per-track state
     private bool _recorded;
     private bool _lookaheadDone;
+    private bool _reloadTried;
     private IReadOnlyList<SkipSegment> _segments = [];
 
     public PlaybackService(PlayQueue queue, IStreamResolver resolver, IAudioPlayer player, LibraryStore lib,
@@ -54,11 +67,14 @@ public sealed class PlaybackService
         _clock = clock;
 
         _player.PositionChanged += OnPosition;
-        _player.Ended += () => Spawn(OnEndedAsync);
+        _player.Ended += () =>
+        {
+            if (_loaded) Spawn(OnEndedAsync);
+        };
         _player.Failed += why =>
         {
             var gen = _generation;
-            if (Current is { } t) Spawn(() => OnTrackFailedAsync(t, why, gen));
+            if (_loaded && Current is { } t) Spawn(() => OnPlayerFailedAsync(t, why, gen));
         };
     }
 
@@ -66,6 +82,9 @@ public sealed class PlaybackService
     public IAudioPlayer Player => _player;
     public Track? Current => Queue.Current;
     public bool IsPlaying { get; private set; }
+
+    /// <summary>True between choosing a song and its audio starting (yt-dlp + YouTube's start delay).</summary>
+    public bool IsLoading { get; private set; }
 
     /// <summary>Something the user should see (track list, play state, queue) changed.</summary>
     public event Action? StateChanged;
@@ -79,21 +98,24 @@ public sealed class PlaybackService
     public Task PlayListAsync(IReadOnlyList<Track> list, int index)
     {
         Queue.StartList(list, index);
+        Interlocked.Increment(ref _queueEpoch);
         return PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
     }
 
     public Task PlayRadioAsync(Track seed)
     {
         Queue.StartRadio(seed);
+        Interlocked.Increment(ref _queueEpoch);
+        var play = PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
         Spawn(EnsureRadioAsync);
-        return PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
+        return play;
     }
 
     public Task NextAsync() => AdvanceAsync(userInitiated: true);
 
     public Task PreviousAsync()
     {
-        if (_player.Position > RestartThreshold)
+        if (_loaded && _player.Position > RestartThreshold)
         {
             _player.Seek(TimeSpan.Zero);
             return Task.CompletedTask;
@@ -104,20 +126,26 @@ public sealed class PlaybackService
 
     public void TogglePause()
     {
-        if (Current is null) return;
+        if (Current is null || IsLoading) return;
+
+        if (!_loaded)
+        {
+            // stopped (end of queue, failures, "play next" into an empty queue, failed resume): start it again
+            var from = _resumePosition ?? TimeSpan.Zero;
+            _resumePosition = null;
+            Spawn(() => PlayCurrentAsync(from, resetTrackState: from == TimeSpan.Zero));
+            return;
+        }
+
         if (_player.IsPaused)
         {
             if (_pausedAt is { } at && _clock.Now - at > ReloadAfterPause)
             {
                 // the stream URL has probably expired while paused (e.g. laptop slept overnight)
-                var pos = _player.Position;
-                _resolver.Invalidate(Current.VideoId);
-                Spawn(() => PlayCurrentAsync(pos, resetTrackState: false));
+                Spawn(() => ResumeAsync(_player.Position));
+                return;
             }
-            else
-            {
-                _player.Play();
-            }
+            _player.Play();
             _pausedAt = null;
             IsPlaying = true;
         }
@@ -130,7 +158,10 @@ public sealed class PlaybackService
         StateChanged?.Invoke();
     }
 
-    public void Seek(TimeSpan pos) => _player.Seek(pos);
+    public void Seek(TimeSpan pos)
+    {
+        if (_loaded) _player.Seek(pos);
+    }
 
     /// <summary>Call after changing <see cref="Queue"/> directly (shuffle, repeat, reorder…).</summary>
     public void NotifyQueueChanged()
@@ -141,6 +172,19 @@ public sealed class PlaybackService
 
     // ---------- core ----------
 
+    /// <summary>Starts a new generation: cancels whatever was loading and silences the old song immediately.</summary>
+    private (int Gen, CancellationToken Ct) BeginLoad()
+    {
+        var gen = Interlocked.Increment(ref _generation);
+        var cts = new CancellationTokenSource();
+        Interlocked.Exchange(ref _loadCts, cts).Cancel();
+        _loaded = false;
+        _player.Stop();
+        IsLoading = true;
+        IsPlaying = false;
+        return (gen, cts.Token);
+    }
+
     private async Task PlayCurrentAsync(TimeSpan startAt, bool resetTrackState)
     {
         var track = Queue.Current;
@@ -150,11 +194,12 @@ public sealed class PlaybackService
             return;
         }
 
-        var gen = Interlocked.Increment(ref _generation);
+        var (gen, ct) = BeginLoad();
         if (resetTrackState)
         {
             _recorded = false;
             _lookaheadDone = false;
+            _reloadTried = false;
             _segments = [];
         }
         StateChanged?.Invoke();
@@ -162,9 +207,13 @@ public sealed class PlaybackService
         Uri url;
         try
         {
-            url = await _resolver.ResolveAsync(track.VideoId).ConfigureAwait(false);
+            url = await _resolver.ResolveAsync(track.VideoId, ct).ConfigureAwait(false);
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return; // another song was chosen meanwhile
+        }
+        catch (Exception e)
         {
             if (gen == _generation) await OnTrackFailedAsync(track, e.Message, gen).ConfigureAwait(false);
             return;
@@ -172,12 +221,52 @@ public sealed class PlaybackService
         if (gen != _generation) return;
 
         if (resetTrackState) Spawn(() => LoadSegmentsAsync(track, gen));
+        await StartAudioAsync(url, startAt, gen).ConfigureAwait(false);
+    }
+
+    private async Task StartAudioAsync(Uri url, TimeSpan startAt, int gen)
+    {
         await _player.LoadAsync(url, startAt).ConfigureAwait(false);
+        if (gen != _generation) return;
         _player.Play();
+        _loaded = true;
         _pausedAt = null;
+        IsLoading = false;
         IsPlaying = true;
         StateChanged?.Invoke();
     }
+
+    /// <summary>Resume after a long pause: fresh URL, same position. Without network it stays paused.</summary>
+    private async Task ResumeAsync(TimeSpan position)
+    {
+        var track = Queue.Current;
+        if (track is null) return;
+        _resolver.Invalidate(track.VideoId);
+        var (gen, ct) = BeginLoad();
+        StateChanged?.Invoke();
+        try
+        {
+            var url = await _resolver.ResolveAsync(track.VideoId, ct).ConfigureAwait(false);
+            if (gen != _generation) return;
+            await StartAudioAsync(url, position, gen).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception e)
+        {
+            if (gen != _generation) return;
+            Log.Warn($"Resume failed for {track.VideoId}", e);
+            // keep the song and position; the next press of Play tries again
+            IsLoading = false;
+            IsPlaying = false;
+            _resumePosition = position;
+            StateChanged?.Invoke();
+            Notice?.Invoke("Couldn't resume — check your internet connection, then press play again.");
+        }
+    }
+
+    private TimeSpan? _resumePosition;
 
     private async Task AdvanceAsync(bool userInitiated)
     {
@@ -201,15 +290,32 @@ public sealed class PlaybackService
         await AdvanceAsync(userInitiated: false).ConfigureAwait(false);
     }
 
+    /// <summary>The stream broke while playing (URL expired, connection dropped): first reload where it was.</summary>
+    private async Task OnPlayerFailedAsync(Track track, string reason, int gen)
+    {
+        if (gen != _generation) return;
+        var position = _player.Position;
+        if (!_reloadTried && position > TimeSpan.FromSeconds(1))
+        {
+            _reloadTried = true;
+            Log.Warn($"Stream broke at {position} for {track.VideoId} ({reason}); reloading");
+            _resolver.Invalidate(track.VideoId);
+            await PlayCurrentAsync(position, resetTrackState: false).ConfigureAwait(false);
+            return;
+        }
+        await OnTrackFailedAsync(track, reason, gen).ConfigureAwait(false);
+    }
+
     private async Task OnTrackFailedAsync(Track track, string reason, int gen)
     {
         if (gen != _generation) return;
         Log.Warn($"Playback failed for {track.VideoId}: {reason}");
 
-        if (!_updatedTools)
+        var now = _clock.Now;
+        if (_lastToolUpdate is not { } last || now - last >= ToolUpdateEvery)
         {
             // most failures are YouTube changes that a newer yt-dlp already handles
-            _updatedTools = true;
+            _lastToolUpdate = now;
             try { await _updateYtDlp(CancellationToken.None).ConfigureAwait(false); }
             catch (Exception e) when (e is not OperationCanceledException) { Log.Warn("yt-dlp update failed", e); }
             _resolver.Invalidate(track.VideoId);
@@ -229,22 +335,34 @@ public sealed class PlaybackService
         await AdvanceAsync(userInitiated: true).ConfigureAwait(false);
     }
 
-    private async Task EnsureRadioAsync()
+    /// <summary>Appends YouTube radio for the queue's last song; concurrent callers share one request.</summary>
+    private Task EnsureRadioAsync()
     {
         var seed = Queue.RadioSeedId;
-        if (seed is null) return;
-        lock (_radioFetched)
-            if (!_radioFetched.Add(seed)) return;
+        if (seed is null) return Task.CompletedTask;
+        var key = (Volatile.Read(ref _queueEpoch), seed);
+        lock (_pendingGate)
+        {
+            if (_radioKey == key && _radioTask is not null) return _radioTask;
+            _radioKey = key;
+            return _radioTask = FetchRadioAsync(key);
+        }
+    }
+
+    private async Task FetchRadioAsync((int Epoch, string Seed) key)
+    {
         try
         {
-            var tracks = await _api.GetRadioAsync(seed).ConfigureAwait(false);
+            var tracks = await _api.GetRadioAsync(key.Seed).ConfigureAwait(false);
+            if (key.Epoch != Volatile.Read(ref _queueEpoch)) return; // the user started something else meanwhile
             Queue.AppendRadio(tracks);
             StateChanged?.Invoke();
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            lock (_radioFetched) _radioFetched.Remove(seed); // allow a later retry
-            Log.Warn($"Radio for {seed} unavailable", e);
+            lock (_pendingGate)
+                if (_radioKey == key) _radioKey = null; // allow a later retry
+            Log.Warn($"Radio for {key.Seed} unavailable", e);
         }
     }
 
@@ -256,6 +374,7 @@ public sealed class PlaybackService
 
     private void OnPosition()
     {
+        if (!_loaded) return; // ticks from a song that is being replaced
         var pos = _player.Position;
         if (pos >= HealthyAfter) _failures = 0;
         if (!_recorded && pos >= RecordAfter) RecordPlay();
@@ -280,14 +399,17 @@ public sealed class PlaybackService
 
     private void RecordPlay()
     {
-        if (_recorded || Current is not { } t) return;
+        if (_recorded || !_loaded || Current is not { } t) return;
         _recorded = true;
         _lib.RecordPlay(t, _clock.Now);
     }
 
     private void Stop()
     {
+        Interlocked.Increment(ref _generation);
+        _loaded = false;
         _player.Stop();
+        IsLoading = false;
         IsPlaying = false;
         StateChanged?.Invoke();
     }
@@ -303,6 +425,7 @@ public sealed class PlaybackService
     private static async Task Guard(Func<Task> work)
     {
         try { await work().ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
         catch (Exception e) { Log.Error("Background playback task failed", e); }
     }
 

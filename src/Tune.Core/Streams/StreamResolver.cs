@@ -32,6 +32,17 @@ public sealed class StreamResolver(ToolManager tools, IProcessRunner runner, ICl
 
     private readonly ConcurrentDictionary<string, (Uri Url, DateTimeOffset ValidUntil, DateTimeOffset AvailableAt)> _cache = new();
 
+    /// <summary>One yt-dlp run shared by everyone asking for the same song; killed when the last waiter gives up.</summary>
+    private sealed class InFlight
+    {
+        public required CancellationTokenSource Cts { get; init; }
+        public Task<(Uri Url, DateTimeOffset AvailableAt)> Run { get; set; } = null!;
+        public int Waiters;
+    }
+
+    private readonly Dictionary<string, InFlight> _inFlight = [];
+    private readonly Lock _gate = new();
+
     public async Task<Uri> ResolveAsync(string videoId, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(videoId, out var hit) && clock.Now < hit.ValidUntil)
@@ -40,6 +51,52 @@ public sealed class StreamResolver(ToolManager tools, IProcessRunner runner, ICl
             return hit.Url;
         }
 
+        InFlight entry;
+        lock (_gate)
+        {
+            if (!_inFlight.TryGetValue(videoId, out entry!))
+            {
+                entry = new InFlight { Cts = new CancellationTokenSource() };
+                var created = entry;
+                _inFlight[videoId] = entry;
+                entry.Run = RunYtDlpAsync(videoId, entry.Cts.Token);
+                _ = entry.Run.ContinueWith(_ => Forget(videoId, created), TaskScheduler.Default);
+            }
+            entry.Waiters++;
+        }
+
+        (Uri Url, DateTimeOffset AvailableAt) result;
+        try
+        {
+            result = await entry.Run.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            Leave(videoId, entry);
+            throw;
+        }
+        await WaitUntilAvailableAsync(result.AvailableAt, ct).ConfigureAwait(false);
+        return result.Url;
+    }
+
+    private void Leave(string videoId, InFlight entry)
+    {
+        lock (_gate)
+        {
+            if (--entry.Waiters > 0 || entry.Run.IsCompleted) return;
+            Forget(videoId, entry);
+        }
+        entry.Cts.Cancel(); // nobody wants this song any more: kill yt-dlp (and its deno)
+    }
+
+    private void Forget(string videoId, InFlight entry)
+    {
+        lock (_gate)
+            if (_inFlight.TryGetValue(videoId, out var current) && current == entry) _inFlight.Remove(videoId);
+    }
+
+    private async Task<(Uri Url, DateTimeOffset AvailableAt)> RunYtDlpAsync(string videoId, CancellationToken ct)
+    {
         string[] args =
         [
             "-f", "bestaudio", "--no-playlist", "--no-warnings", "--no-progress",
@@ -62,8 +119,7 @@ public sealed class StreamResolver(ToolManager tools, IProcessRunner runner, ICl
             ? DateTimeOffset.FromUnixTimeSeconds(expire) - Safety
             : clock.Now + DefaultLifetime;
         _cache[videoId] = (url, validUntil, availableAt);
-        await WaitUntilAvailableAsync(availableAt, ct).ConfigureAwait(false);
-        return url;
+        return (url, availableAt);
     }
 
     private Task WaitUntilAvailableAsync(DateTimeOffset availableAt, CancellationToken ct)

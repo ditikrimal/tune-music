@@ -102,6 +102,19 @@ public class MpvPlayerTests(ToneFixture tone) : IClassFixture<ToneFixture>
     }
 
     [Fact]
+    public async Task Stop_clears_duration_and_position()
+    {
+        using var p = new MpvPlayer();
+        p.Volume = 0;
+        await p.LoadAsync(new Uri(tone.Path), TimeSpan.FromSeconds(2));
+        p.Play();
+        await WaitFor(() => p.Duration is not null);
+        p.Stop();
+        Assert.Null(p.Duration);
+        Assert.Equal(TimeSpan.Zero, p.Position);
+    }
+
+    [Fact]
     public async Task Loading_next_song_does_not_fire_Ended_for_previous()
     {
         using var p = new MpvPlayer();

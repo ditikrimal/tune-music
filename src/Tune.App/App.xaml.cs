@@ -99,6 +99,9 @@ public partial class App : Application
         if (!startHidden) MainWin.Show();
         if (_library.GetSetting("mini.visible") == "1" || startHidden) ShowMini();
         _ = Shell.EnsureToolsAsync();
+        // Tune runs for weeks from the tray: check for a newer yt-dlp hourly (it only updates once a day)
+        new DispatcherTimer(TimeSpan.FromHours(1), DispatcherPriority.Background,
+            (_, _) => Task.Run(() => tools.UpdateYtDlpIfDueAsync(force: false)), Dispatcher).Start();
 
         _activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
         new Thread(() =>

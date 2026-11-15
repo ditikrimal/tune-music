@@ -27,6 +27,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject
     [ObservableProperty] private string _durationText = "0:00";
     [ObservableProperty] private double _volume;
     [ObservableProperty] private bool _isSeeking;
+    [ObservableProperty] private bool _isLoading;
 
     public PlayerBarViewModel(PlaybackService playback, LibraryStore lib, Dispatcher ui)
     {
@@ -93,6 +94,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject
             PositionText = "0:00";
         }
         IsPlaying = _playback.IsPlaying;
+        IsLoading = _playback.IsLoading;
         IsLiked = current is not null && _lib.IsLiked(current.VideoId);
         UpdatePosition();
     }
@@ -115,7 +117,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         if (IsSeeking) return;
         var pos = _playback.Player.Position;
         Position = Math.Min(pos.TotalSeconds, Duration);
-        PositionText = Format(pos);
+        PositionText = IsLoading ? "Loading…" : Format(pos);
     }
 
     public void BeginSeek() => IsSeeking = true;

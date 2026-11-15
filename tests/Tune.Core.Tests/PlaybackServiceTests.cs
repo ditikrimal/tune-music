@@ -26,9 +26,11 @@ public sealed class FakePlayer : IAudioPlayer
         return Task.CompletedTask;
     }
 
+    public int Stops { get; private set; }
     public void Play() => IsPaused = false;
     public void Pause() => IsPaused = true;
-    public void Stop() { IsPaused = true; }
+    // like mpv: stopping unloads the file but leaves the pause flag as it was
+    public void Stop() => Stops++;
 
     public void Seek(TimeSpan pos)
     {
@@ -53,12 +55,19 @@ public sealed class FakeResolver : IStreamResolver
     public HashSet<string> Failing { get; } = [];
     public int FailuresBeforeSuccess { get; set; }
 
-    public Task<Uri> ResolveAsync(string videoId, CancellationToken ct = default)
+    /// <summary>Resolves that only finish once the test completes their gate (like a real 5 s yt-dlp run).</summary>
+    public Dictionary<string, TaskCompletionSource> Gates { get; } = [];
+    public Dictionary<string, CancellationToken> Tokens { get; } = [];
+
+    public async Task<Uri> ResolveAsync(string videoId, CancellationToken ct = default)
     {
         Resolved.Add(videoId);
+        Tokens[videoId] = ct;
+        var n = Resolved.Count;
+        if (Gates.TryGetValue(videoId, out var gate)) await gate.Task.WaitAsync(ct);
         if (Failing.Contains(videoId) || FailuresBeforeSuccess-- > 0)
-            return Task.FromException<Uri>(new StreamResolveException(videoId, "ERROR: Video unavailable"));
-        return Task.FromResult(new Uri($"https://rr.googlevideo.com/{videoId}/{Resolved.Count}"));
+            throw new StreamResolveException(videoId, "ERROR: Video unavailable");
+        return new Uri($"https://rr.googlevideo.com/{videoId}/{n}");
     }
 
     public void Invalidate(string videoId) => Invalidated.Add(videoId);
@@ -90,7 +99,10 @@ public class PlaybackServiceTests : IDisposable
         _svc = new PlaybackService(new PlayQueue(), _resolver, _player, _lib, _sb, _api,
             _ => { _updates++; return Task.FromResult(true); }, _clock);
         _svc.Notice += _notices.Add;
+        _svc.StateChanged += () => _states.Add((_svc.Current?.VideoId, _svc.IsPlaying, _svc.IsLoading));
     }
+
+    private readonly List<(string? Id, bool Playing, bool Loading)> _states = [];
 
     public void Dispose() => _lib.Dispose();
 
@@ -260,6 +272,170 @@ public class PlaybackServiceTests : IDisposable
         await _svc.Background;
         Assert.Single(_player.Loads);
         Assert.False(_player.IsPaused);
+    }
+
+    // ---------- final-review fix pass ----------
+
+    [Fact]
+    public async Task Replaying_same_seed_fetches_radio_again()
+    {
+        _api.Radios[Id("a")] = List("a", "x");
+        await _svc.PlayRadioAsync(T("a"));
+        await _svc.Background;
+        await _svc.PlayRadioAsync(T("a"));
+        await _svc.Background;
+        Assert.Equal([Id("a"), Id("x")], _svc.Queue.Items.Select(t => t.VideoId));
+        _player.End();
+        await _svc.Background;
+        Assert.Equal(Id("x"), _svc.Current!.VideoId);
+    }
+
+    [Fact]
+    public async Task Late_radio_for_a_replaced_queue_is_dropped()
+    {
+        _api.RadioGates[Id("a")] = new TaskCompletionSource();
+        _api.Radios[Id("a")] = List("a", "x");
+        _api.Radios[Id("b")] = List("b", "y");
+        await _svc.PlayRadioAsync(T("a"));
+        await _svc.PlayRadioAsync(T("b"));
+        _api.RadioGates[Id("a")].SetResult();
+        await _svc.Background;
+        Assert.Equal([Id("b"), Id("y")], _svc.Queue.Items.Select(t => t.VideoId));
+    }
+
+    [Fact]
+    public async Task Next_while_radio_is_in_flight_waits_for_it()
+    {
+        _api.RadioGates[Id("a")] = new TaskCompletionSource();
+        _api.Radios[Id("a")] = List("a", "x");
+        await _svc.PlayRadioAsync(T("a"));
+        var next = _svc.NextAsync();
+        _api.RadioGates[Id("a")].SetResult();
+        await next;
+        await _svc.Background;
+        Assert.Equal(Id("x"), _svc.Current!.VideoId);
+        Assert.True(_svc.IsPlaying);
+    }
+
+    [Fact]
+    public async Task Switching_stops_the_old_song_at_once_and_shows_loading()
+    {
+        await _svc.PlayListAsync(List("a"), 0);
+        _resolver.Gates[Id("b")] = new TaskCompletionSource();
+        var stopsBefore = _player.Stops;
+        var switching = _svc.PlayListAsync(List("b"), 0);
+        Assert.Equal(stopsBefore + 1, _player.Stops);        // old audio cut immediately
+        Assert.True(_svc.IsLoading);
+        Assert.Contains((Id("b"), false, true), _states);     // UI shows the new song as loading
+        _resolver.Gates[Id("b")].SetResult();
+        await switching;
+        Assert.False(_svc.IsLoading);
+        Assert.True(_svc.IsPlaying);
+    }
+
+    [Fact]
+    public async Task Old_song_events_while_loading_are_ignored()
+    {
+        await _svc.PlayListAsync(List("a", "z"), 0);
+        _resolver.Gates[Id("b")] = new TaskCompletionSource();
+        var switching = _svc.PlayListAsync(List("b", "c"), 0);
+        _player.At(45);      // late position tick from the old song
+        _player.End();       // the old song's end arriving late
+        await _svc.Background;
+        Assert.Equal(Id("b"), _svc.Current!.VideoId);
+        Assert.Empty(_lib.GetRecent(10));                     // b not recorded as played
+        _resolver.Gates[Id("b")].SetResult();
+        await switching;
+        Assert.Equal(Id("b"), _svc.Current!.VideoId);
+    }
+
+    [Fact]
+    public async Task Superseded_resolve_is_cancelled()
+    {
+        _resolver.Gates[Id("a")] = new TaskCompletionSource();
+        var first = _svc.PlayListAsync(List("a"), 0);
+        await _svc.PlayListAsync(List("b"), 0);
+        Assert.True(_resolver.Tokens[Id("a")].IsCancellationRequested);
+        await first;
+        await _svc.Background;
+        Assert.Equal(Id("b"), _svc.Current!.VideoId);
+        Assert.True(_svc.IsPlaying);
+        Assert.Empty(_notices);
+    }
+
+    [Fact]
+    public async Task Play_after_end_of_queue_restarts_current_song()
+    {
+        await _svc.PlayListAsync(List("a"), 0);
+        _player.End();
+        await _svc.Background;
+        Assert.False(_svc.IsPlaying);
+        _svc.TogglePause();
+        await _svc.Background;
+        Assert.True(_svc.IsPlaying);
+        Assert.Equal(2, _player.Loads.Count);
+        Assert.False(_player.IsPaused);
+    }
+
+    [Fact]
+    public async Task Play_next_into_empty_queue_then_play_starts_it()
+    {
+        _svc.Queue.PlayNext(T("a"));
+        _svc.TogglePause();
+        await _svc.Background;
+        Assert.True(_svc.IsPlaying);
+        Assert.Single(_player.Loads);
+    }
+
+    [Fact]
+    public async Task Failure_mid_song_reloads_at_position_without_counting()
+    {
+        await _svc.PlayListAsync(List("a", "b"), 0);
+        _player.At(100);
+        _player.Fail("http 403");                             // e.g. the URL expired while the laptop slept
+        await _svc.Background;
+        Assert.Equal(Id("a"), _svc.Current!.VideoId);
+        Assert.Equal(TimeSpan.FromSeconds(100), _player.Loads[^1].StartAt);
+        Assert.Contains(Id("a"), _resolver.Invalidated);
+        Assert.Equal(0, _updates);
+        Assert.Empty(_notices);
+    }
+
+    [Fact]
+    public async Task Resume_with_no_network_stays_paused_at_position()
+    {
+        await _svc.PlayListAsync(List("a", "b"), 0);
+        _player.At(95);
+        _svc.TogglePause();
+        _clock.Now = Now.AddHours(7);
+        _resolver.Failing.Add(Id("a"));
+        _svc.TogglePause();
+        await _svc.Background;
+        Assert.Equal(Id("a"), _svc.Current!.VideoId);        // not skipped
+        Assert.False(_svc.IsPlaying);
+        Assert.Single(_notices);
+        _resolver.Failing.Remove(Id("a"));
+        _svc.TogglePause();                                   // network back: try again
+        await _svc.Background;
+        Assert.True(_svc.IsPlaying);
+        Assert.Equal(TimeSpan.FromSeconds(95), _player.Loads[^1].StartAt);
+    }
+
+    [Fact]
+    public async Task Tools_update_on_failure_again_after_6_hours()
+    {
+        _resolver.Failing.Add(Id("a"));
+        await _svc.PlayListAsync(List("a"), 0);
+        await _svc.Background;
+        Assert.Equal(1, _updates);
+        _clock.Now = Now.AddHours(5);
+        await _svc.PlayListAsync(List("a"), 0);
+        await _svc.Background;
+        Assert.Equal(1, _updates);
+        _clock.Now = Now.AddHours(7);
+        await _svc.PlayListAsync(List("a"), 0);
+        await _svc.Background;
+        Assert.Equal(2, _updates);
     }
 
     [Fact]

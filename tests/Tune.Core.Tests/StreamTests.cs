@@ -12,10 +12,16 @@ public sealed class FakeRunner : IProcessRunner
     public List<(string Exe, IReadOnlyList<string> Args)> Calls { get; } = [];
     public Func<IReadOnlyList<string>, (int, string, string)> Respond { get; set; } = _ => (0, "", "");
 
-    public Task<(int ExitCode, string StdOut, string StdErr)> RunAsync(string exe, IReadOnlyList<string> args, TimeSpan timeout, CancellationToken ct = default)
+    /// <summary>When set, runs block until the gate completes (or the run is cancelled, like a killed process).</summary>
+    public TaskCompletionSource? Gate { get; set; }
+    public List<CancellationToken> Tokens { get; } = [];
+
+    public async Task<(int ExitCode, string StdOut, string StdErr)> RunAsync(string exe, IReadOnlyList<string> args, TimeSpan timeout, CancellationToken ct = default)
     {
         Calls.Add((exe, args));
-        return Task.FromResult(Respond(args));
+        Tokens.Add(ct);
+        if (Gate is { } g) await g.Task.WaitAsync(ct);
+        return Respond(args);
     }
 }
 
@@ -136,6 +142,41 @@ public class StreamTests : IDisposable
         var r = new StreamResolver(Tools(), _runner, _clock);
         await r.ResolveAsync("abcdefghijk");
         r.Invalidate("abcdefghijk");
+        await r.ResolveAsync("abcdefghijk");
+        Assert.Equal(2, _runner.Calls.Count);
+    }
+
+    [Fact]
+    public async Task Concurrent_resolves_of_one_song_share_one_yt_dlp_run()
+    {
+        _runner.Gate = new TaskCompletionSource();
+        _runner.Respond = _ => (0, Url(Now.AddHours(6)), "");
+        var r = new StreamResolver(Tools(), _runner, _clock);
+        var a = r.ResolveAsync("abcdefghijk");   // e.g. look-ahead
+        var b = r.ResolveAsync("abcdefghijk");   // user pressed Next meanwhile
+        _runner.Gate.SetResult();
+        Assert.Equal((await a).ToString(), (await b).ToString());
+        Assert.Single(_runner.Calls);
+    }
+
+    [Fact]
+    public async Task Run_is_killed_only_when_every_waiter_gave_up()
+    {
+        _runner.Gate = new TaskCompletionSource();
+        _runner.Respond = _ => (0, Url(Now.AddHours(6)), "");
+        var r = new StreamResolver(Tools(), _runner, _clock);
+        using var first = new CancellationTokenSource();
+        using var second = new CancellationTokenSource();
+        var a = r.ResolveAsync("abcdefghijk", first.Token);
+        var b = r.ResolveAsync("abcdefghijk", second.Token);
+        first.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => a);
+        Assert.False(_runner.Tokens.Single().IsCancellationRequested); // b still needs it
+        second.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => b);
+        Assert.True(_runner.Tokens.Single().IsCancellationRequested);  // nobody left: yt-dlp killed
+        // a later request starts a fresh run
+        _runner.Gate = null;
         await r.ResolveAsync("abcdefghijk");
         Assert.Equal(2, _runner.Calls.Count);
     }

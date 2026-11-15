@@ -85,7 +85,12 @@ public sealed class MpvPlayer : IAudioPlayer, IDisposable
         MpvNative.SetPropertyString(_ctx, "pause", "yes");
     }
 
-    public void Stop() => MpvNative.Command(_ctx, "stop");
+    public void Stop()
+    {
+        _duration = null;
+        Volatile.Write(ref _position, 0);
+        MpvNative.Command(_ctx, "stop");
+    }
 
     public void Seek(TimeSpan pos)
     {
