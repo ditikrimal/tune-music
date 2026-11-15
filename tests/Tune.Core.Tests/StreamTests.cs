@@ -1,3 +1,4 @@
+using System.Formats.Tar;
 using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
@@ -43,13 +44,20 @@ public class StreamTests : IDisposable
         Directory.Delete(_dir, true);
     }
 
-    private static byte[] DenoZip()
+    // npm tarball layout: gzip(tar) with package/deno.exe
+    private static byte[] DenoTgz()
     {
         using var ms = new MemoryStream();
-        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
-        using (var s = zip.CreateEntry("deno.exe").Open()) s.Write("fake deno"u8);
+        using (var gz = new GZipStream(ms, CompressionLevel.Fastest, leaveOpen: true))
+        using (var tar = new TarWriter(gz))
+        {
+            var entry = new PaxTarEntry(TarEntryType.RegularFile, "package/deno.exe") { DataStream = new MemoryStream("fake deno"u8.ToArray()) };
+            tar.WriteEntry(entry);
+        }
         return ms.ToArray();
     }
+
+    private static string Integrity(byte[] data) => "sha512-" + Convert.ToBase64String(SHA512.HashData(data));
 
     private ToolManager Tools(BytesHandler? handler = null, ToolManifest? manifest = null) =>
         new(_dir, new HttpClient(handler ?? new BytesHandler(_ => [])), _runner, _lib, _clock, manifest ?? ToolManifest.Load());
@@ -61,8 +69,8 @@ public class StreamTests : IDisposable
     public void Manifest_is_embedded_and_pins_deno()
     {
         var m = ToolManifest.Load();
-        Assert.Equal(64, m.DenoSha256.Length);
-        Assert.EndsWith("deno-x86_64-pc-windows-msvc.zip", m.DenoUrl);
+        Assert.StartsWith("sha512-", m.DenoIntegrity);
+        Assert.StartsWith("https://registry.npmjs.org/@deno/win32-x64/", m.DenoUrl);
     }
 
     [Fact]
@@ -136,9 +144,9 @@ public class StreamTests : IDisposable
     [Fact]
     public async Task EnsureInstalled_downloads_missing_tools_and_verifies_deno()
     {
-        var zip = DenoZip();
-        var manifest = ToolManifest.Load() with { DenoSha256 = Convert.ToHexString(SHA256.HashData(zip)) };
-        var handler = new BytesHandler(u => u.AbsolutePath.EndsWith(".zip") ? zip : "fake yt-dlp"u8.ToArray());
+        var tgz = DenoTgz();
+        var manifest = ToolManifest.Load() with { DenoIntegrity = Integrity(tgz) };
+        var handler = new BytesHandler(u => u.AbsolutePath.EndsWith(".tgz") ? tgz : "fake yt-dlp"u8.ToArray());
         var tools = Tools(handler, manifest);
         await tools.EnsureInstalledAsync();
         Assert.Equal("fake deno", File.ReadAllText(tools.DenoPath));
@@ -161,10 +169,10 @@ public class StreamTests : IDisposable
     [Fact]
     public async Task Deno_sha_mismatch_throws_and_deletes_file()
     {
-        var handler = new BytesHandler(u => u.AbsolutePath.EndsWith(".zip") ? DenoZip() : "y"u8.ToArray());
-        var tools = Tools(handler, ToolManifest.Load() with { DenoSha256 = new string('0', 64) });
+        var handler = new BytesHandler(u => u.AbsolutePath.EndsWith(".tgz") ? DenoTgz() : "y"u8.ToArray());
+        var tools = Tools(handler, ToolManifest.Load() with { DenoIntegrity = Integrity("other"u8.ToArray()) });
         await Assert.ThrowsAsync<ToolInstallException>(() => tools.EnsureInstalledAsync());
         Assert.False(File.Exists(tools.DenoPath));
-        Assert.Empty(Directory.GetFiles(_dir, "*.zip"));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tgz"));
     }
 }

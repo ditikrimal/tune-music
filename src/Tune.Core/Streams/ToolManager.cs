@@ -1,3 +1,4 @@
+using System.Formats.Tar;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
@@ -9,7 +10,7 @@ namespace Tune.Core.Streams;
 
 public sealed class ToolInstallException(string message) : Exception(message);
 
-public sealed record ToolManifest(string DenoVersion, string DenoUrl, string DenoSha256, string YtDlpUrl)
+public sealed record ToolManifest(string DenoVersion, string DenoUrl, string DenoIntegrity, string YtDlpUrl)
 {
     /// <summary>Reads tools/manifest.json, embedded into this assembly at build time.</summary>
     public static ToolManifest Load()
@@ -18,7 +19,7 @@ public sealed record ToolManifest(string DenoVersion, string DenoUrl, string Den
                       ?? throw new InvalidOperationException("manifest.json not embedded");
         var j = JsonNode.Parse(s)!;
         return new ToolManifest(
-            (string)j["deno"]!["version"]!, (string)j["deno"]!["url"]!, (string)j["deno"]!["sha256"]!,
+            (string)j["deno"]!["version"]!, (string)j["deno"]!["url"]!, (string)j["deno"]!["integrity"]!,
             (string)j["ytdlp"]!["url"]!);
     }
 }
@@ -45,26 +46,37 @@ public sealed class ToolManager(string toolsDir, HttpClient http, IProcessRunner
         if (!File.Exists(DenoPath) || !File.Exists(marker) || File.ReadAllText(marker) != manifest.DenoVersion)
         {
             Log.Info($"Downloading deno {manifest.DenoVersion}");
-            var zip = Path.Combine(toolsDir, "deno.download.zip");
+            var tgz = Path.Combine(toolsDir, "deno.download.tgz");
             try
             {
-                await DownloadAsync(new Uri(manifest.DenoUrl), zip, ct).ConfigureAwait(false);
+                // npm package @deno/win32-x64: gzip'd tar holding package/deno.exe, verified with npm's SRI hash
+                await DownloadAsync(new Uri(manifest.DenoUrl), tgz, ct).ConfigureAwait(false);
                 string actual;
-                await using (var fs = File.OpenRead(zip))
-                    actual = Convert.ToHexString(await SHA256.HashDataAsync(fs, ct).ConfigureAwait(false));
-                if (!actual.Equals(manifest.DenoSha256, StringComparison.OrdinalIgnoreCase))
-                    throw new ToolInstallException($"deno checksum mismatch (expected {manifest.DenoSha256}, got {actual})");
+                await using (var fs = File.OpenRead(tgz))
+                    actual = "sha512-" + Convert.ToBase64String(await SHA512.HashDataAsync(fs, ct).ConfigureAwait(false));
+                if (actual != manifest.DenoIntegrity)
+                    throw new ToolInstallException($"deno integrity mismatch (expected {manifest.DenoIntegrity}, got {actual})");
 
-                using (var archive = ZipFile.OpenRead(zip))
+                await using (var fs = File.OpenRead(tgz))
+                await using (var gz = new GZipStream(fs, CompressionMode.Decompress))
+                await using (var tar = new TarReader(gz))
                 {
-                    var entry = archive.GetEntry("deno.exe") ?? throw new ToolInstallException("deno.exe missing from archive");
-                    entry.ExtractToFile(DenoPath, overwrite: true);
+                    var found = false;
+                    while (await tar.GetNextEntryAsync(cancellationToken: ct).ConfigureAwait(false) is { } entry)
+                    {
+                        if (entry.Name != "package/deno.exe" || entry.DataStream is null) continue;
+                        await using (var outFile = File.Create(DenoPath))
+                            await entry.DataStream.CopyToAsync(outFile, ct).ConfigureAwait(false);
+                        found = true;
+                        break;
+                    }
+                    if (!found) throw new ToolInstallException("deno.exe missing from package");
                 }
                 await File.WriteAllTextAsync(marker, manifest.DenoVersion, ct).ConfigureAwait(false);
             }
             finally
             {
-                File.Delete(zip);
+                File.Delete(tgz);
             }
         }
     }
