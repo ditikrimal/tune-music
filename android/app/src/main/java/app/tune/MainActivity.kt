@@ -70,7 +70,7 @@ import app.tune.ui.TuneTheme
 import app.tune.ui.Type
 import kotlinx.coroutines.delay
 
-object BuildConfigLite { const val VERSION = "1.1.0" }
+object BuildConfigLite { const val VERSION = "1.2.0" }
 
 class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
