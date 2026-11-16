@@ -33,10 +33,29 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
         when (card.kind) {
             CardKind.Song -> card.track?.let { player.playRadio(it) }
             CardKind.Album -> card.browseId?.let { nav.navigate("album/$it") }
-            CardKind.Playlist -> (card.playlistId ?: card.browseId)?.let { nav.navigate("ytplaylist/$it") }
+            CardKind.Playlist -> {
+                val p = card.playlistId ?: card.browseId
+                if (p != null && p.startsWith("tune:")) graph.library.playlistIdByUid(p.removePrefix("tune:"))?.let { nav.navigate("local/$it") }
+                else p?.let { nav.navigate("ytplaylist/$it") }
+            }
             CardKind.Artist -> card.browseId?.let { nav.navigate("artist/$it") }
         }
     }
+
+    /** Long-press on an album/playlist card: a small sheet to open it or pin it. */
+    var cardMenuFor by mutableStateOf<Card?>(null)
+
+    fun isPinned(card: Card) = app.tune.data.SpeedDialPins.isPinned(graph.library, card)
+
+    /** Pin to / unpin from the speed dial (Home rebuilds). */
+    fun togglePin(card: Card) {
+        val pinned = app.tune.data.SpeedDialPins.toggle(graph.library, card)
+        graph.toast(if (pinned) "Pinned to speed dial" else "Removed from speed dial")
+        homeChanged++
+    }
+
+    /** Ticks when pins or the Home layout change: Home rebuilds. */
+    var homeChanged by mutableStateOf(0)
 
     fun openArtist(browseId: String?) { if (browseId != null) { nowPlayingOpen = false; nav.navigate("artist/$browseId") } }
 

@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.tune.data.Card
+import app.tune.data.SpeedDialPins
 import app.tune.data.PlaylistLinks
 import app.tune.data.CardKind
 import app.tune.BuildConfigLite
@@ -90,6 +91,10 @@ fun HomeScreen() {
     val state by vm.state.collectAsState()
     val refreshing by vm.refreshing.collectAsState()
     LaunchedEffect(online) { if (online) vm.load(force = state?.getOrNull()?.offline == true) { app.graph.feed.build() } }
+    // pins or the Home layout changed (here, in Settings, or synced from another device): rebuild
+    val homeChanged = app.homeChanged
+    val homeSynced by app.graph.library.homeSynced.collectAsState()
+    LaunchedEffect(homeChanged, homeSynced) { if ((homeChanged > 0 || homeSynced > 0) && online) vm.load(force = true) { app.graph.feed.build() } }
 
     // pull down to rebuild Home from what you've been playing (and fresh YouTube Music rows)
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -115,8 +120,11 @@ fun HomeScreen() {
         if (feed == null) { item { Loading() }; return@LazyColumn }
         feed.shelves.take(9).forEachIndexed { i, shelf ->
             item(key = "shelf$i") {
-                if (shelf.isList) QuickPicksRow(shelf.copy(items = shelf.items.take(20)))
-                else ShelfRow(shelf.copy(items = shelf.items.take(12)), featured = i == 0 && shelf.isLocal)
+                when {
+                    shelf.isSpeedDial -> SpeedDialRow(shelf)
+                    shelf.isList -> QuickPicksRow(shelf.copy(items = shelf.items.take(20)))
+                    else -> ShelfRow(shelf.copy(items = shelf.items.take(12)), featured = i == 0 && shelf.isLocal)
+                }
             }
         }
     }
@@ -489,6 +497,16 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                                     if (any) androidx.compose.material3.DropdownMenuItem({ Text("Remove downloads from this ${if (kind == CollectionKind.Album) "album" else "playlist"}") }, {
                                         menu = false; app.removeDownloads(col.tracks.filter { app.graph.downloads.stateOf(it.videoId) != DownloadState.None })
                                     })
+                                    val pinCard = when (kind) {
+                                        CollectionKind.Local -> app.graph.library.playlistUid(id.toLong())?.let { SpeedDialPins.localPlaylistCard(it, col.title, col.thumbnail ?: col.tracks.firstOrNull()?.thumbnail) }
+                                        CollectionKind.Album -> Card(CardKind.Album, col.title, col.subtitle, col.thumbnail, browseId = id)
+                                        CollectionKind.YtPlaylist -> Card(CardKind.Playlist, col.title, col.subtitle, col.thumbnail, playlistId = id)
+                                        else -> null
+                                    }
+                                    pinCard?.let { pc ->
+                                        val pinned = remember(version, pc) { app.isPinned(pc) }
+                                        androidx.compose.material3.DropdownMenuItem({ Text(if (pinned) "Unpin from speed dial" else "Pin to speed dial") }, { menu = false; app.togglePin(pc) })
+                                    }
                                     if (kind == CollectionKind.Local) {
                                         androidx.compose.material3.DropdownMenuItem({ Text("Rename") }, { menu = false; renaming = true })
                                         androidx.compose.material3.DropdownMenuItem({ Text("Delete playlist") }, {
@@ -584,59 +602,6 @@ fun ArtistScreen(browseId: String) {
 
 // ============================== Settings ==============================
 
-@Composable
-fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
-    val app = LocalApp.current
-    val c = LocalTune.current
-    val version by app.graph.library.version.collectAsState()
-    val synced = remember(version) { app.graph.library.setting("lyrics.synced") != "0" }
-    LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
-        item { BackRow("Settings") }
-        item {
-            Text("ACCENT COLOUR", style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 12.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(Accents.presets) { (name, color) ->
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(color).clickable { onAccent(color) }, contentAlignment = Alignment.Center) {
-                        if (Accents.hex(color) == Accents.hex(accent)) Icon(Ico.Check, name, tint = if (color.red + color.green + color.blue > 2f) Color.Black else Color.White)
-                    }
-                }
-            }
-        }
-        item {
-            Text("PLAYBACK", style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 28.dp, bottom = 8.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Synced lyrics", style = Type.bodyStrong, color = c.text)
-                    Text("Lyrics follow the song line by line (lrclib.net; title and artist are sent). Off: plain YouTube Music lyrics.",
-                        style = Type.caption, color = c.subtle)
-                }
-                Switch(synced, { app.graph.library.setSetting("lyrics.synced", if (it) "1" else "0") },
-                    colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
-            }
-        }
-        item { SmartSection() }
-        item { UpdatesSection() }
-        item { ImportSection() }
-        item {
-            val dv by app.graph.downloads.version.collectAsState()
-            val bytes = remember(dv) { app.graph.downloads.downloadedBytes() }
-            var cacheBytes by remember { mutableStateOf(app.graph.streamCache.usedBytes()) }
-            Text("STORAGE", style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 28.dp, bottom = 8.dp))
-            Text("Downloads use ${bytes / (1 shl 20)} MB.", style = Type.body, color = c.text, modifier = Modifier.padding(horizontal = 20.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Recently played songs: ${cacheBytes / (1 shl 20)} MB of 1 GB", style = Type.body, color = c.text)
-                    Text("Songs you stream are kept so they play again without internet. The oldest go first.", style = Type.caption, color = c.subtle)
-                }
-                Text("Clear", style = Type.bodyStrong, color = c.accentText, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
-                    app.graph.streamCache.clear(); cacheBytes = app.graph.streamCache.usedBytes(); app.graph.toast("Cleared recently played songs")
-                }.padding(12.dp))
-            }
-            Text("Tune ${BuildConfigLite.VERSION}", style = Type.caption, color = c.subtle, modifier = Modifier.padding(20.dp))
-        }
-    }
-}
-
 /**
  * Downloads the new APK and opens Android's installer. The first time, Android needs "Allow from this source"
  * for Tune: we open that screen and the user taps Update again.
@@ -683,7 +648,7 @@ private fun UpdateBanner() {
 
 /** Settings > Updates: this version, and a button to check now / install. */
 @Composable
-private fun UpdatesSection() {
+internal fun UpdatesSection() {
     val app = LocalApp.current
     val c = LocalTune.current
     val updater = app.graph.updater
@@ -717,7 +682,7 @@ private fun UpdatesSection() {
 
 /** Settings > Import: paste a YouTube Music playlist link; its songs become a playlist in the library. */
 @Composable
-private fun ImportSection() {
+internal fun ImportSection() {
     val app = LocalApp.current
     val c = LocalTune.current
     val scope = rememberCoroutineScope()
@@ -769,7 +734,7 @@ private fun ImportSection() {
 
 /** Settings > Smart downloads: Tune keeps your most-played songs ready offline (like YouTube Music). */
 @Composable
-private fun SmartSection() {
+internal fun SmartSection() {
     val app = LocalApp.current
     val c = LocalTune.current
     val version by app.graph.library.version.collectAsState()

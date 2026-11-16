@@ -67,7 +67,9 @@ import app.tune.ui.MiniPlayer
 import app.tune.ui.NowPlaying
 import app.tune.ui.SearchScreen
 import app.tune.ui.SettingsScreen
+import app.tune.ui.SettingsCategoryScreen
 import app.tune.ui.TrackMenuSheet
+import app.tune.ui.CardMenuSheet
 import app.tune.ui.TuneTheme
 import app.tune.ui.Type
 import kotlinx.coroutines.delay
@@ -139,6 +141,7 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
             composable("ytplaylist/{id}") { page { CollectionScreen(CollectionKind.YtPlaylist, it.arguments?.getString("id")!!) } }
             composable("artist/{id}") { page { ArtistScreen(it.arguments?.getString("id")!!) } }
             composable("settings") { page { SettingsScreen(accent, onAccent) } }
+            composable("settings/{cat}") { page { SettingsCategoryScreen(it.arguments?.getString("cat")!!, accent, onAccent) } }
         }
 
         // mini player + tabs: taps that land between their buttons stop here instead of reaching the page underneath
@@ -154,6 +157,7 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
 
         Toasts(Modifier.align(Alignment.BottomCenter).padding(bottom = 170.dp))
         TrackMenuSheet()
+        CardMenuSheet()
         AddToPlaylistDialog()
     }
 }

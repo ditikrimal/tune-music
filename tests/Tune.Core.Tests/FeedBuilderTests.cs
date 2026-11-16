@@ -61,7 +61,8 @@ public class FeedBuilderTests : IDisposable
         Play("f", 4, artist: "Other");
         Play("once", 1, artist: "Other2"); // one play isn't "frequent"
         var dial = (await Builder().BuildAsync()).Shelves.Single(s => s.IsSpeedDial);
-        Assert.Equal([Id("a"), Id("b"), Id("c"), Id("f")], Ids(dial));
+        Assert.Equal([Id("a"), Id("b"), Id("c"), Id("f")], Ids(dial).Take(4)); // most-played first, ≤ 3 per artist
+        Assert.Contains(Id("once"), Ids(dial));                                    // then topped up to a full page
     }
 
     [Fact]

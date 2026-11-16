@@ -214,6 +214,10 @@ class SyncEngine(private val lib: Library, private val remote: SyncRemote, priva
         }
         pulled += plays.docs.size; plays.commit()
 
+        val settings = pullAll(SETTINGS)
+        for (d in settings.docs) d.str("value")?.let { changed = lib.applySetting(d.id, it, d.long("updatedAt")) or changed }
+        pulled += settings.docs.size; settings.commit()
+
         val pending = lib.pendingSync()
         val docs = pending.mapNotNull { build(it) }
         if (docs.isNotEmpty()) remote.push(docs)
@@ -246,6 +250,7 @@ class SyncEngine(private val lib: Library, private val remote: SyncRemote, priva
                 "device" to deviceId, "day" to item.key, "plays" to SyncFormat.playsJson(plays),
                 "tracks" to SyncFormat.tracksJson(plays.map { it.first }.distinctBy { it.videoId }), "updatedAt" to item.updatedAt))
         }
+        SyncKinds.SETTING -> lib.setting(item.key)?.let { RemoteDoc(SETTINGS, item.key, mapOf("value" to it, "updatedAt" to item.updatedAt)) }
         else -> null
     }
 
@@ -280,9 +285,9 @@ class SyncEngine(private val lib: Library, private val remote: SyncRemote, priva
     }
 
     companion object {
-        const val LIKES = "likes"; const val PLAYLISTS = "playlists"; const val PLAYS = "plays"
+        const val LIKES = "likes"; const val PLAYLISTS = "playlists"; const val PLAYS = "plays"; const val SETTINGS = "settings"
         private const val PAGE = 300
-        fun resetCursors(lib: Library) = listOf(LIKES, PLAYLISTS, PLAYS).forEach { lib.setSetting("sync.cursor.$it", "") }
+        fun resetCursors(lib: Library) = listOf(LIKES, PLAYLISTS, PLAYS, SETTINGS).forEach { lib.setSetting("sync.cursor.$it", "") }
     }
 }
 

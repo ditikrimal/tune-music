@@ -13,11 +13,14 @@ data class PlaylistInfo(val id: Long, val name: String, val count: Int, val thum
  * Everything Tune remembers on the phone: play history, likes, playlists, settings, downloads.
  * Same tables as the Windows app's LibraryStore. [version] ticks on every change so screens refresh.
  */
-class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 3) {
+class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) {
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
     private fun changed() { _version.value++ }
+
+    /** Ticks when the Home layout or pins arrive from another device (Home rebuilds). */
+    val homeSynced = MutableStateFlow(0)
 
     /** Likes, playlists or history changed on this phone: account sync uploads soon after. */
     @Volatile var onLocalChange: (() -> Unit)? = null
@@ -32,6 +35,7 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 3) 
         db.execSQL("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         db.execSQL("CREATE TABLE downloads (video_id TEXT PRIMARY KEY, path TEXT, bytes INTEGER NOT NULL DEFAULT 0, added_at INTEGER NOT NULL, smart INTEGER NOT NULL DEFAULT 0)")
         createSync(db, fresh = true)
+        createSkips(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -39,7 +43,38 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 3) 
         if (oldVersion < 2) db.execSQL("ALTER TABLE downloads ADD COLUMN smart INTEGER NOT NULL DEFAULT 0")
         // v3: account sync (same tables as the Windows app)
         if (oldVersion < 3) createSync(db, fresh = false)
+        // v4: early skips (a "not now" signal for recommendations)
+        if (oldVersion < 4) createSkips(db)
     }
+
+    private fun createSkips(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS skips (id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT NOT NULL, at INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS skips_at ON skips(at)")
+    }
+
+    // ---------- listening signals (recommendations) ----------
+
+    fun recordSkip(videoId: String, at: Long = System.currentTimeMillis()) {
+        writableDatabase.insert("skips", null, ContentValues().apply { put("video_id", videoId); put("at", at) })
+    }
+
+    /** Every play since [sinceMs] with its time. */
+    fun plays(sinceMs: Long): List<Pair<Track, Long>> = readableDatabase.rawQuery(
+        "SELECT p.video_id, p.at, t.json FROM plays p JOIN tracks t ON t.video_id = p.video_id WHERE p.at >= ? ORDER BY p.at", arrayOf(sinceMs.toString())).use { c ->
+        val cache = HashMap<String, Track?>()
+        buildList { while (c.moveToNext()) cache.getOrPut(c.getString(0)) { Track.fromJson(c.getString(2)) }?.let { add(it to c.getLong(1)) } }
+    }
+
+    fun skips(sinceMs: Long): List<Pair<String, Long>> =
+        readableDatabase.rawQuery("SELECT video_id, at FROM skips WHERE at >= ?", arrayOf(sinceMs.toString())).use { c ->
+            buildList { while (c.moveToNext()) add(c.getString(0) to c.getLong(1)) }
+        }
+
+    fun playlistUid(id: Long): String? =
+        readableDatabase.rawQuery("SELECT uid FROM playlists WHERE id = ?", arrayOf(id.toString())).use { if (it.moveToFirst()) it.getString(0) else null }
+
+    fun playlistIdByUid(uid: String): Long? =
+        readableDatabase.rawQuery("SELECT id FROM playlists WHERE uid = ?", arrayOf(uid)).use { if (it.moveToFirst()) it.getLong(0) else null }
 
     /** Change tracking for account sync; playlists get an id that means the same on every device. */
     private fun createSync(db: SQLiteDatabase, fresh: Boolean) {
@@ -223,7 +258,23 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 3) 
 
     fun setSetting(key: String, value: String) {
         writableDatabase.insertWithOnConflict("settings", null, ContentValues().apply { put("key", key); put("value", value) }, SQLiteDatabase.CONFLICT_REPLACE)
+        if (key in SYNCED_SETTINGS) touch(writableDatabase, SyncKinds.SETTING, key) // Home layout + pins follow the account
         changed()
+    }
+
+    /** A Home-layout / pins change from another device. Newer wins. */
+    fun applySetting(key: String, value: String, updatedAt: Long): Boolean {
+        if (key !in SYNCED_SETTINGS || updatedAt <= syncUpdatedAt(SyncKinds.SETTING, key)) return false
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                insertWithOnConflict("settings", null, ContentValues().apply { put("key", key); put("value", value) }, SQLiteDatabase.CONFLICT_REPLACE)
+                applied(this, SyncKinds.SETTING, key, updatedAt)
+                setTransactionSuccessful()
+            } finally { endTransaction() }
+        }
+        homeSynced.value++
+        return true
     }
 
     // ---------- downloads ----------
@@ -310,6 +361,7 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 3) 
                 execSQL("UPDATE sync_items SET pushed = 0")
                 execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'like', video_id, 1 FROM likes")
                 execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'playlist', uid, 1 FROM playlists")
+                execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'setting', key, 1 FROM settings WHERE key IN ('home.layout', 'speeddial.pins')")
                 execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'plays', strftime('%Y%m%d', at / 1000, 'unixepoch'), 1 FROM plays WHERE remote = 0 GROUP BY 2")
                 setTransactionSuccessful()
             } finally { endTransaction() }
@@ -427,7 +479,11 @@ object SyncKinds {
     const val LIKE = "like"
     const val PLAYLIST = "playlist"
     const val PLAYS = "plays"
+    const val SETTING = "setting"
 }
+
+/** Settings that follow the account to every device. */
+val SYNCED_SETTINGS = setOf("home.layout", "speeddial.pins")
 
 data class SyncItem(val kind: String, val key: String, val updatedAt: Long)
 

@@ -71,6 +71,8 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var recordJob: Job? = null
+    private var playingId: String? = null
+    private var playingSince = 0L
     private var radioFor: String? = null
     private var retriedFor: String? = null
     private lateinit var cacheFactory: androidx.media3.datasource.cache.CacheDataSource.Factory
@@ -207,6 +209,13 @@ class PlaybackService : MediaSessionService() {
                 scheduleOfflineCheck(justArrived = true) // don't even try a song that can't play offline
                 return
             }
+            // you moved on from a song early (it played a bit, never counted as a play): a skip, for recommendations
+            val left = playingId
+            if (left != null && recordJob?.isActive == true && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK &&
+                android.os.SystemClock.elapsedRealtime() - playingSince >= 3_000)
+                scope.launch(Dispatchers.IO) { app.graph.library.recordSkip(left) }
+            playingId = mediaItem?.mediaId
+            playingSince = android.os.SystemClock.elapsedRealtime()
             recordJob?.cancel()
             val track = mediaItem?.track() ?: return
             retriedFor = null

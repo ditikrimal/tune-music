@@ -2,6 +2,9 @@ package app.tune.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.tune.data.AccountSync
@@ -159,5 +163,62 @@ private fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         Icon(icon, null, tint = c.text, modifier = Modifier.size(22.dp))
         Text(label, style = Type.body, color = c.text)
+    }
+}
+
+/**
+ * Speed dial (like YouTube Music): your pins and most-played songs as square tiles, nine to a page (3×3),
+ * swiped sideways. A song plays with the dial's other songs after it; a pinned album or playlist opens.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun SpeedDialRow(shelf: app.tune.data.Shelf) {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val state = app.graph.account?.state?.collectAsState()?.value
+    val pages = remember(shelf) { shelf.items.chunked(9) }
+    val songs = remember(shelf) { shelf.items.mapNotNull { it.track } }
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (state?.signedIn == true) { Avatar(state, 40.dp); Spacer(Modifier.width(12.dp)) }
+        Column {
+            if (state?.signedIn == true)
+                Text((state.name ?: state.email ?: "").uppercase(), style = Type.label, color = c.subtle, maxLines = 1)
+            Text(shelf.title, style = Type.section, color = c.text)
+        }
+    }
+    val pager = androidx.compose.foundation.pager.rememberPagerState { pages.size }
+    androidx.compose.foundation.pager.HorizontalPager(pager, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+        pageSpacing = 12.dp, verticalAlignment = Alignment.Top) { page ->
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            pages[page].chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { card ->
+                        Box(Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(c.card)
+                            .combinedClickable(
+                                onClick = {
+                                    val t = card.track
+                                    if (t != null) app.playList(songs, songs.indexOfFirst { it.videoId == t.videoId }.coerceAtLeast(0))
+                                    else app.openCard(card)
+                                },
+                                onLongClick = { card.track?.let { app.menuFor = it; app.menuPlaylistId = null } ?: run { app.cardMenuFor = card } })) {
+                            AsyncImage(card.thumbnail, card.title, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                            Box(Modifier.fillMaxWidth().fillMaxHeight(0.5f).align(Alignment.BottomCenter)
+                                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent,
+                                    androidx.compose.ui.graphics.Color(0xD0000000)))))
+                            Text(card.title, style = Type.bodyStrong.copy(fontSize = 13.sp), color = androidx.compose.ui.graphics.Color.White,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 9.dp, vertical = 8.dp))
+                        }
+                    }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+    if (pages.size > 1) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
+        repeat(pages.size) { i ->
+            Box(Modifier.padding(3.dp).size(if (i == pager.currentPage) 8.dp else 6.dp).clip(CircleShape)
+                .background(if (i == pager.currentPage) c.text else c.subtle.copy(alpha = 0.5f)))
+        }
     }
 }

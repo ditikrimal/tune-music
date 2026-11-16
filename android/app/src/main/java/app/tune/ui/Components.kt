@@ -183,7 +183,10 @@ fun CardItem(card: Card, width: Dp = 150.dp) {
     val c = LocalTune.current
     val round = card.kind == CardKind.Artist
     Column(Modifier.width(width).clip(RoundedCornerShape(12.dp))
-        .combinedClickable(onClick = { app.openCard(card) }, onLongClick = { card.track?.let { app.menuFor = it; app.menuPlaylistId = null } })
+        .combinedClickable(onClick = { app.openCard(card) }, onLongClick = {
+            val t = card.track
+            if (t != null) { app.menuFor = t; app.menuPlaylistId = null } else if (card.kind != CardKind.Artist) app.cardMenuFor = card
+        })
         .padding(6.dp)) {
         Box {
             Art(card.thumbnail, width - 12.dp, corner = 10.dp, circle = round)
@@ -256,11 +259,38 @@ fun TrackMenuSheet() {
             DownloadState.Done -> MenuRow(Ico.DownloadDone, "Remove download", accent = true) { app.removeDownloads(listOf(t)); close() }
             else -> MenuRow(Ico.Close, "Cancel download") { app.removeDownloads(listOf(t)); close() }
         }
+        val songCard = remember(t) { Card(CardKind.Song, t.title, t.artistLine, t.thumbnail, t.videoId, track = t) }
+        val pinned = remember(t.videoId, version) { app.isPinned(songCard) }
+        MenuRow(Ico.Pin, if (pinned) "Unpin from speed dial" else "Pin to speed dial", accent = pinned) { app.togglePin(songCard); close() }
         app.menuPlaylistId?.let { pid ->
             MenuRow(Ico.Delete, "Remove from this playlist") { app.graph.library.removeFromPlaylist(pid, app.menuPlaylistIndex); close() }
         }
         t.artists.filter { it.browseId != null }.take(2).forEach { a -> MenuRow(Ico.Person, "Go to ${a.name}") { close(); app.openArtist(a.browseId) } }
         t.album?.browseId?.let { id -> MenuRow(Ico.Album, "Go to album") { close(); app.nowPlayingOpen = false; app.nav.navigate("album/$id") } }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** Long-press on an album or playlist card: open it, or pin it to the speed dial. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CardMenuSheet() {
+    val app = LocalApp.current
+    val card = app.cardMenuFor ?: return
+    val c = LocalTune.current
+    val close = { app.cardMenuFor = null }
+    val pinned = remember(card) { app.isPinned(card) }
+    ModalBottomSheet(onDismissRequest = close, containerColor = c.card) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Art(card.thumbnail, 52.dp)
+            Column(Modifier.padding(start = 14.dp)) {
+                Text(card.title, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                card.subtitle?.let { Text(it, style = Type.caption, color = c.subtle, maxLines = 1) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        MenuRow(if (card.kind == CardKind.Album) Ico.Album else Ico.PlaylistAdd, "Open") { close(); app.openCard(card) }
+        MenuRow(Ico.Pin, if (pinned) "Unpin from speed dial" else "Pin to speed dial", accent = pinned) { app.togglePin(card); close() }
         Spacer(Modifier.height(24.dp))
     }
 }

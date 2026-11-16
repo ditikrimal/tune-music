@@ -117,9 +117,11 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
             else cards.Add(pin);
         }
         var pinnedSongs = cards.Where(c => c.Kind == CardKind.Song).Select(c => c.VideoId).ToHashSet();
-        var songs = taste.SpeedDial(SpeedDialMax).Where(t => !pinnedSongs.Contains(t.VideoId));
-        if (taste.IsEmpty) songs = lib.GetLiked().Take(SpeedDialMax);
-        cards.AddRange(songs.Select(SongCard));
+        var songs = taste.SpeedDial(SpeedDialMax).ToList();
+        // little history yet: fill a full page with what you played lately and your likes
+        if (songs.Count < 9)
+            songs.AddRange(lib.GetRecent(20).Concat(lib.GetLiked()).Where(t => songs.All(s => s.VideoId != t.VideoId)).Take(9 - songs.Count));
+        cards.AddRange(songs.Where(t => !pinnedSongs.Contains(t.VideoId)).DistinctBy(t => t.VideoId).Select(SongCard));
         return cards.Take(SpeedDialMax).ToList();
     }
 
