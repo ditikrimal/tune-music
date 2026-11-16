@@ -181,6 +181,10 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public void RemoveDownloads(IReadOnlyList<Tune.Core.Models.Track> tracks)
     {
+        if (tracks.Count == 0) return;
+        var what = tracks.Count == 1 ? $"“{tracks[0].Title}”" : $"{tracks.Count} songs";
+        if (!Confirm(tracks.Count == 1 ? "Remove download?" : $"Remove {tracks.Count} downloads?",
+                $"{what} will need internet to play again.", "Remove")) return;
         Services.Downloads.Remove(tracks.Select(t => t.VideoId));
         ShowToast(tracks.Count == 1 ? "Removed download" : $"Removed {tracks.Count} downloads");
         if (Page is CollectionViewModel { IsDownloads: true } c) c.Reload();

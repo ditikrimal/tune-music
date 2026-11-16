@@ -216,6 +216,7 @@ public partial class App : Application
         MainWin.MiniPlayerRequested += ToggleMini;
         Shell.AskPlaylistName = suggested => NameDialog.Ask(MainWin, "New playlist", suggested);
         Shell.AskName = (title, current) => NameDialog.Ask(MainWin, title, current, "Save");
+        Shell.Confirm = (title, message, ok) => ConfirmDialog.Ask(MainWin, title, message, ok);
         Shell.GoToCommand.Execute("home");
         // account sync: likes/playlists/history from other devices arrive here
         _library.SyncApplied += () => Dispatcher.BeginInvoke(Shell.OnSyncApplied);

@@ -136,9 +136,11 @@ fun CollectionMenuSheet() {
             MenuRow(Ico.Edit, "Rename") { close(); app.renamePlaylistId = target.id.toLong() }
             MenuRow(Ico.Delete, "Delete playlist") {
                 close()
-                lib.deletePlaylist(target.id.toLong())
-                app.graph.toast("Deleted ${target.title}")
-                if (onItsPage) app.nav.popBackStack()
+                app.ask("Delete playlist?", "“${target.title}” will be deleted from all your devices. Its songs stay in your library and downloads.", "Delete") {
+                    lib.deletePlaylist(target.id.toLong())
+                    app.graph.toast("Deleted ${target.title}")
+                    if (onItsPage) app.nav.popBackStack()
+                }
             }
         }
         Spacer(Modifier.height(24.dp))

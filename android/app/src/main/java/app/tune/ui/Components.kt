@@ -273,13 +273,33 @@ fun TrackMenuSheet() {
         val pinned = remember(t.videoId, version) { app.isPinned(songCard) }
         MenuRow(Ico.Pin, if (pinned) "Unpin from speed dial" else "Pin to speed dial", accent = pinned) { app.togglePin(songCard); close() }
         app.menuPlaylistId?.let { pid ->
-            MenuRow(Ico.Delete, "Remove from this playlist") { app.graph.library.removeFromPlaylist(pid, app.menuPlaylistIndex); close() }
+            MenuRow(Ico.Delete, "Remove from this playlist") {
+                val index = app.menuPlaylistIndex
+                close()
+                app.ask("Remove from playlist?", "“${t.title}” will be removed from this playlist.", "Remove") { app.graph.library.removeFromPlaylist(pid, index) }
+            }
         }
         MenuRow(Ico.Block, "Not interested") { app.notInterested(t); close() }
         t.artists.filter { it.browseId != null }.take(2).forEach { a -> MenuRow(Ico.Person, "Go to ${a.name}") { close(); app.openArtist(a.browseId) } }
         t.album?.browseId?.let { id -> MenuRow(Ico.Album, "Go to album") { close(); app.nowPlayingOpen = false; app.nav.navigate("album/$id") } }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** The "are you sure?" dialog for removals and deletes. */
+@Composable
+fun ConfirmDialogHost() {
+    val app = LocalApp.current
+    val q = app.confirmation ?: return
+    val c = LocalTune.current
+    AlertDialog(
+        onDismissRequest = { app.confirmation = null },
+        containerColor = c.card,
+        title = { Text(q.title, style = Type.title2, color = c.text) },
+        text = { Text(q.message, style = Type.body, color = c.subtle) },
+        confirmButton = { TextButton(onClick = { app.confirmation = null; q.action() }) { Text(q.ok, color = Color(0xFFFF6B6B), fontWeight = FontWeight.SemiBold) } },
+        dismissButton = { TextButton(onClick = { app.confirmation = null }) { Text("Cancel", color = c.text) } },
+    )
 }
 
 @Composable

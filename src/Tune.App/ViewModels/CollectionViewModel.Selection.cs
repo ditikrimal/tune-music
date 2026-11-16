@@ -127,6 +127,8 @@ public sealed partial class CollectionViewModel
     {
         var rows = SelectedRows;
         var lib = _shell.Services.Library;
+        if (rows.Count == 0 || !_shell.Confirm(IsLiked ? $"Remove {ShellViewModel.Songs(rows.Count)} from Liked songs?" : $"Remove {ShellViewModel.Songs(rows.Count)} from {Title}?",
+                "You can add them back any time.", "Remove")) return;
         if (IsLocal && PlaylistId is { } id)
         {
             // positions shift as songs go: remove from the bottom up

@@ -206,7 +206,7 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
             var feed = await _shell.Services.Feed.BuildAsync(fresh);
             Shelves.Clear();
             // a calm Home: at most 6 rows of 12 — the rest is noise
-            foreach (var s in feed.Shelves.Take(7)) Shelves.Add(s with { Items = s.Items.Take(s.IsList ? 20 : 12).ToList() });
+            foreach (var s in feed.Shelves.Take(7)) Shelves.Add(s with { Items = s.Items.Take(s.IsSpeedDial ? 27 : s.IsList ? 20 : 12).ToList() });
             Offline = feed.Offline;
             if (Offline) ReloadOffline();
             _shell.Prefetch(feed.Shelves.SelectMany(sh => sh.Items.Take(6)).Where(c => c.Track is not null).Select(c => c.Track!).Take(12),
@@ -529,6 +529,7 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
 
     public void Remove(TrackRowViewModel row)
     {
+        if (!_shell.Confirm(IsLiked ? "Remove from Liked songs?" : "Remove from playlist?", $"“{row.Track.Title}” will be removed from {Title}.", "Remove")) return;
         if (IsLocal && PlaylistId is { } id)
         {
             _shell.Services.Library.RemoveFromPlaylist(id, Tracks.IndexOf(row));
@@ -567,6 +568,7 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
     private void DeletePlaylist()
     {
         if (!IsLocal || PlaylistId is not { } id) return;
+        if (!_shell.Confirm("Delete playlist?", $"“{Title}” will be deleted from all your devices. Its songs stay in your library and downloads.", "Delete")) return;
         _shell.Services.Library.DeletePlaylist(id);
         _shell.ReloadPlaylists();
         _shell.ShowToast($"Deleted {Title}");

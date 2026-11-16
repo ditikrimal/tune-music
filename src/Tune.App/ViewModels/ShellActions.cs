@@ -157,6 +157,9 @@ public sealed partial class ShellViewModel
     /// <summary>Asks for a playlist name (null = cancelled). Set by the main window.</summary>
     public Func<string, string?> AskPlaylistName { get; set; } = s => s;
 
+    /// <summary>(title, message, ok text) → confirmed? Asked before anything is removed or deleted.</summary>
+    public Func<string, string, string, bool> Confirm { get; set; } = (_, _, _) => true;
+
     /// <summary>(title, current name) → new name, or null if cancelled.</summary>
     public Func<string, string, string?> AskName { get; set; } = (_, s) => s;
 
@@ -171,6 +174,7 @@ public sealed partial class ShellViewModel
 
     public void DeletePlaylist(long id, string name)
     {
+        if (!Confirm("Delete playlist?", $"“{name}” will be deleted from all your devices. Its songs stay in your library and downloads.", "Delete")) return;
         Services.Library.DeletePlaylist(id);
         ReloadPlaylists();
         HomeChanged();

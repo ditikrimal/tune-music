@@ -73,7 +73,10 @@ fun selectionActions(app: AppState, songs: () -> List<Track>, done: () -> Unit, 
             done()
         },
     )
-    if (remove != null && removeLabel != null) list += SelectionAction(Ico.Delete, removeLabel) { remove(); done() }
+    if (remove != null && removeLabel != null) list += SelectionAction(Ico.Delete, removeLabel) {
+        val n = songs().size
+        app.ask("$removeLabel?", "${if (n == 1) "1 song" else "$n songs"} will be removed. You can add them back any time.", "Remove") { remove(); done() }
+    }
     list += SelectionAction(Ico.Block, "Not interested") {
         songs().forEach { app.graph.library.setNotInterested(it.videoId) }
         app.graph.toast("You won't get these songs in recommendations"); app.homeChanged++; done()

@@ -87,9 +87,18 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
     }
 
     fun removeDownloads(tracks: List<Track>) {
-        graph.downloads.remove(tracks.map { it.videoId })
-        graph.toast(if (tracks.size == 1) "Removed download" else "Removed ${tracks.size} downloads")
+        if (tracks.isEmpty()) return
+        val what = if (tracks.size == 1) "“${tracks[0].title}”" else "${tracks.size} songs"
+        ask(if (tracks.size == 1) "Remove download?" else "Remove ${tracks.size} downloads?", "$what will need internet to play again.", "Remove") {
+            graph.downloads.remove(tracks.map { it.videoId })
+            graph.toast(if (tracks.size == 1) "Removed download" else "Removed ${tracks.size} downloads")
+        }
     }
+
+    /** "Are you sure?" before anything is removed or deleted (shown by ConfirmDialogHost). */
+    data class Confirmation(val title: String, val message: String, val ok: String, val action: () -> Unit)
+    var confirmation by mutableStateOf<Confirmation?>(null)
+    fun ask(title: String, message: String, ok: String, action: () -> Unit) { confirmation = Confirmation(title, message, ok, action) }
 
     /** Imports a YouTube Music playlist link into the library; returns a message and the new playlist id. */
     suspend fun importPlaylist(link: String): Pair<String, Long?> {
