@@ -18,6 +18,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
@@ -112,7 +114,9 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
             composable("settings") { SettingsScreen(accent, onAccent) }
         }
 
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+        // mini player + tabs: taps that land between their buttons stop here instead of reaching the page underneath
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }) {
             // fade the page out above the mini player / tabs
             Box(Modifier.fillMaxWidth().height(28.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF121212)))))
             MiniPlayer(Modifier.fillMaxWidth().background(Color(0xFF121212)))
@@ -134,15 +138,16 @@ private fun BottomBar() {
     val entry by app.nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val tabs = listOf(Triple("home", "Home", Ico.Home), Triple("search", "Search", Ico.Search), Triple("library", "Library", Ico.Library))
-    Row(Modifier.fillMaxWidth().background(Color(0xFF121212)).navigationBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
+    // each tab owns its whole third of the bar (full height), so a tap anywhere in it counts
+    Row(Modifier.fillMaxWidth().background(Color(0xFF121212)).navigationBarsPadding().height(68.dp)) {
         tabs.forEach { (key, label, icon) ->
             val on = route == key || (key == "library" && route in setOf("liked", "downloads", "local/{id}"))
-            Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable {
+            Column(Modifier.weight(1f).fillMaxHeight().clickable {
                 // a tab always lands on its main screen: Home pops back to itself (e.g. out of Settings),
                 // other tabs start fresh on top of Home — no stale pages restored on top
                 if (key == "home") app.nav.popBackStack("home", inclusive = false)
                 else if (route != key) app.nav.navigate(key) { popUpTo("home"); launchSingleTop = true }
-            }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
                 Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accentSoft else Color.Transparent).padding(horizontal = 18.dp, vertical = 4.dp)) {
                     Icon(icon, label, tint = if (on) c.accentText else c.subtle, modifier = Modifier.size(24.dp))
                 }
