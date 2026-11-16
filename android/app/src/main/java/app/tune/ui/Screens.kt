@@ -106,7 +106,13 @@ fun HomeScreen() {
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
         item {
             Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(greeting(), style = Type.title1, color = c.text, modifier = Modifier.weight(1f))
+                val account = app.graph.account?.state?.collectAsState()?.value
+                val first = account?.takeIf { it.signedIn }?.let { (it.name ?: it.email?.substringBefore('@'))?.trim()?.substringBefore(' ') }
+                // "Good evening, Ditik" — shrinks to fit a long name, never wraps
+                androidx.compose.foundation.text.BasicText(if (first.isNullOrBlank()) greeting() else "${greeting()}, $first",
+                    style = Type.title1.copy(color = c.text), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 30.sp),
+                    modifier = Modifier.weight(1f))
                 if (!online) OfflinePill()
                 ProfileButton()
             }
@@ -335,7 +341,11 @@ fun LibraryScreen() {
             }
         }
         items(playlists, key = { it.id }) { p ->
-            Row(Modifier.fillMaxWidth().clickable { app.nav.navigate("local/${p.id}") }.padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+            Row(Modifier.fillMaxWidth().combinedClickable(
+                onClick = { app.nav.navigate("local/${p.id}") },
+                onLongClick = { app.collectionMenuFor = CollectionTarget(CollectionKind.Local, p.id.toString(), p.name, "Playlist • ${p.count} songs", p.thumbnail) })
+                .padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                 Art(p.thumbnail, 58.dp, corner = 12.dp)
                 Column(Modifier.weight(1f).padding(start = 14.dp)) {
                     Text(p.name, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -491,29 +501,8 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                                 tint = if (any) c.accentText else c.subtle, size = 26.dp, box = 52.dp) {
                                 if (all) app.graph.toast("Everything here is downloaded") else app.download(col.tracks)
                             }
-                            Box {
-                                IconBtn(Ico.More, "More options", size = 26.dp, box = 52.dp) { menu = true }
-                                androidx.compose.material3.DropdownMenu(menu, { menu = false }, containerColor = c.cardHover) {
-                                    if (any) androidx.compose.material3.DropdownMenuItem({ Text("Remove downloads from this ${if (kind == CollectionKind.Album) "album" else "playlist"}") }, {
-                                        menu = false; app.removeDownloads(col.tracks.filter { app.graph.downloads.stateOf(it.videoId) != DownloadState.None })
-                                    })
-                                    val pinCard = when (kind) {
-                                        CollectionKind.Local -> app.graph.library.playlistUid(id.toLong())?.let { SpeedDialPins.localPlaylistCard(it, col.title, col.thumbnail ?: col.tracks.firstOrNull()?.thumbnail) }
-                                        CollectionKind.Album -> Card(CardKind.Album, col.title, col.subtitle, col.thumbnail, browseId = id)
-                                        CollectionKind.YtPlaylist -> Card(CardKind.Playlist, col.title, col.subtitle, col.thumbnail, playlistId = id)
-                                        else -> null
-                                    }
-                                    pinCard?.let { pc ->
-                                        val pinned = remember(version, pc) { app.isPinned(pc) }
-                                        androidx.compose.material3.DropdownMenuItem({ Text(if (pinned) "Unpin from speed dial" else "Pin to speed dial") }, { menu = false; app.togglePin(pc) })
-                                    }
-                                    if (kind == CollectionKind.Local) {
-                                        androidx.compose.material3.DropdownMenuItem({ Text("Rename") }, { menu = false; renaming = true })
-                                        androidx.compose.material3.DropdownMenuItem({ Text("Delete playlist") }, {
-                                            menu = false; app.graph.library.deletePlaylist(id.toLong()); app.graph.toast("Deleted ${col.title}"); app.nav.popBackStack()
-                                        })
-                                    }
-                                }
+                            IconBtn(Ico.More, "More options", size = 26.dp, box = 52.dp) {
+                                app.collectionMenuFor = CollectionTarget(kind, id, col.title, col.subtitle, col.thumbnail ?: col.tracks.firstOrNull()?.thumbnail)
                             }
                         }
                     }

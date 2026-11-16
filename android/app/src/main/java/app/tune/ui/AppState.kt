@@ -42,8 +42,14 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
         }
     }
 
-    /** Long-press on an album/playlist card: a small sheet to open it or pin it. */
-    var cardMenuFor by mutableStateOf<Card?>(null)
+    /** The options sheet for a playlist or album (long-press, or ⋯ on its page). */
+    var collectionMenuFor by mutableStateOf<CollectionTarget?>(null)
+    var renamePlaylistId by mutableStateOf<Long?>(null)
+
+    /** Long-press on an album/playlist card: its options sheet. */
+    fun showCardMenu(card: Card) {
+        CollectionTarget.of(card) { graph.library.playlistIdByUid(it) }?.let { collectionMenuFor = it }
+    }
 
     fun isPinned(card: Card) = app.tune.data.SpeedDialPins.isPinned(graph.library, card)
 

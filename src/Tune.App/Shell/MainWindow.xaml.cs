@@ -187,6 +187,14 @@ public partial class MainWindow : Window
 
     private void OfflinePill_Click(object sender, MouseButtonEventArgs e) => Vm.GoToCommand.Execute("downloads");
 
+    /// <summary>Right-click a playlist in the sidebar: the same options as on its page.</summary>
+    private void SidebarPlaylist_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Tune.Core.Library.PlaylistInfo p || Views.Views.Local(p.Id) is not { } target) return;
+        e.Handled = true;
+        Views.Views.ShowCollectionMenu((UIElement)sender, target, atMouse: true);
+    }
+
 
     private void Sleep_Click(object sender, RoutedEventArgs e)
     {

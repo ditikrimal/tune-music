@@ -167,10 +167,16 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
     /// <summary>Something on Home changed (pins, layout): rebuild next time it shows.</summary>
     public void Invalidate() => _loadedAt = DateTimeOffset.MinValue;
 
+    /// <summary>"Good evening, Ditik" when signed in.</summary>
+    public string GreetingLine => _shell.IsSignedIn && _shell.AccountName.Split(' ')[0] is { Length: > 0 } first ? $"{Greeting}, {first}" : Greeting;
+
+    public void AccountChanged() => OnPropertyChanged(nameof(GreetingLine));
+
     /// <summary>Called when the page is shown again; reloads if the feed is old.</summary>
     public void OnShown()
     {
         OnPropertyChanged(nameof(Greeting));
+        OnPropertyChanged(nameof(GreetingLine));
         if (_shell.IsOffline) ReloadOffline();
         else if (!IsLoading && (Offline || _shell.Services.Clock.Now - _loadedAt > RefreshAfter)) _ = LoadAsync();
     }

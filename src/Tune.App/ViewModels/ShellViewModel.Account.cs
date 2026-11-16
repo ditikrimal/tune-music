@@ -56,6 +56,7 @@ public sealed partial class ShellViewModel
         OnPropertyChanged(nameof(AccountNavTitle));
         OnPropertyChanged(nameof(IsSyncing));
         OnPropertyChanged(nameof(AccountLabel));
+        _home?.AccountChanged();
         OnPropertyChanged(nameof(AccountEmail));
         OnPropertyChanged(nameof(AccountInitial));
         OnPropertyChanged(nameof(AccountPhoto));

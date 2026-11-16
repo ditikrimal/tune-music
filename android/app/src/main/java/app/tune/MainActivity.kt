@@ -69,7 +69,8 @@ import app.tune.ui.SearchScreen
 import app.tune.ui.SettingsScreen
 import app.tune.ui.SettingsCategoryScreen
 import app.tune.ui.TrackMenuSheet
-import app.tune.ui.CardMenuSheet
+import app.tune.ui.CollectionMenuSheet
+import app.tune.ui.RenamePlaylistDialog
 import app.tune.ui.TuneTheme
 import app.tune.ui.Type
 import kotlinx.coroutines.delay
@@ -157,7 +158,8 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
 
         Toasts(Modifier.align(Alignment.BottomCenter).padding(bottom = 170.dp))
         TrackMenuSheet()
-        CardMenuSheet()
+        CollectionMenuSheet()
+        RenamePlaylistDialog()
         AddToPlaylistDialog()
     }
 }

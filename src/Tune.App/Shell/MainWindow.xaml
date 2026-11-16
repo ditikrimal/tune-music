@@ -142,7 +142,7 @@
                     <ItemsControl ItemsSource="{Binding Playlists}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Button Style="{StaticResource LibraryItem}"
+                                <Button Style="{StaticResource LibraryItem}" MouseRightButtonUp="SidebarPlaylist_RightClick"
                                         Command="{Binding DataContext.OpenPlaylistCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding}" AutomationProperties.Name="{Binding Name}">
                                     <Button.Tag>

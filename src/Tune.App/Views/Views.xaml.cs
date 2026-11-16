@@ -91,10 +91,16 @@ public partial class Views : ResourceDictionary
             ShowTrackMenu((FrameworkElement)sender, new TrackRowViewModel(t, 0) { IsLiked = Shell.Services.Library.IsLiked(t.VideoId) });
             return;
         }
+        if (TargetFor(card) is { } target)
+        {
+            ShowCollectionMenu((UIElement)sender, target, atMouse: true);
+            return;
+        }
         var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.MousePoint };
-        var what = card.Kind switch { Tune.Core.Models.CardKind.Album => "album", Tune.Core.Models.CardKind.Artist => "artist", _ => "playlist" };
-        menu.Items.Add(Item($"Open {what}", () => Shell.OpenCardCommand.Execute(card)));
-        if (card.Kind != Tune.Core.Models.CardKind.Artist) menu.Items.Add(PinItem(card));
+        menu.Items.Add(HeaderItem(card.ThumbnailUrl, card.Title, card.Subtitle));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Go to artist", () => Shell.OpenCardCommand.Execute(card), "IcoPerson"));
+        menu.Items.Add(Item("Play their top songs", () => Shell.PlayCardCommand.Execute(card), "IcoPlay"));
         menu.IsOpen = true;
     }
 
@@ -161,10 +167,13 @@ public partial class Views : ResourceDictionary
     private static void ShowTrackMenu(FrameworkElement anchor, TrackRowViewModel row)
     {
         var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
-        menu.Items.Add(Item("Play next", () => Shell.PlayNext(row.Track)));
+        menu.Items.Add(HeaderItem(row.Track.ThumbnailUrl, row.Track.Title, row.Track.ArtistLine));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Start radio", () => _ = Shell.Services.Playback.PlayRadioAsync(row.Track), "IcoRadio"));
+        menu.Items.Add(Item("Play next", () => Shell.PlayNext(row.Track), "IcoPlayNext"));
 
-        var add = new MenuItem { Header = "Add to playlist" };
-        add.Items.Add(Item("＋ New playlist", () => Shell.AddToNewPlaylist(row.Track)));
+        var add = Item("Add to playlist", () => { }, "IcoPlaylistAdd");
+        add.Items.Add(Item("New playlist", () => Shell.AddToNewPlaylist(row.Track), "IcoPlaylistAdd"));
         foreach (var p in Shell.Services.Library.GetPlaylists())
             add.Items.Add(Item(p.Name, () => Shell.AddToPlaylist(row.Track, p)));
         menu.Items.Add(add);
@@ -173,10 +182,10 @@ public partial class Views : ResourceDictionary
         {
             row.IsLiked = !row.IsLiked;
             Shell.SetLiked(row.Track, row.IsLiked);
-        }));
+        }, row.IsLiked ? "IcoHeart" : "IcoHeartOutline", accent: row.IsLiked));
 
         if (Shell.Page is CollectionViewModel { IsLocal: true } c)
-            menu.Items.Add(Item("Remove from this playlist", () => c.Remove(row)));
+            menu.Items.Add(Item("Remove from this playlist", () => c.Remove(row), "IcoDelete"));
 
         var songCard = new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Song, row.Track.Title, row.Track.ArtistLine, row.Track.ThumbnailUrl,
             row.Track.VideoId, null, null, row.Track);
@@ -184,27 +193,19 @@ public partial class Views : ResourceDictionary
 
         var dl = Shell.Services.Downloads.StateOf(row.Track.VideoId);
         menu.Items.Add(dl == Tune.Core.Offline.DownloadState.None
-            ? Item("Download", () => Shell.Download([row.Track]))
-            : Item(dl == Tune.Core.Offline.DownloadState.Done ? "Remove download" : "Cancel download", () => Shell.RemoveDownloads([row.Track])));
+            ? Item("Download", () => Shell.Download([row.Track]), "IcoDownload")
+            : Item(dl == Tune.Core.Offline.DownloadState.Done ? "Remove download" : "Cancel download", () => Shell.RemoveDownloads([row.Track]),
+                dl == Tune.Core.Offline.DownloadState.Done ? "IcoDownloadDone" : "IcoClose", accent: dl == Tune.Core.Offline.DownloadState.Done));
+        menu.Items.Add(new Separator());
 
         foreach (var artist in row.Track.Artists.Where(a => a.BrowseId is not null).Take(3))
-            menu.Items.Add(Item($"Go to {artist.Name}", () => Shell.OpenArtistCommand.Execute(artist)));
+            menu.Items.Add(Item($"Go to {artist.Name}", () => Shell.OpenArtistCommand.Execute(artist), "IcoPerson"));
 
         if (row.Track.Album is { BrowseId: not null } album)
             menu.Items.Add(Item("Go to album", () => Shell.OpenCardCommand.Execute(
-                new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Album, album.Title, row.ArtistLine, row.ThumbnailUrl, null, album.BrowseId, null, null))));
+                new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Album, album.Title, row.ArtistLine, row.ThumbnailUrl, null, album.BrowseId, null, null)), "IcoAlbum"));
 
         menu.IsOpen = true;
-    }
-
-    private static MenuItem PinItem(Tune.Core.Models.Card card) =>
-        Item(Shell.IsPinned(card) ? "Unpin from speed dial" : "Pin to speed dial", () => Shell.TogglePin(card));
-
-    private static MenuItem Item(string header, Action action)
-    {
-        var item = new MenuItem { Header = header };
-        item.Click += (_, _) => action();
-        return item;
     }
 
     // ---------- search ----------
@@ -226,20 +227,25 @@ public partial class Views : ResourceDictionary
     private void PlaylistMenu_Click(object sender, RoutedEventArgs e)
     {
         if (Shell.Page is not CollectionViewModel c) return;
+        CollectionTarget? target = c.Kind switch
+        {
+            CollectionKind.LocalPlaylist when c.PlaylistId is { } id => Local(id),
+            CollectionKind.Album or CollectionKind.YtPlaylist when c.SourceCard is { } card =>
+                new CollectionTarget(null, card, c.Title, c.Subtitle, c.ThumbnailUrl ?? card.ThumbnailUrl),
+            _ => null,
+        };
+        if (target is not null)
+        {
+            ShowCollectionMenu((UIElement)sender, target, atMouse: false);
+            return;
+        }
+        // Downloads / Liked songs: just the download actions
         var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom };
         if (!c.IsDownloads && !c.AllDownloaded && c.Tracks.Count > 0)
-            menu.Items.Add(Item(c.AnyDownloaded ? "Download the new songs" : "Download", () => c.ToggleDownloadAllCommand.Execute(null)));
+            menu.Items.Add(Item(c.AnyDownloaded ? "Download the new songs" : "Download", () => c.ToggleDownloadAllCommand.Execute(null), "IcoDownload"));
         if (c.AnyDownloaded)
-            menu.Items.Add(Item(c.IsDownloads ? "Remove all downloads" : "Remove downloads from this " + (c.Kind == CollectionKind.Album ? "album" : "playlist"),
-                c.RemoveAllDownloads));
-        if (c.PinCard is { } pin) menu.Items.Add(PinItem(pin));
-        if (c.IsLocal)
-        {
-            menu.Items.Add(Item("Rename", () => c.BeginRenameCommand.Execute(null)));
-            menu.Items.Add(Item("Delete playlist", () => c.DeletePlaylistCommand.Execute(null)));
-        }
-        if (menu.Items.Count == 0) return;
-        menu.IsOpen = true;
+            menu.Items.Add(Item(c.IsDownloads ? "Remove all downloads" : "Remove downloads", c.RemoveAllDownloads, "IcoDownloadDone", accent: true));
+        if (menu.Items.Count > 0) menu.IsOpen = true;
     }
 
     private void RenameBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)

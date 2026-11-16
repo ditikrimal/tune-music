@@ -149,6 +149,27 @@ public sealed partial class ShellViewModel
     /// <summary>Asks for a playlist name (null = cancelled). Set by the main window.</summary>
     public Func<string, string?> AskPlaylistName { get; set; } = s => s;
 
+    /// <summary>(title, current name) → new name, or null if cancelled.</summary>
+    public Func<string, string, string?> AskName { get; set; } = (_, s) => s;
+
+    /// <summary>Rename one of your playlists from outside its page (sidebar / card menu).</summary>
+    public void RenamePlaylist(long id, string current)
+    {
+        if (AskName("Rename playlist", current) is not { Length: > 0 } name || name == current) return;
+        Services.Library.RenamePlaylist(id, name.Trim());
+        ReloadPlaylists();
+        HomeChanged();
+    }
+
+    public void DeletePlaylist(long id, string name)
+    {
+        Services.Library.DeletePlaylist(id);
+        ReloadPlaylists();
+        HomeChanged();
+        ShowToast($"Deleted {name}");
+        if (Page is CollectionViewModel { PlaylistId: var open } && open == id) GoToCommand.Execute("home");
+    }
+
     public string SuggestedPlaylistName => $"My playlist #{Services.Library.GetPlaylists().Count + 1}";
 
     public void AddToNewPlaylist(Track t)

@@ -175,17 +175,9 @@ private fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 fun SpeedDialRow(shelf: app.tune.data.Shelf) {
     val app = LocalApp.current
     val c = LocalTune.current
-    val state = app.graph.account?.state?.collectAsState()?.value
     val pages = remember(shelf) { shelf.items.chunked(9) }
     val songs = remember(shelf) { shelf.items.mapNotNull { it.track } }
-    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (state?.signedIn == true) { Avatar(state, 40.dp); Spacer(Modifier.width(12.dp)) }
-        Column {
-            if (state?.signedIn == true)
-                Text((state.name ?: state.email ?: "").uppercase(), style = Type.label, color = c.subtle, maxLines = 1)
-            Text(shelf.title, style = Type.section, color = c.text)
-        }
-    }
+    Text(shelf.title, style = Type.section, color = c.text, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp))
     val pager = androidx.compose.foundation.pager.rememberPagerState { pages.size }
     androidx.compose.foundation.pager.HorizontalPager(pager, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
         pageSpacing = 12.dp, verticalAlignment = Alignment.Top) { page ->
@@ -200,7 +192,7 @@ fun SpeedDialRow(shelf: app.tune.data.Shelf) {
                                     if (t != null) app.playList(songs, songs.indexOfFirst { it.videoId == t.videoId }.coerceAtLeast(0))
                                     else app.openCard(card)
                                 },
-                                onLongClick = { card.track?.let { app.menuFor = it; app.menuPlaylistId = null } ?: run { app.cardMenuFor = card } })) {
+                                onLongClick = { card.track?.let { app.menuFor = it; app.menuPlaylistId = null } ?: app.showCardMenu(card) })) {
                             AsyncImage(card.thumbnail, card.title, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                             Box(Modifier.fillMaxWidth().fillMaxHeight(0.5f).align(Alignment.BottomCenter)
                                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent,

@@ -220,23 +220,7 @@
                     <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Click="ShelfLeft_Click" ToolTip="Back" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Margin="8,0,0,0" Click="ShelfRight_Click" ToolTip="More" />
                 </StackPanel>
-                <!-- your avatar + name, like YouTube Music -->
-                <Grid Width="40" Height="40" DockPanel.Dock="Left" VerticalAlignment="Center"
-                      Visibility="{Binding DataContext.IsSignedIn, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                    <Ellipse Fill="{DynamicResource AccentBrush}" />
-                    <TextBlock Text="{Binding DataContext.AccountInitial, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{DynamicResource OnAccentBrush}"
-                               FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    <Ellipse Visibility="{Binding DataContext.AccountPhoto, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource NullToVis}}">
-                        <Ellipse.Fill>
-                            <ImageBrush ImageSource="{Binding DataContext.AccountPhoto, RelativeSource={RelativeSource AncestorType=Window}, TargetNullValue={x:Null}}" Stretch="UniformToFill" />
-                        </Ellipse.Fill>
-                    </Ellipse>
-                </Grid>
-                <StackPanel VerticalAlignment="Center" Margin="12,0,0,0">
-                    <TextBlock Text="{Binding DataContext.AccountLabel, RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource SectionLabel}"
-                               Visibility="{Binding DataContext.IsSignedIn, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
-                    <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" Margin="0" />
-                </StackPanel>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
             </DockPanel>
             <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False">
                 <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource SpeedDialTileTemplate}">
@@ -530,7 +514,10 @@
                         </Button.RenderTransform>
                         <p:Icon Data="{StaticResource IcoRefresh}" Size="22" />
                     </Button>
-                    <TextBlock Text="{Binding Greeting}" Style="{StaticResource Title1}" />
+                    <!-- shrinks to fit a long name; never wraps -->
+                    <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding GreetingLine}" Style="{StaticResource Title1}" />
+                    </Viewbox>
                 </DockPanel>
                 <!-- offline: Home becomes your downloads -->
                 <StackPanel Visibility="{Binding Offline, Converter={StaticResource BoolToVis}}" Margin="0,20,0,0">
