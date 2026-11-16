@@ -33,6 +33,12 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
         return url;
     }
 
+    /// <summary>Cover art saved with downloaded songs, by thumbnail URL (used when the cache can't help).</summary>
+    public Func<string, string?>? LocalFallback { get; set; }
+
+    /// <summary>While offline, images that aren't on disk aren't even tried.</summary>
+    public Func<bool>? IsOffline { get; set; }
+
     public async Task<BitmapSource?> GetAsync(string? url, int decodePx)
     {
         if (string.IsNullOrEmpty(url)) return null;
@@ -40,8 +46,11 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
         var key = sized + "|" + decodePx;
         if (_memory.TryGetValue(key, out var weak) && weak.TryGetTarget(out var cached)) return cached;
 
-        var file = await _downloads.GetOrAdd(sized, u => DownloadAsync(u)).ConfigureAwait(false);
+        var file = IsOffline?.Invoke() == true && !File.Exists(FileFor(sized))
+            ? null
+            : await _downloads.GetOrAdd(sized, u => DownloadAsync(u)).ConfigureAwait(false);
         _downloads.TryRemove(sized, out _);
+        file ??= LocalFallback?.Invoke(url);
         if (file is null) return null;
 
         try
@@ -73,9 +82,11 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
     public Task<string?> GetFileAsync(string? url, int px) =>
         string.IsNullOrEmpty(url) ? Task.FromResult<string?>(null) : DownloadAsync(Sized(url, px));
 
+    private string FileFor(string url) => Path.Combine(dir, Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(url))) + ".img");
+
     private async Task<string?> DownloadAsync(string url)
     {
-        var file = Path.Combine(dir, Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(url))) + ".img");
+        var file = FileFor(url);
         if (File.Exists(file))
         {
             File.SetLastAccessTimeUtc(file, DateTime.UtcNow);

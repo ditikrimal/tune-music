@@ -283,7 +283,15 @@
                                 <ToolTip Style="{StaticResource DetailsTip}" Content="{Binding Track}" />
                             </TextBlock.ToolTip>
                         </TextBlock>
-                        <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
+                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                            <!-- downloaded: accent arrow; waiting/downloading: a dim one -->
+                            <Border x:Name="dlBadge" Width="14" Height="14" CornerRadius="7" Background="{DynamicResource AccentBrush}"
+                                    Margin="0,0,6,0" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="{Binding DownloadTip}">
+                                <TextBlock x:Name="dlGlyph" Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="8" FontWeight="Bold"
+                                           Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource Subtle}" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Grid.Column="2" Text="{Binding AlbumTitle}" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="12,0" />
@@ -301,6 +309,17 @@
             </Trigger>
             <DataTrigger Binding="{Binding IsLiked}" Value="True">
                 <Setter TargetName="like" Property="Opacity" Value="1" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsDownloaded}" Value="True">
+                <Setter TargetName="dlBadge" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsDownloadPending}" Value="True">
+                <Setter TargetName="dlBadge" Property="Visibility" Value="Visible" />
+                <Setter TargetName="dlBadge" Property="Background" Value="{DynamicResource TrackBrush}" />
+                <Setter TargetName="dlGlyph" Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsUnavailable}" Value="True">
+                <Setter TargetName="row" Property="Opacity" Value="0.4" />
             </DataTrigger>
             <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                 <Setter TargetName="title" Property="Foreground" Value="{DynamicResource AccentBrush}" />
@@ -340,15 +359,35 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
             <StackPanel>
                 <TextBlock Text="{Binding Greeting}" Style="{StaticResource Title1}" Margin="0,0,0,4" />
-                <Border Visibility="{Binding Offline, Converter={StaticResource BoolToVis}}" Background="#2A1F1F" CornerRadius="8" Padding="16,12" Margin="0,16,0,0">
-                    <DockPanel>
-                        <Button DockPanel.Dock="Right" Content="Retry" Command="{Binding LoadCommand}" Padding="16,6" />
-                        <TextBlock Text="You're offline — your playlists and Liked songs still work." Style="{StaticResource Body}" VerticalAlignment="Center" />
-                    </DockPanel>
-                </Border>
+                <!-- offline: Home becomes your downloads -->
+                <StackPanel Visibility="{Binding Offline, Converter={StaticResource BoolToVis}}" Margin="0,20,0,0">
+                    <Border Style="{DynamicResource SettingGroup}" Padding="20,16" Margin="0,0,0,8">
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Width="44" Height="44" CornerRadius="22" Background="{DynamicResource TrackBrush}" Margin="0,0,16,0">
+                                <TextBlock Text="&#xF384;" FontFamily="{StaticResource IconFont}" FontSize="20" Foreground="{DynamicResource TextBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Button DockPanel.Dock="Right" Style="{DynamicResource SegmentPill}" Content="Try again" Command="{Binding LoadCommand}" VerticalAlignment="Center" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="You're offline" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="{Binding OfflineSummary}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,16,0" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <StackPanel Visibility="{Binding HasOfflineTracks, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal" Margin="0,16,0,8">
+                            <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}" Width="56" Height="56" FontSize="20"
+                                    Command="{Binding PlayOfflineCommand}" ToolTip="Play your downloads" />
+                            <Button Style="{StaticResource IconButton}" Content="&#xE8B1;" FontSize="24" Width="48" Height="48" Margin="16,0,0,0"
+                                    Command="{Binding ShuffleOfflineCommand}" ToolTip="Shuffle your downloads" />
+                            <TextBlock Text="Your downloads" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" Margin="16,0,0,0" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding OfflineTracks}" ItemTemplate="{StaticResource TrackRowTemplate}" Margin="-12,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
                 <TextBlock Text="Loading your music…" Style="{StaticResource Subtle}" Margin="0,24,0,0"
                            Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
-                <ItemsControl ItemsSource="{Binding Shelves}">
+                <ItemsControl ItemsSource="{Binding Shelves}" Visibility="{Binding Offline, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}">
                     <ItemsControl.ItemTemplateSelector>
                         <sh:FirstItemTemplateSelector First="{StaticResource FeaturedShelfTemplate}" Rest="{StaticResource ShelfTemplate}" />
                     </ItemsControl.ItemTemplateSelector>
@@ -451,6 +490,10 @@
                         Command="{Binding PlayCommand}" ToolTip="Play" />
                 <Button Style="{StaticResource IconButton}" Content="&#xE8B1;" FontSize="24" Width="48" Height="48" Margin="16,0,0,0"
                         Command="{Binding ShufflePlayCommand}" ToolTip="Shuffle play" />
+                <Button Style="{StaticResource ToggleIconButton}" Content="&#xE896;" FontSize="22" Width="48" Height="48" Margin="8,0,0,0"
+                        Command="{Binding ToggleDownloadAllCommand}" ToolTip="{Binding DownloadAllTip}"
+                        Tag="{Binding AllDownloaded, Converter={x:Static sh:BoolToOnConverter.Instance}}"
+                        Visibility="{Binding CanDownloadAll, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Download all" />
                 <Button x:Name="playlistMenu" Style="{StaticResource IconButton}" Content="&#xE712;" FontSize="22" Width="48" Height="48" Margin="8,0,0,0"
                         Visibility="{Binding IsLocal, Converter={StaticResource BoolToVis}}" Click="PlaylistMenu_Click" ToolTip="More options" />
             </StackPanel>
@@ -461,6 +504,10 @@
                      Drop="Tracks_Drop" />
         </DockPanel>
         <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsDownloads}" Value="True">
+                <Setter TargetName="placeholderGlyph" Property="Text" Value="&#xE896;" />
+                <Setter TargetName="placeholderGlyph" Property="Foreground" Value="White" />
+            </DataTrigger>
             <DataTrigger Binding="{Binding IsLiked}" Value="True">
                 <Setter TargetName="placeholderGlyph" Property="Text" Value="&#xEB52;" />
                 <Setter TargetName="placeholderGlyph" Property="Foreground" Value="White" />

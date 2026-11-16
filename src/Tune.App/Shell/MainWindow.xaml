@@ -63,6 +63,8 @@
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=search|&#xE721;}" Content="Search" />
                     <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="liked" AutomationProperties.Name="Liked songs"
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=liked|&#xEB52;}" Content="Liked songs" />
+                    <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="downloads" AutomationProperties.Name="Downloads"
+                            Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=downloads|&#xE896;}" Content="Downloads" />
 
                     <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="8,14" />
                     <DockPanel Margin="16,0,4,8">
@@ -114,6 +116,14 @@
                             Width="32" Height="32" Command="{Binding GoBackCommand}" IsEnabled="{Binding CanGoBack}" ToolTip="Back" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE76C;" Background="#66000000" Foreground="White" FontSize="12"
                             Width="32" Height="32" Margin="8,0,16,0" Command="{Binding GoForwardCommand}" IsEnabled="{Binding CanGoForward}" ToolTip="Forward" />
+                    <Border Background="{DynamicResource CardBrush}" CornerRadius="14" Padding="12,0" Height="28" VerticalAlignment="Center"
+                            Visibility="{Binding IsOffline, Converter={StaticResource BoolToVis}}" Cursor="Hand"
+                            ToolTip="No internet — downloaded songs still play" MouseLeftButtonUp="OfflinePill_Click">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xF384;" FontFamily="{StaticResource IconFont}" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="Offline" Style="{StaticResource Body}" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </DockPanel>
 
@@ -203,7 +213,8 @@
                         <TextBlock Text="{Binding PositionText}" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" />
                         <Slider x:Name="SeekSlider" Grid.Column="1" Style="{StaticResource ThinSlider}" Minimum="0"
                                 Maximum="{Binding Duration}" Value="{Binding Position, Mode=OneWay}" VerticalAlignment="Center"
-                                PreviewMouseLeftButtonDown="Seek_MouseDown" PreviewMouseLeftButtonUp="Seek_MouseUp" />
+                                p:SliderDrag.DragStarted="Seek_Started" p:SliderDrag.DragCompleted="Seek_Completed"
+                                ValueChanged="Seek_ValueChanged" />
                         <TextBlock Grid.Column="2" Text="{Binding DurationText}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </Grid>
                 </StackPanel>

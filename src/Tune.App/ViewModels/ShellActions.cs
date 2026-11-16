@@ -16,6 +16,7 @@ public sealed partial class ShellViewModel
         "home" => _home ??= new HomeViewModel(this),
         "search" => _search ??= new SearchViewModel(this),
         "liked" => CollectionViewModel.Liked(this),
+        "downloads" => CollectionViewModel.Downloads(this),
         "settings" => new SettingsViewModel(this),
         _ when key.StartsWith("playlist:", StringComparison.Ordinal) && long.TryParse(key[9..], out var id) =>
             CollectionViewModel.LocalPlaylist(this, id),

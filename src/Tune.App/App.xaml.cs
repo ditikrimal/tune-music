@@ -28,6 +28,8 @@ public partial class App : Application
     private Mutex? _mutex;
     private EventWaitHandle? _activate;
     private MpvPlayer? _player;
+    private Tune.Core.Offline.ConnectivityMonitor? _network;
+    private Tune.Core.Offline.DownloadManager? _downloads;
     private static volatile PythonWorkerBackend? _worker;
 
     /// <summary>Shown in Settings → About.</summary>
@@ -158,13 +160,38 @@ public partial class App : Application
         _player = new MpvPlayer { Normalize = _library.GetSetting("audio.normalize") == "1" };
         var lib = _library;
         var sponsorBlock = new SponsorBlockClient(http, () => lib.GetSetting("sponsorblock.enabled") != "0");
-        var playback = new PlaybackService(new PlayQueue(), resolver, _player, _library, sponsorBlock, api,
-            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock);
+
+        // offline: a tiny "is YouTube reachable" probe (204, no body), and the downloader
+        _network = new Tune.Core.Offline.ConnectivityMonitor(async ct =>
+        {
+            if (Environment.GetEnvironmentVariable("TUNE_FORCE_OFFLINE") == "1") return false; // testing offline mode without unplugging
+            if (!System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable()) return false;
+            using var req = new HttpRequestMessage(HttpMethod.Head, "https://www.youtube.com/generate_204");
+            using var resp = await http.SendAsync(req, ct);
+            return true; // any answer at all means we're online
+        });
         var art = new ArtCache(Path.Combine(dataDir, "art"), http);
         Art.Cache = art;
+        var downloadHttp = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+            { Timeout = TimeSpan.FromMinutes(2) }; // per 4 MB chunk
+        _downloads = new Tune.Core.Offline.DownloadManager(_library, resolver, downloadHttp, Path.Combine(dataDir, "downloads"), _network, clock,
+            async (track, target, ct) =>
+            {
+                // keep a big copy of the cover next to the song: the art cache may be trimmed
+                if (await art.GetFileAsync(track.ThumbnailUrl, 544) is not { } cached) return null;
+                File.Copy(cached, target, overwrite: true);
+                return target;
+            });
+        art.LocalFallback = _downloads.ArtFor;
+        art.IsOffline = () => !_network.IsOnline;
+        var playback = new PlaybackService(new PlayQueue(), resolver, _player, _library, sponsorBlock, api,
+            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock, _downloads);
         Task.Run(art.Trim);
 
-        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics);
+        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics,
+            _downloads, _network);
+        _downloads.Start();
+        _network.Start();
         ThemeManager.Load(_library);
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();
@@ -276,6 +303,8 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         Shell?.Player.SaveVolume();
+        _downloads?.Dispose();
+        _network?.Dispose();
         _media?.Dispose();
         _worker?.Dispose();
         _player?.Dispose();

@@ -136,3 +136,14 @@ public sealed class NavTagConverter : IValueConverter
     }
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Visible when false (e.g. the online Home feed while not offline).</summary>
+public sealed class InverseBoolToVisConverter : IValueConverter
+{
+    public static readonly InverseBoolToVisConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

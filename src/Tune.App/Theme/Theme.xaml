@@ -351,7 +351,22 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Ellipse x:Name="dot" Width="12" Height="12" Fill="White" Opacity="0" />
+                    <Grid Width="14" Height="14" Background="Transparent">
+                        <Ellipse x:Name="dot" Width="12" Height="12" Fill="{DynamicResource AccentBrush}" RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.55" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Slider}}" Value="True">
+                            <Setter TargetName="dot" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="1.17" ScaleY="1.17" />
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -371,7 +386,8 @@
     </Style>
     <Style x:Key="ThinSlider" TargetType="Slider">
         <Setter Property="Focusable" Value="False" />
-        <Setter Property="IsMoveToPointEnabled" Value="True" />
+        <!-- press anywhere and drag; see Platform/SliderDrag -->
+        <Setter Property="p2:SliderDrag.Enabled" Value="True" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>

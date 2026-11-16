@@ -1,5 +1,6 @@
 using Tune.Core.Library;
 using Tune.Core.Models;
+using Tune.Core.Offline;
 using Tune.Core.SponsorBlock;
 using Tune.Core.Streams;
 using Tune.Core.Util;
@@ -32,6 +33,8 @@ public sealed class PlaybackService
     private readonly IYtMusic _api;
     private readonly Func<CancellationToken, Task<bool>> _updateYtDlp;
     private readonly IClock _clock;
+    private readonly IOfflineSource? _offline;
+    private volatile bool _fromStream; // the current song plays from YouTube, not a downloaded file
 
     private readonly Lock _pendingGate = new();
     private readonly List<Task> _pending = [];
@@ -56,8 +59,11 @@ public sealed class PlaybackService
     private IReadOnlyList<SkipSegment> _segments = [];
 
     public PlaybackService(PlayQueue queue, IStreamResolver resolver, IAudioPlayer player, LibraryStore lib,
-        ISponsorBlock sponsorBlock, IYtMusic api, Func<CancellationToken, Task<bool>> updateYtDlp, IClock clock)
+        ISponsorBlock sponsorBlock, IYtMusic api, Func<CancellationToken, Task<bool>> updateYtDlp, IClock clock,
+        IOfflineSource? offline = null)
     {
+        _offline = offline;
+        if (offline is not null) offline.Network.Changed += OnNetworkChanged;
         Queue = queue;
         _resolver = resolver;
         _player = player;
@@ -104,6 +110,20 @@ public sealed class PlaybackService
 
     public Task PlayListAsync(IReadOnlyList<Track> list, int index)
     {
+        if (IsOffline && index >= 0 && index < list.Count && !IsLocal(list[index]))
+        {
+            // offline: start from the next downloaded song instead; nothing downloaded here -> say so
+            var local = Enumerable.Range(1, list.Count - 1).Select(k => (index + k) % list.Count).Where(i => IsLocal(list[i])).ToList();
+            if (local.Count == 0)
+            {
+                Notice?.Invoke(list.Count == 1
+                    ? $"You're offline — download {list[index].Title} to play it without internet"
+                    : "You're offline and none of these songs are downloaded");
+                return Task.CompletedTask;
+            }
+            Notice?.Invoke("You're offline — playing the downloaded songs");
+            index = local[0];
+        }
         Queue.StartList(list, index);
         Interlocked.Increment(ref _queueEpoch);
         return PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
@@ -111,6 +131,7 @@ public sealed class PlaybackService
 
     public Task PlayRadioAsync(Track seed)
     {
+        if (IsOffline) return PlayListAsync([seed], 0); // no radio without internet
         Queue.StartRadio(seed);
         Interlocked.Increment(ref _queueEpoch);
         var play = PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
@@ -215,7 +236,22 @@ public sealed class PlaybackService
         Uri url;
         try
         {
-            url = await _resolver.ResolveAsync(track.VideoId, ct).ConfigureAwait(false);
+            if (_offline?.LocalPath(track.VideoId) is { } file)
+            {
+                url = new Uri(file);
+                _fromStream = false;
+            }
+            else if (IsOffline)
+            {
+                // not downloaded and no internet: move on to something that can play
+                if (gen == _generation) await AdvanceAsync(userInitiated: true).ConfigureAwait(false);
+                return;
+            }
+            else
+            {
+                url = await _resolver.ResolveAsync(track.VideoId, ct).ConfigureAwait(false);
+                _fromStream = true;
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -228,7 +264,7 @@ public sealed class PlaybackService
         }
         if (gen != _generation) return;
 
-        if (resetTrackState) Spawn(() => LoadSegmentsAsync(track, gen));
+        if (resetTrackState && !IsOffline) Spawn(() => LoadSegmentsAsync(track, gen));
         await StartAudioAsync(url, startAt, gen).ConfigureAwait(false);
     }
 
@@ -250,11 +286,12 @@ public sealed class PlaybackService
     /// <summary>Looks up the next songs now, so Next / auto-advance start instantly.</summary>
     private void PrepareUpcoming()
     {
+        if (IsOffline) return;
         var items = Queue.Items;
         for (int i = Queue.CurrentIndex + 1, n = 0; i < items.Count && n < PrepareAhead; i++, n++)
         {
             var id = items[i].VideoId;
-            if (!_resolver.IsKnown(id)) Spawn(() => _resolver.PrepareAsync(id));
+            if (_offline?.LocalPath(id) is null && !_resolver.IsKnown(id)) Spawn(() => _resolver.PrepareAsync(id));
         }
     }
 
@@ -263,6 +300,11 @@ public sealed class PlaybackService
     {
         var track = Queue.Current;
         if (track is null) return;
+        if (!_fromStream || IsLocal(track))
+        {
+            await PlayCurrentAsync(position, resetTrackState: false).ConfigureAwait(false);
+            return;
+        }
         _resolver.Invalidate(track.VideoId);
         var (gen, ct) = BeginLoad();
         StateChanged?.Invoke();
@@ -292,6 +334,11 @@ public sealed class PlaybackService
 
     private async Task AdvanceAsync(bool userInitiated)
     {
+        if (IsOffline)
+        {
+            await AdvanceOfflineAsync(userInitiated).ConfigureAwait(false);
+            return;
+        }
         var next = Queue.Next(userInitiated);
         if (next is null && Queue.NeedsRadio)
         {
@@ -305,6 +352,59 @@ public sealed class PlaybackService
         }
         await PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true).ConfigureAwait(false);
     }
+
+    /// <summary>Next downloaded song in the queue; if the queue has none, the downloads themselves.</summary>
+    private async Task AdvanceOfflineAsync(bool userInitiated)
+    {
+        var tries = Queue.Items.Count;
+        for (var k = 0; k < tries; k++)
+        {
+            var next = Queue.Next(userInitiated || k > 0);
+            if (next is null) break;
+            if (IsLocal(next))
+            {
+                await PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true).ConfigureAwait(false);
+                return;
+            }
+        }
+        var downloads = _offline!.DownloadedTracks();
+        if (downloads.Count == 0)
+        {
+            Stop();
+            Notice?.Invoke("You're offline — download songs to keep listening without internet");
+            return;
+        }
+        Notice?.Invoke("You're offline — playing your downloads");
+        Queue.StartList(downloads, Queue.Shuffle ? Random.Shared.Next(downloads.Count) : 0);
+        Interlocked.Increment(ref _queueEpoch);
+        await PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The connection dropped while a downloaded song was streaming from YouTube: switch to the file at the
+    /// same spot, so it keeps going.
+    /// </summary>
+    private void OnNetworkChanged(bool online)
+    {
+        if (online || !_loaded || !_fromStream || Current is not { } t || !IsLocal(t)) return;
+        var gen = _generation;
+        var at = _player.Position;
+        var paused = _player.IsPaused;
+        Spawn(async () =>
+        {
+            if (gen != _generation) return;
+            await PlayCurrentAsync(at, resetTrackState: false).ConfigureAwait(false);
+            if (paused && _loaded) TogglePause();
+        });
+    }
+
+    private bool IsOffline => _offline is { Network.IsOnline: false };
+
+    private bool IsLocal(Track t) => _offline?.LocalPath(t.VideoId) is not null;
+
+    /// <summary>A failure while streaming: is it just the internet gone? Then continue with downloads.</summary>
+    private async Task<bool> WentOfflineAsync() =>
+        _offline is not null && !await _offline.Network.CheckNowAsync().ConfigureAwait(false);
 
     private async Task OnEndedAsync()
     {
@@ -325,6 +425,17 @@ public sealed class PlaybackService
     {
         if (gen != _generation) return;
         var position = _player.Position;
+        if (_fromStream && IsLocal(track))
+        {
+            // the stream broke but the song is downloaded: carry on from the file
+            await PlayCurrentAsync(position, resetTrackState: false).ConfigureAwait(false);
+            return;
+        }
+        if (await WentOfflineAsync().ConfigureAwait(false))
+        {
+            if (gen == _generation) await AdvanceAsync(userInitiated: true).ConfigureAwait(false);
+            return;
+        }
         if (!_reloadTried && position > TimeSpan.FromSeconds(1))
         {
             _reloadTried = true;
@@ -340,6 +451,11 @@ public sealed class PlaybackService
     {
         if (gen != _generation) return;
         Log.Warn($"Playback failed for {track.VideoId}: {reason}");
+        if (await WentOfflineAsync().ConfigureAwait(false))
+        {
+            if (gen == _generation) await AdvanceAsync(userInitiated: true).ConfigureAwait(false);
+            return;
+        }
 
         // the link came from the fast path and a different path exists: retry this song at once
         if (!_altPathTried && _resolver.ReportBroken(track.VideoId))
@@ -376,6 +492,7 @@ public sealed class PlaybackService
     /// <summary>Appends YouTube radio for the queue's last song; concurrent callers share one request.</summary>
     private Task EnsureRadioAsync()
     {
+        if (IsOffline) return Task.CompletedTask;
         var seed = Queue.RadioSeedId;
         if (seed is null) return Task.CompletedTask;
         var key = (Volatile.Read(ref _queueEpoch), seed);

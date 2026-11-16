@@ -17,4 +17,6 @@ public sealed record AppServices(
     IClock Clock,
     string DataDir,
     StreamPrefetcher Prefetcher,
-    Tune.Core.Lyrics.LyricsService Lyrics);
+    Tune.Core.Lyrics.LyricsService Lyrics,
+    Tune.Core.Offline.DownloadManager Downloads,
+    Tune.Core.Offline.IConnectivity Network);

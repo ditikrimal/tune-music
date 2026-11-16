@@ -182,6 +182,8 @@ public partial class MainWindow : Window
 
     private void Mini_Click(object sender, RoutedEventArgs e) => MiniPlayerRequested?.Invoke();
 
+    private void OfflinePill_Click(object sender, MouseButtonEventArgs e) => Vm.GoToCommand.Execute("downloads");
+
     private void Sleep_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not ViewModels.ShellViewModel { Player: var player }) return;
@@ -223,9 +225,15 @@ public partial class MainWindow : Window
 
     private void Disc_Click(object sender, MouseButtonEventArgs e) => Vm.NowPlaying.ToggleCommand.Execute(null);
 
-    private void Seek_MouseDown(object sender, MouseButtonEventArgs e) => Vm.Player.BeginSeek();
+    private void Seek_Started(object sender, RoutedEventArgs e) => Vm.Player.BeginSeek();
 
-    private void Seek_MouseUp(object sender, MouseButtonEventArgs e) => Vm.Player.CommitSeek(SeekSlider.Value);
+    private void Seek_Completed(object sender, RoutedEventArgs e) => Vm.Player.CommitSeek(SeekSlider.Value);
+
+    // while dragging, the time label follows the pointer
+    private void Seek_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (Vm.Player.IsSeeking) Vm.Player.PreviewSeek(e.NewValue);
+    }
 
     private void NewPlaylist_Click(object sender, RoutedEventArgs e)
     {

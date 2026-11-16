@@ -54,6 +54,7 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty] private string? _setupError;
     [ObservableProperty] private string? _toast;
     [ObservableProperty] private bool _isQueueOpen;
+    [ObservableProperty] private bool _isOffline;
 
     public ShellViewModel(AppServices services, Dispatcher ui)
     {
@@ -69,6 +70,10 @@ public sealed partial class ShellViewModel : ObservableObject
             _ = TintHeaderAsync(Player.ArtUrl);
         };
         services.Playback.Notice += msg => _ui.BeginInvoke(() => ShowToast(msg));
+        _isOffline = !services.Network.IsOnline;
+        services.Network.Changed += online => _ui.BeginInvoke(() => IsOffline = !online);
+        services.Downloads.Changed += id => _ui.BeginInvoke(DispatcherPriority.Background, () => OnDownloadChanged(id));
+        services.Downloads.Failed += msg => _ui.BeginInvoke(() => ShowToast(msg));
         ReloadPlaylists();
     }
 
@@ -103,14 +108,61 @@ public sealed partial class ShellViewModel : ObservableObject
     private void MarkCurrentRows()
     {
         var id = Services.Playback.Current?.VideoId;
-        IEnumerable<TrackRowViewModel> rows = Page switch
+        foreach (var r in VisibleRows) r.IsCurrent = r.Track.VideoId == id;
+    }
+
+    private IEnumerable<TrackRowViewModel> VisibleRows => Page switch
+    {
+        CollectionViewModel c => c.Tracks,
+        ArtistViewModel a => a.TopSongs,
+        SearchViewModel s => s.Songs,
+        HomeViewModel h => h.OfflineTracks,
+        _ => [],
+    };
+
+    partial void OnIsOfflineChanged(bool value)
+    {
+        ShowToast(value ? "You're offline — your downloads still play" : "Back online");
+        foreach (var r in VisibleRows) r.SyncDownload(Services.Downloads, value);
+        _home?.SetOffline(value);
+    }
+
+    private DateTime _downloadsPageRefreshed;
+
+    private void OnDownloadChanged(string videoId)
+    {
+        foreach (var r in VisibleRows)
+            if (r.Track.VideoId == videoId) r.SyncDownload(Services.Downloads, IsOffline);
+        if (Page is CollectionViewModel c)
         {
-            CollectionViewModel c => c.Tracks,
-            ArtistViewModel a => a.TopSongs,
-            SearchViewModel s => s.Songs,
-            _ => [],
-        };
-        foreach (var r in rows) r.IsCurrent = r.Track.VideoId == id;
+            c.DownloadsChanged();
+            // the Downloads page shows totals: refresh it when a song finishes or leaves (not on every progress tick)
+            var state = Services.Downloads.StateOf(videoId);
+            if (c.IsDownloads && state is not Tune.Core.Offline.DownloadState.Downloading
+                && (c.Tracks.All(r => r.Track.VideoId != videoId) || state is Tune.Core.Offline.DownloadState.Done or Tune.Core.Offline.DownloadState.None)
+                && DateTime.UtcNow - _downloadsPageRefreshed > TimeSpan.FromMilliseconds(300))
+            {
+                _downloadsPageRefreshed = DateTime.UtcNow;
+                c.Reload();
+            }
+        }
+    }
+
+    public void Download(IReadOnlyList<Tune.Core.Models.Track> tracks)
+    {
+        var fresh = tracks.Count(t => Services.Downloads.StateOf(t.VideoId) == Tune.Core.Offline.DownloadState.None);
+        Services.Downloads.Enqueue(tracks);
+        ShowToast(fresh == 0 ? "Already downloaded"
+            : fresh == 1 ? $"Downloading {tracks.First(t => Services.Downloads.StateOf(t.VideoId) != Tune.Core.Offline.DownloadState.Done).Title}"
+            : $"Downloading {fresh} songs");
+    }
+
+    public void RemoveDownloads(IReadOnlyList<Tune.Core.Models.Track> tracks)
+    {
+        Services.Downloads.Remove(tracks.Select(t => t.VideoId));
+        ShowToast(tracks.Count == 1 ? "Removed download" : $"Removed {tracks.Count} downloads");
+        if (Page is CollectionViewModel { IsDownloads: true } c) c.Reload();
+        _home?.ReloadOffline();
     }
 
     public void Navigate(IPage page)

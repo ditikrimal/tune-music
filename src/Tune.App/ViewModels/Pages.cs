@@ -14,6 +14,38 @@ public sealed partial class TrackRowViewModel(Track track, int number) : Observa
 {
     [ObservableProperty] private bool _isLiked;
     [ObservableProperty] private bool _isCurrent;
+    [ObservableProperty] private Tune.Core.Offline.DownloadState _download;
+    [ObservableProperty] private double _downloadProgress;
+
+    /// <summary>Offline and not downloaded: shown dimmed.</summary>
+    [ObservableProperty] private bool _isUnavailable;
+
+    public bool IsDownloaded => Download == Tune.Core.Offline.DownloadState.Done;
+    public bool IsDownloadPending => Download is Tune.Core.Offline.DownloadState.Queued or Tune.Core.Offline.DownloadState.Downloading;
+    public string DownloadTip => Download switch
+    {
+        Tune.Core.Offline.DownloadState.Done => "Downloaded — plays without internet",
+        Tune.Core.Offline.DownloadState.Downloading => $"Downloading… {DownloadProgress:P0}",
+        Tune.Core.Offline.DownloadState.Queued => "Waiting to download",
+        _ => "",
+    };
+
+    partial void OnDownloadChanged(Tune.Core.Offline.DownloadState value)
+    {
+        OnPropertyChanged(nameof(IsDownloaded));
+        OnPropertyChanged(nameof(IsDownloadPending));
+        OnPropertyChanged(nameof(DownloadTip));
+    }
+
+    partial void OnDownloadProgressChanged(double value) => OnPropertyChanged(nameof(DownloadTip));
+
+    /// <summary>Re-reads download state (and availability) from the download manager.</summary>
+    public void SyncDownload(Tune.Core.Offline.DownloadManager dm, bool offline)
+    {
+        Download = dm.StateOf(Track.VideoId);
+        DownloadProgress = dm.ProgressOf(Track.VideoId);
+        IsUnavailable = offline && Download != Tune.Core.Offline.DownloadState.Done;
+    }
 
     public Track Track { get; } = track;
     public int Number { get; set; } = number;
@@ -32,10 +64,15 @@ public static class Rows
     public static ObservableCollection<TrackRowViewModel> From(ShellViewModel shell, IEnumerable<Track> tracks)
     {
         var current = shell.Services.Playback.Current?.VideoId;
-        var rows = tracks.Select((t, i) => new TrackRowViewModel(t, i + 1)
+        var rows = tracks.Select((t, i) =>
         {
-            IsLiked = shell.Services.Library.IsLiked(t.VideoId),
-            IsCurrent = t.VideoId == current,
+            var row = new TrackRowViewModel(t, i + 1)
+            {
+                IsLiked = shell.Services.Library.IsLiked(t.VideoId),
+                IsCurrent = t.VideoId == current,
+            };
+            row.SyncDownload(shell.Services.Downloads, shell.IsOffline);
+            return row;
         });
         return new ObservableCollection<TrackRowViewModel>(rows);
     }
@@ -51,12 +88,62 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _offline;
+    [ObservableProperty] private ObservableCollection<TrackRowViewModel> _offlineTracks = [];
 
     public HomeViewModel(ShellViewModel shell)
     {
         _shell = shell;
-        _ = LoadAsync();
+        if (shell.IsOffline) SetOffline(true);
+        else _ = LoadAsync();
     }
+
+    public bool HasOfflineTracks => OfflineTracks.Count > 0;
+    public string OfflineSummary => OfflineTracks.Count == 0
+        ? "Nothing is downloaded yet. When you're back online, use the download button on any playlist or album, or ⋯ → Download on a song."
+        : $"{ShellViewModel.Songs(OfflineTracks.Count)} you can play without internet.";
+
+    /// <summary>The connection went or came back: Home becomes your downloads, or the normal feed again.</summary>
+    public void SetOffline(bool offline)
+    {
+        if (offline)
+        {
+            Offline = true;
+            ReloadOffline();
+        }
+        else
+        {
+            _ = LoadAsync();
+        }
+    }
+
+    public void ReloadOffline()
+    {
+        OfflineTracks = Rows.From(_shell, _shell.Services.Downloads.DownloadedTracks());
+        OnPropertyChanged(nameof(HasOfflineTracks));
+        OnPropertyChanged(nameof(OfflineSummary));
+    }
+
+    private IReadOnlyList<Track> OfflineList => OfflineTracks.Select(r => r.Track).ToList();
+
+    [RelayCommand]
+    private Task PlayOffline()
+    {
+        if (OfflineTracks.Count == 0) return Task.CompletedTask;
+        if (_shell.Player.ShuffleOn) _shell.Player.ToggleShuffleCommand.Execute(null);
+        return _shell.Services.Playback.PlayListAsync(OfflineList, 0);
+    }
+
+    [RelayCommand]
+    private Task ShuffleOffline()
+    {
+        if (OfflineTracks.Count == 0) return Task.CompletedTask;
+        if (!_shell.Player.ShuffleOn) _shell.Player.ToggleShuffleCommand.Execute(null);
+        return _shell.Services.Playback.PlayListAsync(OfflineList, Random.Shared.Next(OfflineTracks.Count));
+    }
+
+    [RelayCommand]
+    private Task PlayOfflineRow(TrackRowViewModel? row) =>
+        row is null ? Task.CompletedTask : _shell.Services.Playback.PlayListAsync(OfflineList, OfflineTracks.IndexOf(row));
 
     public string? NavKey => "home";
     public ObservableCollection<Shelf> Shelves { get; } = [];
@@ -73,12 +160,18 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
     public void OnShown()
     {
         OnPropertyChanged(nameof(Greeting));
-        if (!IsLoading && _shell.Services.Clock.Now - _loadedAt > RefreshAfter) _ = LoadAsync();
+        if (_shell.IsOffline) ReloadOffline();
+        else if (!IsLoading && (Offline || _shell.Services.Clock.Now - _loadedAt > RefreshAfter)) _ = LoadAsync();
     }
 
     [RelayCommand]
     private async Task LoadAsync()
     {
+        if (_shell.IsOffline && !await _shell.Services.Network.CheckNowAsync())
+        {
+            SetOffline(true);
+            return;
+        }
         IsLoading = true;
         try
         {
@@ -87,6 +180,7 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
             // a calm Home: at most 6 rows of 12 — the rest is noise
             foreach (var s in feed.Shelves.Take(6)) Shelves.Add(s with { Items = s.Items.Take(12).ToList() });
             Offline = feed.Offline;
+            if (Offline) ReloadOffline();
             _shell.Prefetch(feed.Shelves.SelectMany(sh => sh.Items.Take(6)).Where(c => c.Track is not null).Select(c => c.Track!).Take(12),
                 Tune.Core.Streams.PrefetchPriority.Page);
             _loadedAt = _shell.Services.Clock.Now;
@@ -95,6 +189,7 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
         {
             Log.Error("Home load failed", e);
             Offline = true;
+            ReloadOffline();
         }
         finally
         {
@@ -194,7 +289,7 @@ public sealed partial class SearchViewModel : ObservableObject, IPage
 
 // ============================== Album / playlist / liked ==============================
 
-public enum CollectionKind { Album, YtPlaylist, LocalPlaylist, Liked }
+public enum CollectionKind { Album, YtPlaylist, LocalPlaylist, Liked, Downloads }
 
 public sealed partial class CollectionViewModel : ObservableObject, IPage
 {
@@ -234,6 +329,21 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
             return Task.FromResult(new Collection("Liked songs", ShellViewModel.Songs(liked.Count), null, liked));
         });
 
+    public static CollectionViewModel Downloads(ShellViewModel s) =>
+        new(s, CollectionKind.Downloads, "Downloads", "downloads", _ =>
+        {
+            var dm = s.Services.Downloads;
+            var all = dm.All();
+            var done = all.Count(d => dm.IsDownloaded(d.Track.VideoId));
+            var pending = dm.PendingCount;
+            var sub = ShellViewModel.Songs(done) + " · " + FormatSize(dm.DownloadedBytes())
+                      + (pending > 0 ? $" · {pending} downloading" : "");
+            return Task.FromResult(new Collection("Downloads", sub, null, all.Select(d => d.Track).ToList()));
+        });
+
+    private static string FormatSize(long bytes) =>
+        bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.0} GB" : $"{bytes / (double)(1L << 20):0} MB";
+
     public static CollectionViewModel LocalPlaylist(ShellViewModel s, long id) =>
         new(s, CollectionKind.LocalPlaylist, "Playlist", $"playlist:{id}", _ =>
         {
@@ -246,12 +356,41 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
     public string? NavKey { get; }
     public long? PlaylistId { get; }
     public bool IsLiked => Kind == CollectionKind.Liked;
+    public bool IsDownloads => Kind == CollectionKind.Downloads;
+    public bool CanDownloadAll => !IsDownloads && Tracks.Count > 0;
+
+    /// <summary>Every song here is downloaded (or on its way): the header button shows "on".</summary>
+    public bool AllDownloaded => Tracks.Count > 0 && Tracks.All(r => r.Download != Tune.Core.Offline.DownloadState.None);
+    public string DownloadAllTip => AllDownloaded ? "Remove downloads" : "Download — play without internet";
+
+    [RelayCommand]
+    private void ToggleDownloadAll()
+    {
+        if (Tracks.Count == 0) return;
+        if (AllDownloaded)
+        {
+            _shell.RemoveDownloads(AllTracks);
+        }
+        else
+        {
+            _shell.Download(AllTracks);
+        }
+    }
+
+    /// <summary>A download state changed somewhere: refresh the header button.</summary>
+    public void DownloadsChanged()
+    {
+        OnPropertyChanged(nameof(AllDownloaded));
+        OnPropertyChanged(nameof(DownloadAllTip));
+        OnPropertyChanged(nameof(CanDownloadAll));
+    }
     public bool IsLocal => Kind == CollectionKind.LocalPlaylist;
     public bool IsEditable => IsLocal || IsLiked;
     public string KindLabel => Kind switch
     {
         CollectionKind.Album => "Album",
         CollectionKind.Liked => "Playlist",
+        CollectionKind.Downloads => "Offline",
         _ => "Playlist",
     };
 
@@ -266,9 +405,11 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
             Subtitle = c.Subtitle;
             ThumbnailUrl = c.ThumbnailUrl ?? ThumbnailUrl ?? c.Tracks.FirstOrDefault()?.ThumbnailUrl;
             Tracks = Rows.From(_shell, c.Tracks);
+            DownloadsChanged();
             _shell.Prefetch(c.Tracks.Take(6), Tune.Core.Streams.PrefetchPriority.Page);
             if (c.Tracks.Count == 0)
-                Message = IsLiked ? "Songs you like will appear here. Tap ♡ on any song."
+                Message = IsDownloads ? "Songs you download play without internet. Use the download button on a playlist or album, or ⋯ → Download on a song."
+                        : IsLiked ? "Songs you like will appear here. Tap ♡ on any song."
                         : IsLocal ? "This playlist is empty. Use ⋯ → Add to playlist on any song."
                         : "Nothing here.";
         }

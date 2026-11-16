@@ -218,18 +218,33 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         DurationText = Format(dur ?? TimeSpan.Zero);
         if (IsSeeking) return;
         var pos = _playback.Player.Position;
+        if (_seekTarget is { } target)
+        {
+            // until the player has actually jumped, ticks still report the old spot: don't snap back to it
+            if (Math.Abs(pos.TotalSeconds - target) > 1.5 && DateTime.UtcNow - _seekAt < TimeSpan.FromSeconds(3)) return;
+            _seekTarget = null;
+        }
         Position = Math.Min(pos.TotalSeconds, Duration);
         PositionText = IsLoading ? "Loading…" : Format(pos);
     }
 
     public void BeginSeek() => IsSeeking = true;
 
+    private double? _seekTarget;
+    private DateTime _seekAt;
+
     public void CommitSeek(double seconds)
     {
+        _seekTarget = seconds;
+        _seekAt = DateTime.UtcNow;
+        Position = seconds;
+        PositionText = Format(TimeSpan.FromSeconds(seconds));
         IsSeeking = false;
         _playback.Seek(TimeSpan.FromSeconds(seconds));
-        PositionText = Format(TimeSpan.FromSeconds(seconds));
     }
+
+    /// <summary>Shows where a drag would land, without seeking yet.</summary>
+    public void PreviewSeek(double seconds) => PositionText = Format(TimeSpan.FromSeconds(seconds));
 
     public static string Format(TimeSpan t) =>
         t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : $"{(int)t.TotalMinutes}:{t.Seconds:00}";

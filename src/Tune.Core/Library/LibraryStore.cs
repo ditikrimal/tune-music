@@ -8,6 +8,9 @@ public sealed record PlaylistInfo(long Id, string Name, int Count, string? Thumb
 
 public sealed record PlayStat(Track Track, int Plays);
 
+/// <summary>A song saved for offline play. <see cref="Path"/> is null while it is still waiting/downloading.</summary>
+public sealed record DownloadInfo(Track Track, string? Path, string? ArtPath, long Bytes, DateTimeOffset AddedAt);
+
 /// <summary>Everything the app remembers locally: play history, likes, playlists and settings.</summary>
 public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheStore
 {
@@ -30,6 +33,8 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
                 position INTEGER NOT NULL, video_id TEXT NOT NULL, PRIMARY KEY (playlist_id, position));
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS downloads (video_id TEXT PRIMARY KEY, path TEXT, art_path TEXT,
+                bytes INTEGER NOT NULL DEFAULT 0, added_at INTEGER NOT NULL);
             """);
         // v3: stream_cache gains "source" (worker/exe). Links saved before may be bound to a VPN route
         // (see ToolManager.PreparePrivatePython), so the old table is simply dropped — it's only a cache.
@@ -109,6 +114,50 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
 
     public IReadOnlyList<Track> GetLiked() =>
         QueryTracks("SELECT t.json FROM likes l JOIN tracks t ON t.video_id = l.video_id ORDER BY l.seq DESC");
+
+    // ---------- downloads ----------
+
+    /// <summary>Adds songs to the download list (already listed ones keep their place and file).</summary>
+    public void AddDownloads(IEnumerable<Track> tracks, DateTimeOffset at)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            var ms = at.ToUnixTimeMilliseconds();
+            foreach (var t in tracks)
+            {
+                SaveTrack(t);
+                Exec("INSERT INTO downloads (video_id, added_at) VALUES ($v, $at) ON CONFLICT(video_id) DO NOTHING",
+                    ("$v", t.VideoId), ("$at", ms--)); // newest-first list still shows a batch in the order given
+            }
+            tx.Commit();
+        }
+    }
+
+    public void SetDownloaded(string videoId, string path, string? artPath, long bytes) =>
+        Exec("UPDATE downloads SET path = $p, art_path = $a, bytes = $b WHERE video_id = $v",
+            ("$v", videoId), ("$p", path), ("$a", (object?)artPath ?? DBNull.Value), ("$b", bytes));
+
+    public void RemoveDownload(string videoId) => Exec("DELETE FROM downloads WHERE video_id = $v", ("$v", videoId));
+
+    /// <summary>Newest first.</summary>
+    public IReadOnlyList<DownloadInfo> GetDownloads()
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("""
+                SELECT t.json, d.path, d.art_path, d.bytes, d.added_at FROM downloads d
+                JOIN tracks t ON t.video_id = d.video_id ORDER BY d.added_at DESC
+                """);
+            using var r = cmd.ExecuteReader();
+            var list = new List<DownloadInfo>();
+            while (r.Read())
+                if (Deserialize(r.GetString(0)) is { } t)
+                    list.Add(new DownloadInfo(t, r.IsDBNull(1) ? null : r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
+                        r.GetInt64(3), DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(4))));
+            return list;
+        }
+    }
 
     // ---------- playlists ----------
 

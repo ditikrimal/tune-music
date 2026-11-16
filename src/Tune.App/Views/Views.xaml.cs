@@ -47,6 +47,7 @@ public partial class Views : ResourceDictionary
             case CollectionViewModel c: c.PlayRowCommand.Execute(row); break;
             case ArtistViewModel a: a.PlayRowCommand.Execute(row); break;
             case SearchViewModel s: s.PlaySongCommand.Execute(row); break;
+            case HomeViewModel h: h.PlayOfflineRowCommand.Execute(row); break;
         }
     }
 
@@ -121,6 +122,11 @@ public partial class Views : ResourceDictionary
 
         if (Shell.Page is CollectionViewModel { IsLocal: true } c)
             menu.Items.Add(Item("Remove from this playlist", () => c.Remove(row)));
+
+        var dl = Shell.Services.Downloads.StateOf(row.Track.VideoId);
+        menu.Items.Add(dl == Tune.Core.Offline.DownloadState.None
+            ? Item("Download", () => Shell.Download([row.Track]))
+            : Item(dl == Tune.Core.Offline.DownloadState.Done ? "Remove download" : "Cancel download", () => Shell.RemoveDownloads([row.Track])));
 
         foreach (var artist in row.Track.Artists.Where(a => a.BrowseId is not null).Take(3))
             menu.Items.Add(Item($"Go to {artist.Name}", () => Shell.OpenArtistCommand.Execute(artist)));
