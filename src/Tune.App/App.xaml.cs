@@ -275,6 +275,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Shell?.Player.SaveVolume();
         _media?.Dispose();
         _worker?.Dispose();
         _player?.Dispose();

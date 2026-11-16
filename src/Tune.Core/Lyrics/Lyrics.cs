@@ -116,12 +116,21 @@ public sealed class LyricsService(Tune.Core.YtMusic.InnerTubeClient yt, LrcLibCl
 {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<SongLyrics?>> _cache = new();
 
-    public Task<SongLyrics?> GetAsync(Track track) => _cache.GetOrAdd(track.VideoId, _ => LoadAsync(track));
+    /// <summary>Whether synced lyrics are currently allowed (a setting); part of the cache key so flipping it takes effect.</summary>
+    public bool SyncedAllowed => syncedAllowed();
 
-    private async Task<SongLyrics?> LoadAsync(Track track)
+    public Task<SongLyrics?> GetAsync(Track track)
+    {
+        var allowed = syncedAllowed();
+        return _cache.GetOrAdd(Key(track, allowed), _ => LoadAsync(track, allowed));
+    }
+
+    private static string Key(Track track, bool allowed) => track.VideoId + (allowed ? "|s" : "|p");
+
+    private async Task<SongLyrics?> LoadAsync(Track track, bool allowed)
     {
         SongLyrics? synced = null;
-        if (syncedAllowed())
+        if (allowed)
         {
             try { synced = await lrc.GetAsync(track).ConfigureAwait(false); }
             catch (Exception) { /* offline or no match: fall back to YouTube Music */ }
@@ -137,7 +146,7 @@ public sealed class LyricsService(Tune.Core.YtMusic.InnerTubeClient yt, LrcLibCl
             }
         }
         catch (Exception) { }
-        if (synced is null) _cache.TryRemove(track.VideoId, out _); // let a later open retry
+        if (synced is null) _cache.TryRemove(Key(track, allowed), out _); // let a later open retry
         return synced;
     }
 }

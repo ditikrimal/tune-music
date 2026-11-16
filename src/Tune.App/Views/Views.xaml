@@ -1015,6 +1015,15 @@
                             <TextBlock Text="Skips talking intros, skits and outros in music videos (SponsorBlock). Only a short video code is sent to sponsor.ajay.app." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                         </StackPanel>
                     </DockPanel>
+                    <Border Style="{StaticResource SettingDivider}" />
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE8D2;" /></Border>
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding SyncedLyrics}" VerticalAlignment="Center" AutomationProperties.Name="Synced lyrics" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Synced lyrics" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="Lyrics follow the song line by line (lrclib.net; the song title and artist are sent). Off: plain YouTube Music lyrics." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                        </StackPanel>
+                    </DockPanel>
                     </StackPanel>
                 </Border>
 

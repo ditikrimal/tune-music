@@ -71,18 +71,19 @@ public sealed partial class NowPlayingViewModel : ObservableObject
             Status = "Play a song to see its lyrics.";
             return;
         }
-        if (_loadedFor == t.VideoId)
+        var key = t.VideoId + (_lyrics.SyncedAllowed ? "|s" : "|p"); // the synced-lyrics setting can change between opens
+        if (_loadedFor == key)
         {
             UpdateCurrent();
             return;
         }
-        _loadedFor = t.VideoId;
+        _loadedFor = key;
         Reset();
         Status = "Finding lyrics…";
         SongLyrics? l;
         try { l = await _lyrics.GetAsync(t); }
         catch (Exception) { l = null; }
-        if (_loadedFor != t.VideoId) return; // the song changed meanwhile
+        if (_loadedFor != key) return; // the song changed meanwhile
         Status = null;
         if (l is null)
         {

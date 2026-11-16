@@ -155,4 +155,21 @@ public class PlayQueueTests
         q.Remove(3);
         q.Move(0, 1);
     }
+
+    [Fact]
+    public async Task Items_snapshot_survives_radio_appended_from_another_thread()
+    {
+        var q = new PlayQueue();
+        q.StartList(List("a"), 0);
+        var before = q.Items;
+        var writer = Task.Run(() =>
+        {
+            for (var i = 0; i < 2000; i++) q.AppendRadio([T("r" + i)]);
+        });
+        while (!writer.IsCompleted)
+            foreach (var t in q.Items) Assert.NotNull(t); // would throw "collection was modified" on a live list
+        await writer;
+        Assert.Single(before);
+        Assert.Equal(2001, q.Items.Count);
+    }
 }

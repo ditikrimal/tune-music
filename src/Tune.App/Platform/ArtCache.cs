@@ -88,6 +88,7 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
             var tmp = file + ".part";
             await File.WriteAllBytesAsync(tmp, bytes).ConfigureAwait(false);
             File.Move(tmp, file, overwrite: true);
+            NoteDownloaded(bytes.Length);
             return file;
         }
         catch (Exception e) when (e is HttpRequestException or IOException or TaskCanceledException)
@@ -114,7 +115,23 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
         }
     }
 
-    /// <summary>Deletes least-recently-used files until the cache is under its cap. Run once at startup.</summary>
+    // Tune runs for days: besides the startup trim, trim again after every TrimEvery of new downloads
+    private const long TrimEvery = 20L * 1024 * 1024;
+    private long _sinceTrim;
+    private int _trimming;
+
+    private void NoteDownloaded(long bytes)
+    {
+        if (Interlocked.Add(ref _sinceTrim, bytes) < TrimEvery || Interlocked.Exchange(ref _trimming, 1) == 1) return;
+        Interlocked.Exchange(ref _sinceTrim, 0);
+        _ = Task.Run(() =>
+        {
+            try { Trim(); }
+            finally { Interlocked.Exchange(ref _trimming, 0); }
+        });
+    }
+
+    /// <summary>Deletes least-recently-used files until the cache is under its cap (at startup and as it grows).</summary>
     public void Trim()
     {
         try
@@ -129,7 +146,7 @@ public sealed partial class ArtCache(string dir, HttpClient http, long maxBytes 
                 TryDelete(f.FullName);
             }
         }
-        catch (IOException e)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Log.Warn("Art cache trim failed", e);
         }

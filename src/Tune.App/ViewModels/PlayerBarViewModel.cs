@@ -51,6 +51,8 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         _playback.Queue.Shuffle = _shuffleOn;
         _playback.Queue.Repeat = _repeat;
 
+        _saveVolume.Tick += (_, _) => SaveVolume();
+        _sleepTick.Tick += (_, _) => SleepTickNow();
         _playback.StateChanged += () => _ui.BeginInvoke(Refresh);
         _playback.Player.PositionChanged += OnPositionChanged;
     }
@@ -90,8 +92,93 @@ public sealed partial class PlayerBarViewModel : ObservableObject
 
     partial void OnVolumeChanged(double value)
     {
-        _playback.Player.Volume = value;
-        _lib.SetSetting("volume", value.ToString("0.###", CultureInfo.InvariantCulture));
+        _playback.Player.Volume = SleepFade(value);
+        // a slider drag sends dozens of values a second: save once it settles
+        _saveVolume.Stop();
+        _saveVolume.Start();
+    }
+
+    private readonly DispatcherTimer _saveVolume = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
+    /// <summary>Writes a volume change that is still waiting for the slider to settle (call on exit).</summary>
+    public void SaveVolume()
+    {
+        _saveVolume.Stop();
+        _lib.SetSetting("volume", Volume.ToString("0.###", CultureInfo.InvariantCulture));
+    }
+
+    // ---------- sleep timer ----------
+
+    private static readonly TimeSpan SleepFadeLength = TimeSpan.FromSeconds(20);
+    private readonly DispatcherTimer _sleepTick = new();
+    private DateTime? _sleepAt;
+    [ObservableProperty] private bool _sleepAtEndOfSong;
+    [ObservableProperty] private string _sleepText = "";
+
+    public bool SleepActive => _sleepAt is not null || SleepAtEndOfSong;
+    public string SleepTag => SleepActive ? "On" : "Off";
+    public string SleepTip => SleepActive ? $"Sleep timer: pauses {SleepText}" : "Sleep timer";
+
+    /// <summary>"15", "30"… minutes, "end" (after this song) or "off".</summary>
+    [RelayCommand]
+    private void SetSleep(string what)
+    {
+        _sleepAt = null;
+        _sleepTick.Stop();
+        SleepAtEndOfSong = false;
+        _playback.PauseAfterCurrent = false;
+        if (what == "end")
+        {
+            SleepAtEndOfSong = true;
+            _playback.PauseAfterCurrent = true;
+        }
+        else if (int.TryParse(what, CultureInfo.InvariantCulture, out var minutes) && minutes > 0)
+        {
+            _sleepAt = DateTime.UtcNow.AddMinutes(minutes);
+            SleepTickNow();
+        }
+        _playback.Player.Volume = Volume;
+        UpdateSleepText();
+    }
+
+    private void SleepTickNow()
+    {
+        if (_sleepAt is not { } at) return;
+        var left = at - DateTime.UtcNow;
+        if (left <= TimeSpan.Zero)
+        {
+            _sleepAt = null;
+            _sleepTick.Stop();
+            if (_playback.IsPlaying) _playback.TogglePause();
+            _playback.Player.Volume = Volume; // undo the fade for whenever play is pressed again
+            UpdateSleepText();
+            return;
+        }
+        _playback.Player.Volume = SleepFade(Volume);
+        UpdateSleepText();
+        // tick rarely while far away (the label shows minutes), smoothly during the fade
+        _sleepTick.Interval = left > SleepFadeLength + TimeSpan.FromSeconds(5)
+            ? TimeSpan.FromSeconds(Math.Min(30, (left - SleepFadeLength).TotalSeconds))
+            : TimeSpan.FromMilliseconds(250);
+        _sleepTick.Start();
+    }
+
+    /// <summary>The volume to play at: the user's volume, faded out over the timer's last seconds.</summary>
+    private double SleepFade(double volume)
+    {
+        if (_sleepAt is not { } at) return volume;
+        var left = at - DateTime.UtcNow;
+        return left >= SleepFadeLength ? volume : volume * Math.Clamp(left / SleepFadeLength, 0, 1);
+    }
+
+    private void UpdateSleepText()
+    {
+        SleepText = _sleepAt is { } at
+            ? $"in {Math.Max(1, (int)Math.Ceiling((at - DateTime.UtcNow).TotalMinutes))} min"
+            : SleepAtEndOfSong ? "after this song" : "";
+        OnPropertyChanged(nameof(SleepActive));
+        OnPropertyChanged(nameof(SleepTag));
+        OnPropertyChanged(nameof(SleepTip));
     }
 
     public void Refresh()
@@ -106,6 +193,11 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         IsPlaying = _playback.IsPlaying;
         IsLoading = _playback.IsLoading;
         IsLiked = current is not null && _lib.IsLiked(current.VideoId);
+        if (SleepAtEndOfSong && !_playback.PauseAfterCurrent)
+        {
+            SleepAtEndOfSong = false; // it fired
+            UpdateSleepText();
+        }
         UpdatePosition();
     }
 

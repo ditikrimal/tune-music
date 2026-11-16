@@ -182,6 +182,24 @@ public partial class MainWindow : Window
 
     private void Mini_Click(object sender, RoutedEventArgs e) => MiniPlayerRequested?.Invoke();
 
+    private void Sleep_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ViewModels.ShellViewModel { Player: var player }) return;
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = SleepButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Top,
+        };
+        if (player.SleepActive)
+            menu.Items.Add(new System.Windows.Controls.MenuItem { Header = $"Pauses {player.SleepText}", IsEnabled = false, Opacity = 0.6 });
+        void Add(string header, string arg) =>
+            menu.Items.Add(new System.Windows.Controls.MenuItem { Header = header, Command = player.SetSleepCommand, CommandParameter = arg });
+        foreach (var m in new[] { 15, 30, 45, 60, 90 }) Add($"{m} minutes", m.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Add("End of this song", "end");
+        if (player.SleepActive) Add("Turn off", "off");
+        menu.IsOpen = true;
+    }
+
     /// <summary>Puts the cursor in the Search page's box (Ctrl+K), also when that page is already open.</summary>
     private void FocusSearchBox()
     {

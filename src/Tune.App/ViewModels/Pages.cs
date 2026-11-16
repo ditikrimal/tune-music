@@ -421,6 +421,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
 
     [ObservableProperty] private bool _sponsorBlock;
     [ObservableProperty] private bool _normalize;
+    [ObservableProperty] private bool _syncedLyrics;
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private bool _closeToTray;
     [ObservableProperty] private bool _miniOnTop;
@@ -453,6 +454,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         _shell = shell;
         _sponsorBlock = Lib.GetSetting("sponsorblock.enabled") != "0";
         _normalize = Lib.GetSetting("audio.normalize") == "1";
+        _syncedLyrics = Lib.GetSetting("lyrics.synced") != "0";
         _closeToTray = Lib.GetSetting("window.closeToTray") != "0";
         _miniOnTop = Lib.GetSetting("mini.topmost") != "0";
 
@@ -478,6 +480,8 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         Lib.SetSetting("audio.normalize", value ? "1" : "0");
         _shell.Services.Playback.Player.Normalize = value;
     }
+
+    partial void OnSyncedLyricsChanged(bool value) => Lib.SetSetting("lyrics.synced", value ? "1" : "0");
 
     partial void OnCloseToTrayChanged(bool value) => Lib.SetSetting("window.closeToTray", value ? "1" : "0");
 

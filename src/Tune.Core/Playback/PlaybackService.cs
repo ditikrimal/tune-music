@@ -87,6 +87,12 @@ public sealed class PlaybackService
     /// <summary>True between choosing a song and its audio starting (yt-dlp + YouTube's start delay).</summary>
     public bool IsLoading { get; private set; }
 
+    /// <summary>
+    /// Sleep timer "end of song": when the current song finishes, move to the next one but don't start it.
+    /// Clears itself once used.
+    /// </summary>
+    public bool PauseAfterCurrent { get; set; }
+
     /// <summary>Something the user should see (track list, play state, queue) changed.</summary>
     public event Action? StateChanged;
 
@@ -303,6 +309,14 @@ public sealed class PlaybackService
     private async Task OnEndedAsync()
     {
         RecordPlay();
+        if (PauseAfterCurrent)
+        {
+            PauseAfterCurrent = false;
+            Queue.Next(userInitiated: false); // play resumes with the next song (or this one, if it was the last)
+            Stop();
+            Notice?.Invoke("Sleep timer: paused");
+            return;
+        }
         await AdvanceAsync(userInitiated: false).ConfigureAwait(false);
     }
 

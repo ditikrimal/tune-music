@@ -176,6 +176,25 @@ public class PlaybackServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Pause_after_current_stops_on_the_next_song_and_play_resumes_it()
+    {
+        await _svc.PlayListAsync(List("a", "b"), 0);
+        _svc.PauseAfterCurrent = true;
+        _player.End();
+        await _svc.Background;
+        Assert.Equal(Id("b"), _svc.Current!.VideoId);
+        Assert.False(_svc.IsPlaying);
+        Assert.DoesNotContain(Id("b"), _resolver.Resolved);
+        Assert.False(_svc.PauseAfterCurrent); // one-shot
+        Assert.Single(_lib.GetTopTracks(DateTimeOffset.MinValue, 10)); // a still counts as played
+
+        _svc.TogglePause();
+        await _svc.Background;
+        Assert.True(_svc.IsPlaying);
+        Assert.Equal(Id("b"), _resolver.Resolved.Last());
+    }
+
+    [Fact]
     public async Task Radio_play_fetches_radio_right_away()
     {
         _api.Radios[Id("a")] = List("a", "x");

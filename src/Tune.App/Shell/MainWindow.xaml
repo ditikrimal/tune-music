@@ -208,8 +208,10 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- right: queue, mini-player, volume -->
+                <!-- right: sleep timer, queue, now playing, mini-player, volume -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="SleepButton" Style="{StaticResource ToggleIconButton}" Content="&#xE708;" ToolTip="{Binding SleepTip}"
+                            Tag="{Binding SleepTag}" Click="Sleep_Click" AutomationProperties.Name="Sleep timer" />
                     <Button Style="{StaticResource ToggleIconButton}" Content="&#xE8FD;" ToolTip="Queue"
                             Command="{Binding DataContext.ToggleQueueCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             Tag="{Binding DataContext.IsQueueOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:BoolToOnConverter.Instance}}" />
