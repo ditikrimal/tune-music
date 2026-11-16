@@ -91,3 +91,15 @@ fun formatDuration(sec: Int?): String {
     val h = sec / 3600; val m = (sec % 3600) / 60; val s = sec % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
+
+/** Finds the playlist id in a pasted music.youtube.com / youtube.com link or a bare id. */
+object PlaylistLinks {
+    private val listParam = Regex("[?&]list=([A-Za-z0-9_-]{10,})")
+    private val bareId = Regex("^(VL)?(PL|OLAK5uy_|RD|LL|FL|UU)[A-Za-z0-9_-]{8,}$")
+
+    fun parse(text: String?): String? {
+        val t = text?.trim().orEmpty()
+        listParam.find(t)?.let { return it.groupValues[1] }
+        return if (bareId.matches(t)) t.removePrefix("VL") else null
+    }
+}

@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.tune.data.Card
+import app.tune.data.PlaylistLinks
 import app.tune.data.CardKind
 import app.tune.BuildConfigLite
 import app.tune.data.Collection
@@ -449,6 +450,7 @@ fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
                     colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
             }
         }
+        item { ImportSection() }
         item {
             val dv by app.graph.downloads.version.collectAsState()
             val bytes = remember(dv) { app.graph.downloads.downloadedBytes() }
@@ -456,5 +458,57 @@ fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
             Text("Downloads use ${bytes / (1 shl 20)} MB.", style = Type.body, color = c.text, modifier = Modifier.padding(horizontal = 20.dp))
             Text("Tune ${BuildConfigLite.VERSION}", style = Type.caption, color = c.subtle, modifier = Modifier.padding(20.dp))
         }
+    }
+}
+
+/** Settings > Import: paste a YouTube Music playlist link; its songs become a playlist in the library. */
+@Composable
+private fun ImportSection() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val scope = rememberCoroutineScope()
+    var link by rememberSaveable { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    fun import() {
+        val id = PlaylistLinks.parse(link)
+        if (id == null) { status = "That doesn\u2019t look like a playlist link. It should contain list=\u2026"; return }
+        busy = true; status = "Importing\u2026"
+        scope.launch {
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { app.graph.yt.playlist(id) } }
+            busy = false
+            val col = result.getOrNull()
+            status = when {
+                col == null -> "Couldn\u2019t import \u2014 check the link and your connection."
+                col.tracks.isEmpty() -> "That playlist is empty or private (only public and unlisted playlists can be imported)."
+                else -> {
+                    val pid = app.graph.library.createPlaylist(col.title)
+                    app.graph.library.addManyToPlaylist(pid, col.tracks)
+                    link = ""
+                    app.graph.toast("Imported ${col.title}")
+                    "Imported ${col.tracks.size} songs into \u201c${col.title}\u201d."
+                }
+            }
+        }
+    }
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        Text("IMPORT", style = Type.label, color = c.subtle, modifier = Modifier.padding(top = 28.dp, bottom = 8.dp))
+        Text("Import a YouTube Music playlist", style = Type.bodyStrong, color = c.text)
+        Text("Paste a playlist link (music.youtube.com or youtube.com). Its songs become a playlist in your library. Public and unlisted playlists work.",
+            style = Type.caption, color = c.subtle, modifier = Modifier.padding(bottom = 10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(link, { link = it }, singleLine = true, modifier = Modifier.weight(1f),
+                placeholder = { Text("https://music.youtube.com/playlist?list=\u2026", color = c.subtle, maxLines = 1) },
+                shape = RoundedCornerShape(24.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { if (!busy) import() }),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.accent, unfocusedBorderColor = Color.Transparent,
+                    unfocusedContainerColor = c.card, focusedContainerColor = c.card, cursorColor = c.accent))
+            Box(Modifier.padding(start = 10.dp).clip(RoundedCornerShape(22.dp)).background(if (busy) c.track else c.accent)
+                .clickable(enabled = !busy) { import() }.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                Text("Import", style = Type.bodyStrong, color = if (busy) c.subtle else c.onAccent)
+            }
+        }
+        status?.let { Text(it, style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 10.dp)) }
     }
 }

@@ -93,7 +93,7 @@ class Downloads(context: Context, private val lib: Library, private val streams:
             try {
                 download(next)
             } catch (e: Exception) {
-                Log.w("Tune", "Download failed for ${next.videoId}", e)
+                Log.w("Tune", "Download failed for ${next.videoId}: $e")
                 synchronized(queue) { queue.remove(next); queue.add(next) } // try the others first
                 streams.invalidate(next.videoId)
                 kotlinx.coroutines.delay(5_000)

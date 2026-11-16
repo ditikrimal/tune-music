@@ -137,6 +137,23 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 1) 
         changed()
     }
 
+    /** Appends many songs in one transaction (playlist import). */
+    fun addManyToPlaylist(id: Long, list: List<Track>) {
+        writableDatabase.run {
+            beginTransaction()
+            try {
+                var next = rawQuery("SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_items WHERE playlist_id = ?", arrayOf(id.toString()))
+                    .use { it.moveToFirst(); it.getInt(0) }
+                for (t in list.distinctBy { it.videoId }) {
+                    saveTrack(this, t)
+                    insert("playlist_items", null, ContentValues().apply { put("playlist_id", id); put("position", next++); put("video_id", t.videoId) })
+                }
+                setTransactionSuccessful()
+            } finally { endTransaction() }
+        }
+        changed()
+    }
+
     fun removeFromPlaylist(id: Long, index: Int) = rewritePlaylist(id) { it.apply { if (index in indices) removeAt(index) } }
 
     fun moveInPlaylist(id: Long, from: Int, to: Int) = rewritePlaylist(id) { list ->

@@ -369,7 +369,7 @@ class YtMusic(private val client: InnerTube) {
         val (c, first) = Parsers.playlist(client.post("browse", JSONObject().put("browseId", browseId)))
         val tracks = c.tracks.toMutableList()
         var token = first
-        repeat(4) {
+        repeat(12) { // ~1300 songs: enough to import big playlists
             val t = token ?: return c.copy(tracks = tracks)
             val more = runCatching { Parsers.playlistContinuation(client.post("browse", JSONObject().put("continuation", t))) }.getOrNull()
                 ?: return c.copy(tracks = tracks)

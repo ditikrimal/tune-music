@@ -92,4 +92,12 @@ class ParserTests {
         assertEquals(1, Lrc.indexAt(lines, 3300))
         assertEquals(3, Lrc.indexAt(lines, 99_000))
     }
+
+    @Test fun playlist_links() {
+        assertEquals("PLJ968k8uWUmXbTohbJAfR2pYiDHo771el",
+            app.tune.data.PlaylistLinks.parse("https://music.youtube.com/playlist?list=PLJ968k8uWUmXbTohbJAfR2pYiDHo771el&si=SjJYibdrW5YjSuzc&drli=1"))
+        assertEquals("PLJ968k8uWUmXbTohbJAfR2pYiDHo771el", app.tune.data.PlaylistLinks.parse(" VLPLJ968k8uWUmXbTohbJAfR2pYiDHo771el "))
+        assertNull(app.tune.data.PlaylistLinks.parse("https://music.youtube.com/watch?v=abcdefghijk"))
+        assertNull(app.tune.data.PlaylistLinks.parse("hello"))
+    }
 }

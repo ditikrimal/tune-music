@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Tune logo: six-bar waveform, white, inside the adaptive-icon safe zone -->
+<!-- Tune logo (same geometry as the Windows icon, tools/IconGen): six thin rounded bars, white -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M33,48h4a2,2 0,0 1,2 2v8a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-8a2,2 0,0 1,2 -2z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M41,40h4a2,2 0,0 1,2 2v24a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-24a2,2 0,0 1,2 -2z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M49,32h4a2,2 0,0 1,2 2v40a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-40a2,2 0,0 1,2 -2z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M57,38h4a2,2 0,0 1,2 2v28a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-28a2,2 0,0 1,2 -2z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M65,44h4a2,2 0,0 1,2 2v16a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-16a2,2 0,0 1,2 -2z" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M73,49h4a2,2 0,0 1,2 2v6a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-6a2,2 0,0 1,2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M37.33,48.67h0.00a2.00,2.00 0,0 1,2.00,2.00v5.00a2.00,2.00 0,0 1,-2.00,2.00h-0.00a2.00,2.00 0,0 1,-2.00,-2.00v-5.00a2.00,2.00 0,0 1,2.00,-2.00zM44.00,42.00h0.00a2.00,2.00 0,0 1,2.00,2.00v18.33a2.00,2.00 0,0 1,-2.00,2.00h-0.00a2.00,2.00 0,0 1,-2.00,-2.00v-18.33a2.00,2.00 0,0 1,2.00,-2.00zM50.67,37.00h0.00a2.00,2.00 0,0 1,2.00,2.00v30.00a2.00,2.00 0,0 1,-2.00,2.00h-0.00a2.00,2.00 0,0 1,-2.00,-2.00v-30.00a2.00,2.00 0,0 1,2.00,-2.00zM57.33,45.33h0.00a2.00,2.00 0,0 1,2.00,2.00v11.67a2.00,2.00 0,0 1,-2.00,2.00h-0.00a2.00,2.00 0,0 1,-2.00,-2.00v-11.67a2.00,2.00 0,0 1,2.00,-2.00zM64.00,40.33h0.00a2.00,2.00 0,0 1,2.00,2.00v21.67a2.00,2.00 0,0 1,-2.00,2.00h-0.00a2.00,2.00 0,0 1,-2.00,-2.00v-21.67a2.00,2.00 0,0 1,2.00,-2.00zM70.67,48.67h0.00a2.00,2.00 0,0 1,2.00,2.00v5.00a2.00,2.00 0,0 1,-2.00,2.00h-0.00a2.00,2.00 0,0 1,-2.00,-2.00v-5.00a2.00,2.00 0,0 1,2.00,-2.00z" />
 </vector>
