@@ -122,6 +122,7 @@ public sealed partial class ShellViewModel
     {
         Services.Library.SetLiked(t, liked);
         Player.Refresh();
+        LikesChanged();
         if (Page is CollectionViewModel { IsLiked: true } page) page.Reload();
     }
 }

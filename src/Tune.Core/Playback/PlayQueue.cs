@@ -194,6 +194,19 @@ public sealed class PlayQueue(Random? random = null)
         }
     }
 
+    /// <summary>Drops every song after the current one (radio may refill it later).</summary>
+    public void ClearUpcoming()
+    {
+        lock (_gate)
+        {
+            if (_currentIndex < 0 || _currentIndex >= _items.Count - 1) return;
+            _items.RemoveRange(_currentIndex + 1, _items.Count - _currentIndex - 1);
+            _listCount = Math.Min(_listCount, _items.Count);
+            _original = _items.Take(_listCount).ToList();
+            _snapshot = null;
+        }
+    }
+
     // ---- helpers: callers hold _gate ----
 
     private void SyncOriginal() => _original = _items.Take(_listCount).ToList();

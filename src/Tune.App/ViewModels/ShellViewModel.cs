@@ -56,6 +56,16 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty] private bool _isQueueOpen;
     [ObservableProperty] private bool _isOffline;
 
+    /// <summary>Bumped on every like/unlike so card hearts (bound through LikedTagConverter) refresh.</summary>
+    [ObservableProperty] private int _likesVersion;
+
+    /// <summary>A like changed anywhere: refresh hearts on cards and visible rows.</summary>
+    public void LikesChanged()
+    {
+        LikesVersion++;
+        foreach (var r in VisibleRows) r.IsLiked = Services.Library.IsLiked(r.Track.VideoId);
+    }
+
     public ShellViewModel(AppServices services, Dispatcher ui)
     {
         Services = services;
@@ -76,6 +86,11 @@ public sealed partial class ShellViewModel : ObservableObject
             _ = TintHeaderAsync(Player.ArtUrl);
         };
         services.Playback.Notice += msg => _ui.BeginInvoke(() => ShowToast(msg));
+        Player.LikedChanged += () =>
+        {
+            LikesChanged();
+            if (Page is CollectionViewModel { IsLiked: true } liked) liked.Reload();
+        };
         _isOffline = !services.Network.IsOnline;
         services.Network.Changed += online => _ui.BeginInvoke(() => IsOffline = !online);
         services.Downloads.Changed += id => _ui.BeginInvoke(DispatcherPriority.Background, () => OnDownloadChanged(id));

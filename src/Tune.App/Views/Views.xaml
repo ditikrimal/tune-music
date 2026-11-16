@@ -53,6 +53,11 @@
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="Background" Value="#B0000000" />
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="On">
+                <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- ================= card (album / playlist / artist / song) ================= -->
@@ -97,10 +102,21 @@
                             </Image>
                         </Grid>
                     </Border>
-                    <StackPanel x:Name="quick" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Opacity="0"
+                    <StackPanel x:Name="quick" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0"
                                 Visibility="{Binding Track, Converter={StaticResource NullToVis}}">
-                        <Button Style="{StaticResource CardOverlayButton}" Content="&#xEB51;" ToolTip="Save to Liked songs" Click="CardLike_Click" Margin="0,0,6,0" />
-                        <Button Style="{StaticResource CardOverlayButton}" Content="&#xE712;" ToolTip="More options" Click="CardMore_Click" />
+                        <Button x:Name="cardLike" Style="{StaticResource CardOverlayButton}" ToolTip="Save to Liked songs" Click="CardLike_Click" Margin="0,0,6,0" Opacity="0"
+                                p:LikePop.Enabled="True">
+                            <Button.Tag>
+                                <MultiBinding Converter="{x:Static sh:LikedTagConverter.Instance}">
+                                    <Binding Path="Track.VideoId" />
+                                    <Binding Path="DataContext.LikesVersion" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                </MultiBinding>
+                            </Button.Tag>
+                            <p:Icon Size="16" Data="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}, Converter={x:Static sh:OnOffIconConverter.Instance}, ConverterParameter=IcoHeart|IcoHeartOutline}" />
+                        </Button>
+                        <Button x:Name="cardMore" Style="{StaticResource CardOverlayButton}" ToolTip="More options" Click="CardMore_Click" Opacity="0">
+                            <p:Icon Size="16" Data="{StaticResource IcoMore}" />
+                        </Button>
                     </StackPanel>
                     <Button x:Name="play" Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}"
                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8" Opacity="0"
@@ -114,7 +130,12 @@
         <DataTemplate.Triggers>
             <Trigger SourceName="card" Property="IsMouseOver" Value="True">
                 <Setter TargetName="play" Property="Opacity" Value="1" />
-                <Setter TargetName="quick" Property="Opacity" Value="1" />
+                <Setter TargetName="cardLike" Property="Opacity" Value="1" />
+                <Setter TargetName="cardMore" Property="Opacity" Value="1" />
+            </Trigger>
+            <!-- a liked song keeps its heart showing -->
+            <Trigger SourceName="cardLike" Property="Tag" Value="On">
+                <Setter TargetName="cardLike" Property="Opacity" Value="1" />
             </Trigger>
             <DataTrigger Binding="{Binding Kind}" Value="Artist">
                 <Setter TargetName="artBorder" Property="CornerRadius" Value="86" />
@@ -295,10 +316,14 @@
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Grid.Column="2" Text="{Binding AlbumTitle}" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="12,0" />
-                <Button x:Name="like" Grid.Column="3" Style="{StaticResource ToggleIconButton}" Content="{Binding LikeGlyph}" Opacity="0"
-                        Tag="{Binding IsLiked, Converter={x:Static sh:BoolToOnConverter.Instance}}" Click="Like_Click" ToolTip="Save to Liked songs" />
+                <Button x:Name="like" Grid.Column="3" Style="{StaticResource ToggleIconButton}" Opacity="0" p:LikePop.Enabled="True"
+                        Tag="{Binding IsLiked, Converter={x:Static sh:BoolToOnConverter.Instance}}" Click="Like_Click" ToolTip="Save to Liked songs">
+                    <p:Icon Size="18" Data="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}, Converter={x:Static sh:OnOffIconConverter.Instance}, ConverterParameter=IcoHeart|IcoHeartOutline}" />
+                </Button>
                 <TextBlock Grid.Column="4" Text="{Binding DurationText}" Style="{StaticResource Subtle}" VerticalAlignment="Center" HorizontalAlignment="Right" />
-                <Button x:Name="more" Grid.Column="5" Style="{StaticResource IconButton}" Content="&#xE712;" Opacity="0" Click="More_Click" ToolTip="More options" />
+                <Button x:Name="more" Grid.Column="5" Style="{StaticResource IconButton}" Opacity="0" Click="More_Click" ToolTip="More options">
+                    <p:Icon Data="{StaticResource IcoMore}" />
+                </Button>
             </Grid>
         </Border>
         <DataTemplate.Triggers>

@@ -99,6 +99,8 @@ public sealed partial class PlayerBarViewModel : ObservableObject
     public string? ArtUrl => Track?.ThumbnailUrl;
     public string PlayGlyph => IsPlaying ? "" : "";
     public string LikeGlyph => IsLiked ? "" : "";
+    public string PlayIconKey => IsPlaying ? "IcoPause" : "IcoPlay";
+    public string RepeatIconKey => Repeat == RepeatMode.One ? "IcoRepeatOne" : "IcoRepeat";
     public string RepeatGlyph => Repeat == RepeatMode.One ? "" : "";
     public string RepeatTag => Repeat == RepeatMode.Off ? "Off" : "On";
     public string ShuffleTag => ShuffleOn ? "On" : "Off";
@@ -112,13 +114,18 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         OnPropertyChanged(nameof(ArtUrl));
     }
 
-    partial void OnIsPlayingChanged(bool value) => OnPropertyChanged(nameof(PlayGlyph));
+    partial void OnIsPlayingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(PlayGlyph));
+        OnPropertyChanged(nameof(PlayIconKey));
+    }
     partial void OnIsLikedChanged(bool value) => OnPropertyChanged(nameof(LikeGlyph));
     partial void OnShuffleOnChanged(bool value) => OnPropertyChanged(nameof(ShuffleTag));
 
     partial void OnRepeatChanged(RepeatMode value)
     {
         OnPropertyChanged(nameof(RepeatGlyph));
+        OnPropertyChanged(nameof(RepeatIconKey));
         OnPropertyChanged(nameof(RepeatTag));
         OnPropertyChanged(nameof(RepeatTip));
     }

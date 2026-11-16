@@ -147,3 +147,39 @@ public sealed class InverseBoolToVisConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Tag "On"/"Off" → one of two icon geometries; parameter "IcoOn|IcoOff".</summary>
+public sealed class OnOffIconConverter : IValueConverter
+{
+    public static readonly OnOffIconConverter Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var keys = ((string)parameter!).Split('|');
+        return Application.Current.TryFindResource(value as string == "On" ? keys[0] : keys[1]);
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>A resource key (e.g. "IcoPause") → that icon geometry.</summary>
+public sealed class IconKeyConverter : IValueConverter
+{
+    public static readonly IconKeyConverter Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is string key ? Application.Current.TryFindResource(key) : null;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>[videoId, likes version] → "On" when liked. The version makes bindings re-ask after any like change.</summary>
+public sealed class LikedTagConverter : IMultiValueConverter
+{
+    public static readonly LikedTagConverter Instance = new();
+
+    public object Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture) =>
+        values[0] is string id && App.Shell?.Services.Library.IsLiked(id) == true ? "On" : "Off";
+
+    public object[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

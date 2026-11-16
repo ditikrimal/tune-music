@@ -79,7 +79,6 @@ public partial class Views : ResourceDictionary
         var liked = !Shell.Services.Library.IsLiked(t.VideoId);
         Shell.SetLiked(t, liked);
         Shell.ShowToast(liked ? "Saved to Liked songs" : "Removed from Liked songs");
-        if (sender is Button b) b.Content = liked ? "\uEB52" : "\uEB51";
         e.Handled = true;
     }
 

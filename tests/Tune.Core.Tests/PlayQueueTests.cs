@@ -157,6 +157,20 @@ public class PlayQueueTests
     }
 
     [Fact]
+    public void ClearUpcoming_keeps_the_current_song_and_what_came_before()
+    {
+        var q = new PlayQueue();
+        q.StartList(List("a", "b", "c", "d"), 1);
+        q.ClearUpcoming();
+        Assert.Equal([Id("a"), Id("b")], q.Items.Select(t => t.VideoId));
+        Assert.Equal(Id("b"), q.Current!.VideoId);
+        Assert.True(q.NeedsRadio);
+        q.Shuffle = true;   // still consistent afterwards
+        q.Shuffle = false;
+        Assert.Equal(Id("b"), q.Current!.VideoId);
+    }
+
+    [Fact]
     public async Task Items_snapshot_survives_radio_appended_from_another_thread()
     {
         var q = new PlayQueue();
