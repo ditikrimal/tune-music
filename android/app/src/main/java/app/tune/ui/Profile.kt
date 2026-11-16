@@ -90,13 +90,13 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                     when {
                         account == null -> {
                             Avatar(null, 64.dp)
-                            Text("Sign-in isn't available in this version of Tune.", style = Type.caption, color = c.subtle, textAlign = TextAlign.Center,
+                            Text("Sign-in isn't available in this version.", style = Type.caption, color = c.subtle, textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(top = 12.dp))
                         }
                         state?.signedIn != true -> {
                             Avatar(null, 64.dp)
-                            Text("Sync your library", style = Type.title2, color = c.text, modifier = Modifier.padding(top = 12.dp))
-                            Text("Sign in to keep your likes, playlists and history on every device, and get them back if you reinstall.",
+                            Text("Sign in to sync", style = Type.title2, color = c.text, modifier = Modifier.padding(top = 12.dp))
+                            Text("Likes, playlists and history on all your devices.",
                                 style = Type.caption, color = c.subtle, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                             Text(if (busy) "Signing in…" else "Continue with Google", style = Type.bodyStrong, color = c.onAccent,
                                 modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(24.dp)).background(c.accent)
@@ -123,7 +123,7 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                             val status = when {
                                 state.syncing -> "Syncing…"
                                 state.error != null -> "Couldn't sync: ${state.error}"
-                                state.lastSynced > 0 -> "Likes, playlists and history synced " +
+                                state.lastSynced > 0 -> "Synced " +
                                     if (System.currentTimeMillis() - state.lastSynced < 60_000) "just now"
                                     else android.text.format.DateUtils.getRelativeTimeSpanString(state.lastSynced).toString().lowercase()
                                 else -> "Waiting to sync"
@@ -141,8 +141,7 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                     MenuRow(Ico.Logout, "Sign out") {
                         account?.signOut(); app.graph.toast("Signed out. Everything stays on this phone.")
                     }
-                Text("Downloads stay on each device. Only likes, playlists and history are synced.", style = Type.caption, color = c.subtle,
-                    textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp))
+                Spacer(Modifier.height(6.dp))
             }
         }
     }

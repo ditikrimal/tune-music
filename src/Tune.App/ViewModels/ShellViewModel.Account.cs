@@ -28,7 +28,7 @@ public sealed partial class ShellViewModel
     {
         if (Services.Account is not { } account)
         {
-            AccountStatus = "Sign-in isn't available in this version of Tune.";
+            AccountStatus = "Sign-in isn't available in this version.";
             return;
         }
         if (!_accountHooked)
@@ -36,10 +36,10 @@ public sealed partial class ShellViewModel
             _accountHooked = true;
             account.Changed += () => _ui.BeginInvoke(RefreshAccount);
         }
-        AccountStatus = !account.IsSignedIn ? "Sign in to keep your likes, playlists and history on every device — and get them back after a reinstall."
+        AccountStatus = !account.IsSignedIn ? "Likes, playlists and history on all your devices."
             : account.IsSyncing ? "Syncing…"
             : account.LastError is { } err ? $"Couldn't sync: {err}"
-            : account.LastSynced is { } at ? $"Likes, playlists and history synced {Ago(at)}"
+            : account.LastSynced is { } at ? $"Synced {Ago(at)}"
             : "Waiting to sync";
         OnPropertyChanged(nameof(IsSignedIn));
         OnPropertyChanged(nameof(IsSignedOut));

@@ -206,7 +206,7 @@
                                         </StackPanel>
                                         <!-- signed out -->
                                         <StackPanel Visibility="{Binding IsSignedIn, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" HorizontalAlignment="Center">
-                                            <TextBlock Text="Sync your library" Style="{StaticResource Body}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,12,0,0" />
+                                            <TextBlock Text="Sign in to sync" Style="{StaticResource Body}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,12,0,0" />
                                             <TextBlock Text="{Binding AccountStatus}" Style="{StaticResource Subtle}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0" />
                                             <Button Style="{StaticResource HeaderPill}" Content="Continue with Google" Command="{Binding SignInCommand}" HorizontalAlignment="Center" Margin="0,16,0,0"
                                                     Visibility="{Binding AccountAvailable, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Continue with Google"
@@ -222,8 +222,6 @@
                                         Click="ProfileMenu_Click" AutomationProperties.Name="Open downloads" />
                                 <Button Style="{StaticResource ProfileMenuItem}" Tag="{StaticResource IcoLogout}" Content="Sign out" Command="{Binding SignOutCommand}"
                                         Click="ProfileMenu_Click" Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Sign out" />
-                                <TextBlock Text="Downloads stay on each device. Only likes, playlists and history are synced." Style="{StaticResource Subtle}" FontSize="12"
-                                           TextWrapping="Wrap" TextAlignment="Center" Margin="24,8,24,4" />
                             </StackPanel>
                         </Border>
                     </Popup>
