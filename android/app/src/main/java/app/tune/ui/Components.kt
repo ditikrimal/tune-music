@@ -106,9 +106,21 @@ fun LikeButton(track: Track, size: Dp = 22.dp, box: Dp = 44.dp) {
 }
 
 @Composable
-fun DownloadBadge(state: DownloadState, size: Dp = 14.dp) {
+fun DownloadBadge(state: DownloadState, size: Dp = 14.dp, videoId: String? = null) {
     if (state == DownloadState.None) return
     val c = LocalTune.current
+    if (state == DownloadState.Downloading && videoId != null) {
+        // live progress ring around the arrow
+        val app = LocalApp.current
+        val p by app.graph.downloads.progress.collectAsState()
+        val fraction = if (p.first == videoId) p.second else 0f
+        Box(Modifier.size(size + 2.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.CircularProgressIndicator(progress = { fraction.coerceIn(0.02f, 1f) }, modifier = Modifier.size(size + 2.dp),
+                color = c.accent, trackColor = c.track, strokeWidth = 2.dp)
+            Icon(Ico.Download, null, tint = c.accentText, modifier = Modifier.size(size * 0.55f))
+        }
+        return
+    }
     val done = state == DownloadState.Done
     Box(Modifier.size(size).clip(CircleShape).background(if (done) c.accent else c.track), contentAlignment = Alignment.Center) {
         Icon(Ico.Download, null, tint = if (done) c.onAccent else c.subtle, modifier = Modifier.size(size * 0.66f))
@@ -150,7 +162,7 @@ fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, play
             Text(track.title, style = Type.body, color = if (isCurrent) c.accentText else c.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                DownloadBadge(dl)
+                DownloadBadge(dl, videoId = track.videoId)
                 if (dl != DownloadState.None) Spacer(Modifier.width(6.dp))
                 Text(listOfNotNull(track.artistLine.ifEmpty { null }, formatDuration(track.durationSec).ifEmpty { null }).joinToString(" • "),
                     style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)

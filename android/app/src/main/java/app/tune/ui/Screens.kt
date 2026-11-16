@@ -307,7 +307,10 @@ fun LibraryScreen() {
         // the built-in collections as calm rows
         item { Spacer(Modifier.height(10.dp)) }
         item { LibraryRow(Ico.Heart, "Liked songs", "$likedCount songs") { app.nav.navigate("liked") } }
-        item { LibraryRow(Ico.Download, "Downloads", "$downloaded songs \u2022 play without internet") { app.nav.navigate("downloads") } }
+        item {
+            val pending = remember(dv) { app.graph.downloads.pendingCount }
+            LibraryRow(Ico.Download, "Downloads", if (pending > 0) "$downloaded songs \u2022 downloading $pending\u2026" else "$downloaded songs \u2022 play without internet") { app.nav.navigate("downloads") }
+        }
         item { LibraryRow(Ico.History, "History", "Everything you played, by day") { app.nav.navigate("history") } }
         item {
             Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -497,6 +500,24 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                 }
             }
         }
+        // how far along this playlist/album's downloads are
+        if (kind != CollectionKind.Downloads && col.tracks.isNotEmpty()) item {
+            val states = remember(dv, col.tracks) { col.tracks.map { app.graph.downloads.stateOf(it.videoId) } }
+            val done = states.count { it == DownloadState.Done }
+            val pending = states.count { it == DownloadState.Queued || it == DownloadState.Downloading }
+            if (pending > 0) {
+                val p by app.graph.downloads.progress.collectAsState()
+                val current = if (col.tracks.any { it.videoId == p.first }) p.second else 0f
+                val total = done + pending
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    Text("Downloading \u2022 $done of $total saved", style = Type.caption, color = c.subtle)
+                    androidx.compose.material3.LinearProgressIndicator(progress = { ((done + current) / total).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                        color = c.accent, trackColor = c.track, drawStopIndicator = {})
+                }
+            }
+        }
+        if (kind == CollectionKind.Downloads) item { DownloadQueueCard() }
         if (col.tracks.isEmpty()) item {
             Message(when (kind) {
                 CollectionKind.Liked -> "Songs you like will appear here. Tap ♡ on any song."
@@ -717,6 +738,56 @@ private fun SmartSection() {
             }
             Switch(lookahead, { app.graph.library.setSetting("lookahead.enabled", if (it) "1" else "0") },
                 colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
+        }
+    }
+}
+
+/** Downloads page: what's downloading right now (live bar) and what's waiting, each cancellable. */
+@Composable
+private fun DownloadQueueCard() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val dv by app.graph.downloads.version.collectAsState()
+    val p by app.graph.downloads.progress.collectAsState()
+    val unmetered by app.graph.unmetered.collectAsState()
+    val queue = remember(dv) { app.graph.downloads.queued() }
+    if (queue.isEmpty()) return
+    val active = queue.firstOrNull { it.first.videoId == p.first }
+    val waiting = queue.filter { it.first.videoId != p.first }
+    var expanded by remember { mutableStateOf(false) }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).padding(14.dp)) {
+        Text(if (active != null) "Downloading now" else "Waiting to download", style = Type.label, color = c.subtle)
+        if (active != null) {
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Art(active.first.thumbnail, 44.dp)
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(active.first.title, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${(p.second * 100).toInt()}%", style = Type.caption, color = c.accentText)
+                }
+                IconBtn(Ico.Close, "Cancel", size = 18.dp, box = 40.dp) { app.removeDownloads(listOf(active.first)) }
+            }
+            androidx.compose.material3.LinearProgressIndicator(progress = { p.second.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                color = c.accent, trackColor = c.track, drawStopIndicator = {})
+        }
+        if (waiting.isNotEmpty()) {
+            val smartWaiting = waiting.count { it.second }
+            val note = if (smartWaiting > 0 && !unmetered) " \u2022 $smartWaiting smart downloads wait for Wi-Fi" else ""
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp).clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
+                Text("${waiting.size} waiting$note", style = Type.caption, color = c.subtle, modifier = Modifier.weight(1f))
+                Text(if (expanded) "Hide" else "Show", style = Type.caption, color = c.accentText, fontWeight = FontWeight.SemiBold)
+            }
+            if (expanded) waiting.take(50).forEach { (t, smart) ->
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Art(t.thumbnail, 36.dp)
+                    Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                        Text(t.title, style = Type.body, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (smart && !unmetered) "Waiting for Wi-Fi" else if (smart) "Smart download \u2022 waiting" else "Waiting",
+                            style = Type.caption, color = c.subtle)
+                    }
+                    IconBtn(Ico.Close, "Cancel", size = 16.dp, box = 36.dp) { app.removeDownloads(listOf(t)) }
+                }
+            }
         }
     }
 }

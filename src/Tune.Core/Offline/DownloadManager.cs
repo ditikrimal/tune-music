@@ -300,10 +300,18 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
             var before = done;
             var buffer = new byte[1 << 16];
             int n;
+            var lastTick = Environment.TickCount64;
             while ((n = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
             {
                 await file.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
                 done += n;
+                // report a few times a second: a whole song is often a single chunk
+                if (total is { } totalBytes && Environment.TickCount64 - lastTick > 150)
+                {
+                    lastTick = Environment.TickCount64;
+                    lock (_gate) _activeProgress = Math.Clamp((double)done / totalBytes, 0, 1);
+                    if (_active is { } a) Changed?.Invoke(a.Id);
+                }
             }
             if (done == before) throw new IOException("The server sent no data");
             if (total is { } tt)

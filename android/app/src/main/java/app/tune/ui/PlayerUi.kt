@@ -303,7 +303,7 @@ private fun QueuePane() {
                     Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                         Text(t.title, style = Type.body, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            DownloadBadge(rememberDownloadState(t.videoId), 12.dp)
+                            DownloadBadge(rememberDownloadState(t.videoId), 12.dp, videoId = t.videoId)
                             Text(t.artistLine, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
                         }
                     }

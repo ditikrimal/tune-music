@@ -74,6 +74,12 @@ class Downloads(context: Context, private val lib: Library, private val streams:
 
     fun downloadedBytes(): Long = lib.downloads().filter { files.containsKey(it.track.videoId) }.sumOf { it.bytes }
 
+    /** What's waiting, in order: (song, picked by smart downloads). The first one may be downloading now. */
+    fun queued(): List<Pair<Track, Boolean>> = synchronized(queue) { queue.map { it.track to it.smart } }
+
+    /** Smart songs only download on Wi-Fi: true when that's what they're waiting for. */
+    val waitingForWifi: Boolean get() = !unmetered.value
+
     /** Video ids Tune picked itself (done or waiting). */
     fun smartIds(): Set<String> = lib.downloads().filter { it.smart }.map { it.track.videoId }.toSet()
 
@@ -153,7 +159,17 @@ class Downloads(context: Context, private val lib: Library, private val streams:
                 http.newCall(req).execute().use { r ->
                     if (r.code == 416) return@use
                     if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code}")
-                    val n = r.body.byteStream().copyTo(out)
+                    // copy while reporting progress a few times a second (a song is often a single chunk)
+                    val input = r.body.byteStream()
+                    val buf = ByteArray(1 shl 16)
+                    var n = 0L
+                    var lastTick = 0L
+                    while (true) {
+                        val k = input.read(buf); if (k < 0) break
+                        out.write(buf, 0, k); n += k
+                        val now = System.currentTimeMillis()
+                        if (total != null && now - lastTick > 150) { lastTick = now; _progress.value = t.videoId to ((done + n).toFloat() / total) }
+                    }
                     if (n == 0L) throw java.io.IOException("No data")
                     done += n
                     if (r.code == 200) { done = total ?: done }

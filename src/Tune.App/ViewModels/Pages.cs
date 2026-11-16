@@ -35,9 +35,17 @@ public sealed partial class TrackRowViewModel(Track track, int number) : Observa
         OnPropertyChanged(nameof(IsDownloaded));
         OnPropertyChanged(nameof(IsDownloadPending));
         OnPropertyChanged(nameof(DownloadTip));
+        OnPropertyChanged(nameof(DownloadProgressText));
     }
 
-    partial void OnDownloadProgressChanged(double value) => OnPropertyChanged(nameof(DownloadTip));
+    partial void OnDownloadProgressChanged(double value)
+    {
+        OnPropertyChanged(nameof(DownloadTip));
+        OnPropertyChanged(nameof(DownloadProgressText));
+    }
+
+    /// <summary>"45%" while this song downloads, else empty.</summary>
+    public string DownloadProgressText => Download == Tune.Core.Offline.DownloadState.Downloading ? $"{DownloadProgress:P0}" : "";
 
     /// <summary>Re-reads download state (and availability) from the download manager.</summary>
     public void SyncDownload(Tune.Core.Offline.DownloadManager dm, bool offline)
@@ -400,9 +408,35 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
 
     public IReadOnlyList<Track> TrackList => AllTracks;
 
+    /// <summary>"Downloading · 12 of 40 saved" while this page's songs download (null otherwise) and its 0..1 progress.</summary>
+    public string? DownloadSummary
+    {
+        get
+        {
+            var dm = _shell.Services.Downloads;
+            var pending = Tracks.Count(r => r.Download is Tune.Core.Offline.DownloadState.Queued or Tune.Core.Offline.DownloadState.Downloading);
+            if (pending == 0 || IsDownloads) return null;
+            var done = Tracks.Count(r => r.Download == Tune.Core.Offline.DownloadState.Done);
+            return $"Downloading \u2022 {done} of {done + pending} saved";
+        }
+    }
+
+    public double DownloadFraction
+    {
+        get
+        {
+            var pending = Tracks.Count(r => r.Download is Tune.Core.Offline.DownloadState.Queued or Tune.Core.Offline.DownloadState.Downloading);
+            var done = Tracks.Count(r => r.Download == Tune.Core.Offline.DownloadState.Done);
+            var current = Tracks.FirstOrDefault(r => r.Download == Tune.Core.Offline.DownloadState.Downloading)?.DownloadProgress ?? 0;
+            return pending == 0 ? 1 : (done + current) / (done + pending);
+        }
+    }
+
     /// <summary>A download state changed somewhere: refresh the header button.</summary>
     public void DownloadsChanged()
     {
+        OnPropertyChanged(nameof(DownloadSummary));
+        OnPropertyChanged(nameof(DownloadFraction));
         OnPropertyChanged(nameof(AllDownloaded));
         OnPropertyChanged(nameof(AnyDownloaded));
         OnPropertyChanged(nameof(DownloadAllTip));

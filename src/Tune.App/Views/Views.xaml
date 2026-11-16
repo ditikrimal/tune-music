@@ -370,6 +370,9 @@
                                 <TextBlock x:Name="dlGlyph" Text="&#xE896;" FontFamily="{StaticResource IconFont}" FontSize="8" FontWeight="Bold"
                                            Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
+                            <!-- live percentage while this song downloads -->
+                            <TextBlock Text="{Binding DownloadProgressText}" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="0,0,8,0" />
                             <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource Subtle}" />
                         </StackPanel>
                     </StackPanel>
@@ -607,6 +610,12 @@
                         Visibility="{Binding CanDownloadAll, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Download all" />
                 <Button x:Name="playlistMenu" Style="{StaticResource IconButton}" Content="&#xE712;" FontSize="22" Width="48" Height="48" Margin="8,0,0,0"
                         Click="PlaylistMenu_Click" ToolTip="More options" />
+            </StackPanel>
+            <!-- how far along this page's downloads are -->
+            <StackPanel DockPanel.Dock="Top" Margin="36,0,40,10" Visibility="{Binding DownloadSummary, Converter={StaticResource NullToVis}}">
+                <TextBlock Text="{Binding DownloadSummary}" Style="{StaticResource Subtle}" />
+                <ProgressBar Height="4" Margin="0,6,0,0" Minimum="0" Maximum="1" Value="{Binding DownloadFraction, Mode=OneWay}" MaxWidth="520" HorizontalAlignment="Left" Width="520"
+                             Foreground="{DynamicResource AccentBrush}" Background="{DynamicResource TrackBrush}" BorderThickness="0" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding Message}" Style="{StaticResource Subtle}" FontSize="15" Margin="44,12,0,0"
                        Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
