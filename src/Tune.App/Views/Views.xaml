@@ -685,8 +685,8 @@
             <Border DockPanel.Dock="Top" Margin="32,24,24,12" Height="56" CornerRadius="28" Background="{DynamicResource CardBrush}" Padding="20,0,10,0"
                     Visibility="{Binding IsSelecting, Converter={StaticResource BoolToVis}}">
                 <DockPanel VerticalAlignment="Center">
-                    <Button DockPanel.Dock="Right" Style="{StaticResource HeaderPill}" Content="Done" Command="{Binding ToggleSelectingCommand}" Margin="6,0,0,0" />
-                    <Button DockPanel.Dock="Right" Style="{StaticResource HeaderPill}" Content="Select all" Command="{Binding SelectAllCommand}" Margin="6,0,0,0" />
+                    <Button DockPanel.Dock="Right" Style="{DynamicResource HeaderPill}" Content="Done" Command="{Binding ToggleSelectingCommand}" Margin="6,0,0,0" />
+                    <Button DockPanel.Dock="Right" Style="{DynamicResource HeaderPill}" Content="Select all" Command="{Binding SelectAllCommand}" Margin="6,0,0,0" />
                     <TextBlock Text="{Binding SelectedText}" Style="{StaticResource Body}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,18,0" />
                     <StackPanel Orientation="Horizontal">
                         <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Play these" Command="{Binding PlaySelectedCommand}">

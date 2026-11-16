@@ -118,9 +118,10 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
         }
         var pinnedSongs = cards.Where(c => c.Kind == CardKind.Song).Select(c => c.VideoId).Concat(taste.SkippedIds).ToHashSet();
         var songs = taste.SpeedDial(SpeedDialMax).ToList();
-        // little history yet: fill a full page with what you played lately and your likes
-        if (songs.Count < 9)
-            songs.AddRange(lib.GetRecent(20).Concat(lib.GetLiked()).Where(t => songs.All(s => s.VideoId != t.VideoId)).Take(9 - songs.Count));
+        // little history yet: fill the dial (2 rows across a wide window / 3 pages on a phone) with recent plays and likes
+        if (songs.Count < SpeedDialMax)
+            songs.AddRange(lib.GetRecent(60).Concat(lib.GetLiked()).Where(t => songs.All(s => s.VideoId != t.VideoId))
+                .DistinctBy(t => t.VideoId).Take(SpeedDialMax - songs.Count));
         cards.AddRange(songs.Where(t => !pinnedSongs.Contains(t.VideoId)).DistinctBy(t => t.VideoId).Select(SongCard));
         return cards.Take(SpeedDialMax).ToList();
     }

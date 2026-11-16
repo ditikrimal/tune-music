@@ -70,7 +70,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Extra space at the bottom so lists clear the mini player and nav bar. */
-val BottomClearance = PaddingValues(bottom = 150.dp)
+val BottomClearance = PaddingValues(bottom = 210.dp)
 
 @Composable
 fun Loading() = Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {

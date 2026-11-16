@@ -1,5 +1,9 @@
 package app.tune.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
+
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -135,9 +139,10 @@ fun NowPlaying() {
             }
             if (t == null) { Message("Play a song to see it here."); return@Column }
 
-            Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
                 when (pane) {
-                    NpPane.Art -> Art(t.thumbnail, 340.dp, corner = 18.dp, modifier = Modifier.shadow(24.dp, RoundedCornerShape(18.dp)))
+                    // as big as the space allows; swipe for next / previous, tap to play or pause
+                    NpPane.Art -> SwipeArt(t, minOf(maxWidth, maxHeight))
                     NpPane.Lyrics -> LyricsPane(t)
                     NpPane.Queue -> QueuePane()
                 }
@@ -157,7 +162,7 @@ fun NowPlaying() {
                 LikeButton(t, size = 26.dp, box = 48.dp)
             }
             SeekBar(ui.durationMs)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 IconBtn(Ico.Shuffle, "Shuffle", tint = if (ui.shuffle) c.accentText else c.subtle) { app.player.toggleShuffle() }
                 IconBtn(Ico.Prev, "Previous", tint = c.text, size = 34.dp, box = 56.dp) { app.player.previous() }
                 Box(Modifier.size(72.dp).shadow(16.dp, CircleShape, ambientColor = c.accent, spotColor = c.accent).clip(CircleShape).background(c.accent)
@@ -168,12 +173,50 @@ fun NowPlaying() {
                 IconBtn(if (ui.repeat == Player.REPEAT_MODE_ONE) Ico.RepeatOne else Ico.Repeat, "Repeat",
                     tint = if (ui.repeat != Player.REPEAT_MODE_OFF) c.accentText else c.subtle) { app.player.cycleRepeat() }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PaneButton(Ico.Lyrics, "Lyrics", pane == NpPane.Lyrics) { pane = if (pane == NpPane.Lyrics) NpPane.Art else NpPane.Lyrics }
                 SleepButton()
                 PaneButton(Ico.Queue, "Queue", pane == NpPane.Queue) { pane = if (pane == NpPane.Queue) NpPane.Art else NpPane.Queue }
             }
         }
+    }
+}
+
+/**
+ * The cover on Now Playing: follows a sideways swipe — far enough left plays the next song, right the previous —
+ * and a tap plays or pauses.
+ */
+@Composable
+private fun SwipeArt(t: Track, size: androidx.compose.ui.unit.Dp) {
+    val app = LocalApp.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val offset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val threshold = with(density) { 90.dp.toPx() }
+    LaunchedEffect(t.videoId) { offset.snapTo(0f) } // a new song: back in the middle
+    Box(Modifier.size(size)
+        .graphicsLayer {
+            translationX = offset.value
+            alpha = 1f - (kotlin.math.abs(offset.value) / (size.toPx() * 1.2f)).coerceIn(0f, 0.6f)
+            rotationZ = offset.value / size.toPx() * 4f
+        }
+        .pointerInput(t.videoId) {
+            detectHorizontalDragGestures(
+                onDragEnd = {
+                    val dx = offset.value
+                    scope.launch {
+                        when {
+                            dx < -threshold -> { offset.animateTo(-size.toPx(), androidx.compose.animation.core.tween(160)); app.player.next() }
+                            dx > threshold -> { offset.animateTo(size.toPx(), androidx.compose.animation.core.tween(160)); app.player.previous(); offset.snapTo(0f) }
+                            else -> offset.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.7f))
+                        }
+                    }
+                },
+                onDragCancel = { scope.launch { offset.animateTo(0f) } },
+            ) { change, dx -> change.consume(); scope.launch { offset.snapTo(offset.value + dx) } }
+        }
+        .pointerInput(Unit) { detectTapGestures(onTap = { app.player.toggle() }) }) {
+        Art(t.thumbnail, size, corner = 18.dp, modifier = Modifier.shadow(24.dp, RoundedCornerShape(18.dp)))
     }
 }
 

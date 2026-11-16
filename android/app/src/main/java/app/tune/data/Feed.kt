@@ -255,7 +255,7 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
         val pinnedSongs = cards.filter { it.kind == CardKind.Song }.mapNotNull { it.videoId }.toSet() + taste.skippedIds
         val songs = taste.speedDial(27).toMutableList()
         // little history yet: fill a full page with what you played lately and your likes
-        if (songs.size < 9) songs += (lib.recent(20) + lib.liked()).filter { t -> songs.none { it.videoId == t.videoId } }.distinctBy { it.videoId }.take(9 - songs.size)
+        if (songs.size < 27) songs += (lib.recent(60) + lib.liked()).filter { t -> songs.none { it.videoId == t.videoId } }.distinctBy { it.videoId }.take(27 - songs.size)
         cards += songs.filter { it.videoId !in pinnedSongs }.map(::songCard)
         return cards.take(27)
     }
