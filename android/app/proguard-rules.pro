@@ -5,3 +5,7 @@
 -dontwarn javax.script.**
 -dontwarn java.beans.**
 -dontwarn jdk.dynalink.**
+
+# Credential Manager (Continue with Google) loads its Play Services provider by reflection
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }

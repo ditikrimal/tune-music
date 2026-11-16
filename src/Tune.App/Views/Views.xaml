@@ -937,6 +937,46 @@
                     </Grid>
                 </Border>
 
+                <!-- account: likes, playlists and history on every device (hidden when the build has no Firebase project) -->
+                <StackPanel Visibility="{Binding Shell.AccountAvailable, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="ACCOUNT" Style="{StaticResource SettingsSection}" />
+                    <Border Style="{StaticResource SettingGroup}">
+                        <StackPanel>
+                        <DockPanel Style="{StaticResource SettingRow}" Visibility="{Binding Shell.IsSignedOut, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE77B;" /></Border>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource HeaderPill}" Content="Continue with Google" Command="{Binding Shell.SignInCommand}"
+                                    VerticalAlignment="Center" AutomationProperties.Name="Continue with Google"
+                                    IsEnabled="{Binding Shell.IsSigningIn, Converter={x:Static sh:InverseBoolConverter.Instance}}" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Sync your library" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Shell.AccountStatus}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
+                            </StackPanel>
+                        </DockPanel>
+                        <DockPanel Style="{StaticResource SettingRow}" Visibility="{Binding Shell.IsSignedIn, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource SettingIconTile}" Background="{DynamicResource AccentBrush}" CornerRadius="999" ClipToBounds="True">
+                                <Grid>
+                                    <TextBlock Text="{Binding Shell.AccountInitial}" Foreground="{DynamicResource OnAccentBrush}" FontSize="17" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Ellipse Visibility="{Binding Shell.AccountPhoto, Converter={StaticResource NullToVis}}">
+                                        <Ellipse.Fill>
+                                            <ImageBrush ImageSource="{Binding Shell.AccountPhoto, TargetNullValue={x:Null}}" Stretch="UniformToFill" />
+                                        </Ellipse.Fill>
+                                    </Ellipse>
+                                </Grid>
+                            </Border>
+                            <Button DockPanel.Dock="Right" Content="Sign out" VerticalAlignment="Center" Command="{Binding Shell.SignOutCommand}" AutomationProperties.Name="Sign out" />
+                            <Button DockPanel.Dock="Right" Content="Sync now" VerticalAlignment="Center" Margin="0,0,10,0" Command="{Binding Shell.SyncNowCommand}" AutomationProperties.Name="Sync now" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Shell.AccountName}" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Shell.AccountEmail}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
+                                <TextBlock Text="{Binding Shell.AccountStatus}" Style="{StaticResource Subtle}" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" Margin="0,4,24,0" />
+                                <TextBlock Text="Likes, playlists and history stay the same on every device where you sign in. Downloads stay on each device." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,4,24,0" />
+                            </StackPanel>
+                        </DockPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
                 <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSection}" />
                 <Border Style="{StaticResource SettingGroup}">
                     <StackPanel>
@@ -1344,7 +1384,7 @@
                 <StackPanel Orientation="Horizontal" Margin="4,22,0,0">
                     <Image Source="{x:Static p:AppIcon.Logo}" Width="28" Height="28" VerticalAlignment="Center" />
                     <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0">
-                        <Run Text="Tune" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /><Run Text="{Binding Version, Mode=OneWay, StringFormat=' {0}'}" /><Run Text=" · no account, nothing leaves this PC except YouTube requests" />
+                        <Run Text="Tune" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /><Run Text="{Binding Version, Mode=OneWay, StringFormat=' {0}'}" /><Run Text=" · no ads, no tracking; your library syncs only if you sign in" />
                     </TextBlock>
                 </StackPanel>
             </StackPanel>

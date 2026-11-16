@@ -20,8 +20,10 @@ namespace Tune.App;
 
 public partial class App : Application
 {
-    private const string MutexName = "Tune.SingleInstance";
-    private const string ActivateEventName = "Tune.Activate";
+    // TUNE_PROFILE=name (testing): a separate copy with its own data folder that runs beside the everyday one
+    private static readonly string? Profile = Environment.GetEnvironmentVariable("TUNE_PROFILE") is { Length: > 0 } p ? p : null;
+    private static readonly string MutexName = "Tune.SingleInstance" + (Profile is null ? "" : "." + Profile);
+    private static readonly string ActivateEventName = "Tune.Activate" + (Profile is null ? "" : "." + Profile);
 
     private static bool _quitting;
     public static bool IsQuitting => _quitting;
@@ -126,7 +128,7 @@ public partial class App : Application
             return;
         }
 
-        var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tune");
+        var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Profile is null ? "Tune" : "Tune-" + Profile);
         Directory.CreateDirectory(dataDir);
         Log.Init(Path.Combine(dataDir, "logs", "tune.log"));
         Log.Info("Tune starting");
@@ -198,8 +200,11 @@ public partial class App : Application
         Task.Run(art.Trim);
 
         var updater = new AppUpdater(toolsHttp, dataDir);
+        _account = LoadSyncConfig() is { } syncConfig
+            ? new Tune.Core.Sync.AccountSync(_library, new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, syncConfig)
+            : null;
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics,
-            _downloads, _network, _cache, offline, smart, updater);
+            _downloads, _network, _cache, offline, smart, updater, _account);
         _downloads.Start();
         _cache.Start();
         _network.Start();
@@ -211,6 +216,9 @@ public partial class App : Application
         MainWin.MiniPlayerRequested += ToggleMini;
         Shell.AskPlaylistName = suggested => NameDialog.Ask(MainWin, "New playlist", suggested);
         Shell.GoToCommand.Execute("home");
+        // account sync: likes/playlists/history from other devices arrive here
+        _library.SyncApplied += () => Dispatcher.BeginInvoke(Shell.OnSyncApplied);
+        _account?.Start();
         _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
 
         // media keys + Windows media flyout need a window handle; creating it doesn't show the window
@@ -262,6 +270,24 @@ public partial class App : Application
     private static MiniPlayerWindow? _mini;
     private static TrayIcon? _tray;
     private Tune.Core.Offline.AudioCache? _cache;
+    private Tune.Core.Sync.AccountSync? _account;
+
+    /// <summary>The Firebase project baked into the build (TUNE_FIREBASE_CONFIG=path overrides, e.g. for the emulator).</summary>
+    private static Tune.Core.Sync.SyncConfig? LoadSyncConfig()
+    {
+        try
+        {
+            if (Environment.GetEnvironmentVariable("TUNE_FIREBASE_CONFIG") is { Length: > 0 } path)
+                return Tune.Core.Sync.SyncConfig.Parse(File.ReadAllText(path));
+            using var s = typeof(App).Assembly.GetManifestResourceStream("firebase.properties");
+            return s is null ? null : Tune.Core.Sync.SyncConfig.Parse(new StreamReader(s).ReadToEnd());
+        }
+        catch (Exception e)
+        {
+            Log.Warn("Account sync config unreadable", e);
+            return null;
+        }
+    }
 
     /// <summary>Wi-Fi/Ethernet without a data cap (Windows' "metered connection" setting is respected).</summary>
     private static bool IsUnmetered()
@@ -357,6 +383,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         Shell?.Player.SaveVolume();
+        _account?.Dispose();
         _downloads?.Dispose();
         _cache?.Dispose();
         _network?.Dispose();

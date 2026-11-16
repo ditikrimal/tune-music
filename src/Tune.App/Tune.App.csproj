@@ -34,4 +34,12 @@
     <EmbeddedResource Include="Assets\Tune.ico" LogicalName="Tune.ico" />
   </ItemGroup>
 
+  <!-- account sync: the Firebase project's ids live outside the repo (like the signing key) and are baked in -->
+  <PropertyGroup>
+    <TuneFirebaseConfig Condition="'$(TuneFirebaseConfig)' == ''">D:\Keys\tune-firebase.properties</TuneFirebaseConfig>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(TuneFirebaseConfig)" LogicalName="firebase.properties" Condition="Exists('$(TuneFirebaseConfig)')" />
+  </ItemGroup>
+
 </Project>

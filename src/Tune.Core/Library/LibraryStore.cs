@@ -12,7 +12,7 @@ public sealed record PlayStat(Track Track, int Plays);
 public sealed record DownloadInfo(Track Track, string? Path, string? ArtPath, long Bytes, DateTimeOffset AddedAt);
 
 /// <summary>Everything the app remembers locally: play history, likes, playlists and settings.</summary>
-public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheStore
+public sealed partial class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IgnoreReadOnlyProperties = true };
     private readonly SqliteConnection _db;
@@ -48,6 +48,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
         // smart downloads: songs Tune picked itself (it may swap them out); 0 = the user asked for it
         if (Scalar("SELECT 1 FROM pragma_table_info('downloads') WHERE name = 'smart'") is null)
             Exec("ALTER TABLE downloads ADD COLUMN smart INTEGER NOT NULL DEFAULT 0;");
+        MigrateSync();
     }
 
     public void Dispose() => _db.Dispose();
@@ -61,14 +62,15 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
             using var tx = _db.BeginTransaction();
             SaveTrack(t);
             Exec("INSERT INTO plays (video_id, at) VALUES ($v, $at)", ("$v", t.VideoId), ("$at", at.ToUnixTimeMilliseconds()));
+            Touch(SyncKinds.Plays, SyncDay(at.ToUnixTimeMilliseconds()));
             tx.Commit();
         }
     }
 
     public IReadOnlyList<Track> GetRecent(int max) =>
         QueryTracks("""
-            SELECT t.json FROM (SELECT video_id, MAX(id) AS last FROM plays GROUP BY video_id) p
-            JOIN tracks t ON t.video_id = p.video_id ORDER BY p.last DESC LIMIT $n
+            SELECT t.json FROM (SELECT video_id, MAX(at) AS last, MAX(id) AS lid FROM plays GROUP BY video_id) p
+            JOIN tracks t ON t.video_id = p.video_id ORDER BY p.last DESC, p.lid DESC LIMIT $n
             """, ("$n", max));
 
     public IReadOnlyList<PlayStat> GetTopTracks(DateTimeOffset since, int max)
@@ -76,8 +78,8 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
         lock (_gate)
         {
             using var cmd = Command("""
-                SELECT t.json, COUNT(*) AS n, MAX(p.id) AS last FROM plays p JOIN tracks t ON t.video_id = p.video_id
-                WHERE p.at >= $since GROUP BY p.video_id ORDER BY n DESC, last DESC LIMIT $n
+                SELECT t.json, COUNT(*) AS n, MAX(p.at) AS last FROM plays p JOIN tracks t ON t.video_id = p.video_id
+                WHERE p.at >= $since GROUP BY p.video_id ORDER BY n DESC, last DESC, MAX(p.id) DESC LIMIT $n
                 """, ("$since", since.ToUnixTimeMilliseconds()), ("$n", max));
             using var r = cmd.ExecuteReader();
             var list = new List<PlayStat>();
@@ -154,6 +156,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 SaveTrack(t);
                 Exec("INSERT INTO likes (video_id) VALUES ($v)", ("$v", t.VideoId));
             }
+            Touch(SyncKinds.Like, t.VideoId);
             tx.Commit();
         }
     }
@@ -234,14 +237,31 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
     {
         lock (_gate)
         {
-            Exec("INSERT INTO playlists (name) VALUES ($n)", ("$n", name));
-            return (long)Scalar("SELECT last_insert_rowid()")!;
+            var uid = NewUid();
+            Exec("INSERT INTO playlists (name, uid) VALUES ($n, $u)", ("$n", name), ("$u", uid));
+            var id = (long)Scalar("SELECT last_insert_rowid()")!;
+            Touch(SyncKinds.Playlist, uid);
+            return id;
         }
     }
 
-    public void RenamePlaylist(long id, string name) => Exec("UPDATE playlists SET name = $n WHERE id = $id", ("$n", name), ("$id", id));
+    public void RenamePlaylist(long id, string name)
+    {
+        lock (_gate)
+        {
+            Exec("UPDATE playlists SET name = $n WHERE id = $id", ("$n", name), ("$id", id));
+            TouchPlaylist(id);
+        }
+    }
 
-    public void DeletePlaylist(long id) => Exec("DELETE FROM playlists WHERE id = $id", ("$id", id));
+    public void DeletePlaylist(long id)
+    {
+        lock (_gate)
+        {
+            TouchPlaylist(id); // before the row goes: the sync record keeps its uid, so the delete reaches other devices
+            Exec("DELETE FROM playlists WHERE id = $id", ("$id", id));
+        }
+    }
 
     public IReadOnlyList<PlaylistInfo> GetPlaylists()
     {
@@ -278,6 +298,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 SaveTrack(t);
                 Exec("INSERT INTO playlist_items (playlist_id, position, video_id) VALUES ($id, $p, $v)", ("$id", id), ("$p", next++), ("$v", t.VideoId));
             }
+            TouchPlaylist(id);
             tx.Commit();
         }
     }
@@ -292,6 +313,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 INSERT INTO playlist_items (playlist_id, position, video_id)
                 VALUES ($id, (SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_items WHERE playlist_id = $id), $v)
                 """, ("$id", id), ("$v", t.VideoId));
+            TouchPlaylist(id);
             tx.Commit();
         }
     }
@@ -327,6 +349,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
             Exec("DELETE FROM playlist_items WHERE playlist_id = $id", ("$id", id));
             for (var i = 0; i < ids.Count; i++)
                 Exec("INSERT INTO playlist_items (playlist_id, position, video_id) VALUES ($id, $p, $v)", ("$id", id), ("$p", i), ("$v", ids[i]));
+            TouchPlaylist(id);
             tx.Commit();
         }
     }

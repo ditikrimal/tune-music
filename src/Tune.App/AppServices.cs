@@ -23,4 +23,5 @@ public sealed record AppServices(
     Tune.Core.Offline.AudioCache Cache,
     Tune.Core.Offline.OfflineLibrary Offline,
     Tune.Core.Offline.SmartDownloads Smart,
-    AppUpdater Updater);
+    AppUpdater Updater,
+    Tune.Core.Sync.AccountSync? Account);

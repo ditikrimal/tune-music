@@ -49,6 +49,9 @@ class Graph(context: Context) {
     val downloads = Downloads(context, library, streams, http, online, unmetered) { id, target -> streamCache.copyTo(id, target) }
     val smart = SmartDownloads(library, yt, downloads)
     val updater = app.tune.data.Updater(context, http, library)
+    /** Tune account (Continue with Google): likes, playlists and history synced. Null if the build has no Firebase project. */
+    val account: app.tune.data.AccountSync? = app.tune.data.SyncConfig.of(BuildConfig.FIREBASE_PROJECT, BuildConfig.FIREBASE_API_KEY,
+        BuildConfig.FIREBASE_WEB_CLIENT, BuildConfig.SYNC_EMULATOR)?.let { app.tune.data.AccountSync(library, http, it) }
     init { downloads.onNotice = { toast(it) } }
 
     /** Playable without internet: downloaded, or fully in the streaming cache. */
@@ -93,6 +96,7 @@ class TuneApp : Application() {
         super.onCreate()
         graph = Graph(this)
         SmartRefreshWorker.schedule(this)
+        graph.account?.start()
     }
 }
 

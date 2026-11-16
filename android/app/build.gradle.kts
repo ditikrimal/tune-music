@@ -11,6 +11,16 @@ val releaseKey = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Account sync: the Firebase project's ids also live in D:/Keys (tune-firebase.properties). Without it, the build has
+// no account feature. -PsyncEmulator=127.0.0.1 points the app at the local Firebase emulators (testing; use with
+// -PcheckBuild and "adb reverse tcp:9099 tcp:9099" + "adb reverse tcp:8080 tcp:8080").
+val firebase = Properties().apply {
+    val f = file("D:/Keys/tune-firebase.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val syncEmulator = (project.findProperty("syncEmulator") as String?).orEmpty()
+fun firebaseValue(key: String, emulatorValue: String) = if (syncEmulator.isNotEmpty()) emulatorValue else firebase.getProperty(key, "")
+
 android {
     namespace = "app.tune"
     compileSdk = 37
@@ -21,6 +31,11 @@ android {
         targetSdk = 36
         versionCode = 5
         versionName = "1.3.0"
+        buildConfigField("String", "FIREBASE_PROJECT", "\"${firebaseValue("projectId", "demo-tune")}\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseValue("apiKey", "fake")}\"")
+        buildConfigField("String", "FIREBASE_WEB_CLIENT", "\"${firebaseValue("webClientId", "")}\"")
+        buildConfigField("String", "SYNC_EMULATOR", "\"$syncEmulator\"")
+        manifestPlaceholders["cleartext"] = syncEmulator.isNotEmpty().toString()
     }
 
     signingConfigs {
@@ -47,7 +62,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += setOf("META-INF/*.md", "META-INF/LICENSE*", "META-INF/NOTICE*") }
 }
 
@@ -73,6 +88,11 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     implementation("com.squareup.okhttp3:okhttp:5.5.1")
+    // "Continue with Google" (account sync)
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("androidx.fragment:fragment-ktx:1.8.9") // Play Services pulls in an ancient Fragment otherwise
     implementation("io.coil-kt.coil3:coil-compose:3.6.3")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")

@@ -591,6 +591,7 @@ fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
     val synced = remember(version) { app.graph.library.setting("lyrics.synced") != "0" }
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
         item { BackRow("Settings") }
+        item { AccountSection() }
         item {
             Text("ACCENT COLOUR", style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 12.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -710,6 +711,72 @@ private fun UpdatesSection() {
                         scope.launch { status = if (updater.check(force = true) == null) "You have the latest version." else null }
                     }
                 }.padding(12.dp))
+        }
+    }
+}
+
+/** Settings > Account: Continue with Google; likes, playlists and history stay the same on every device. */
+@Composable
+private fun AccountSection() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val account = app.graph.account ?: return
+    val state by account.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        Text("ACCOUNT", style = Type.label, color = c.subtle, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
+        if (!state.signedIn) {
+            Text("Sync your library", style = Type.bodyStrong, color = c.text)
+            Text("Sign in to keep your likes, playlists and history on every device — and get them back after a reinstall.",
+                style = Type.caption, color = c.subtle)
+            Text(if (busy) "Signing in…" else "Continue with Google", style = Type.bodyStrong, color = c.onAccent,
+                modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(22.dp)).background(c.accent)
+                    .clickable(enabled = !busy) {
+                        busy = true
+                        scope.launch {
+                            try {
+                                val token = GoogleSignIn.idToken(context, account.config)
+                                account.signInWithGoogle(token)
+                                app.graph.toast("Signed in as ${account.state.value.email ?: account.state.value.name}")
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                android.util.Log.w("Tune", "Sign-in failed: $e")
+                                app.graph.toast(GoogleSignIn.describe(e))
+                            } finally { busy = false }
+                        }
+                    }.padding(horizontal = 20.dp, vertical = 10.dp))
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                    Text((state.name ?: state.email ?: "?").take(1).uppercase(), style = Type.bodyStrong, color = c.onAccent)
+                    state.photo?.let { coil3.compose.AsyncImage(it, null, Modifier.fillMaxSize().clip(CircleShape)) }
+                }
+                Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                    Text(state.name ?: state.email ?: "Signed in", style = Type.bodyStrong, color = c.text)
+                    state.email?.let { Text(it, style = Type.caption, color = c.subtle) }
+                    val status = when {
+                        state.syncing -> "Syncing…"
+                        state.error != null -> "Couldn't sync: ${state.error}"
+                        state.lastSynced > 0 -> "Synced " + android.text.format.DateUtils.getRelativeTimeSpanString(state.lastSynced).toString().lowercase()
+                        else -> "Waiting to sync"
+                    }
+                    Text(status, style = Type.caption, color = c.accentText)
+                }
+            }
+            Text("Likes, playlists and history stay the same on every device where you sign in. Downloads stay on each device.",
+                style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 8.dp))
+            Row(Modifier.padding(top = 4.dp)) {
+                Text("Sync now", style = Type.bodyStrong, color = c.accentText,
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { scope.launch { account.syncNow() } }.padding(vertical = 10.dp, horizontal = 4.dp))
+                Spacer(Modifier.width(20.dp))
+                Text("Sign out", style = Type.bodyStrong, color = c.subtle,
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                        account.signOut(); app.graph.toast("Signed out. Everything stays on this phone.")
+                    }.padding(vertical = 10.dp, horizontal = 4.dp))
+            }
         }
     }
 }

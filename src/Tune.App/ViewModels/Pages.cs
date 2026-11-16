@@ -670,6 +670,7 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         _audioCacheEnabled = _shell.Services.Cache.Enabled;
         RefreshSmartStatus();
         RefreshAudioCache();
+        _shell.RefreshAccount();
     }
 
     public string? NavKey => "settings";
