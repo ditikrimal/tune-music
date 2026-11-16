@@ -518,7 +518,8 @@ public sealed class PlaybackService
         {
             var tracks = await _api.GetRadioAsync(key.Seed).ConfigureAwait(false);
             if (key.Epoch != Volatile.Read(ref _queueEpoch)) return; // the user started something else meanwhile
-            Queue.AppendRadio(tracks);
+            var notInterested = _lib.GetNotInterested(); // radios leave out songs you said no to
+            Queue.AppendRadio(tracks.Where(t => !notInterested.Contains(t.VideoId)).ToList());
             StateChanged?.Invoke();
             if (_loaded) PrepareUpcoming();
         }

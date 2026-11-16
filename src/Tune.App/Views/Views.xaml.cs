@@ -42,6 +42,14 @@ public partial class Views : ResourceDictionary
     private void TrackRow_Click(object sender, MouseButtonEventArgs e)
     {
         if (Row(sender) is not { } row) return;
+        if (e.OriginalSource is DependencyObject d && Ancestor<Button>(d) is not null) return; // like / ⋯ buttons
+        // selecting: click toggles, Shift+click picks a range; Ctrl/Shift+click starts selecting
+        if (Shell.Page is CollectionViewModel sel &&
+            (sel.IsSelecting || Keyboard.Modifiers.HasFlag(ModifierKeys.Control) || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)))
+        {
+            sel.Select(row, range: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+            return;
+        }
         if (row.IsUnavailable)
         {
             Shell.ShowToast($"{row.Title} isn't downloaded — it plays when you're back online");
@@ -186,6 +194,7 @@ public partial class Views : ResourceDictionary
 
         if (Shell.Page is CollectionViewModel { IsLocal: true } c)
             menu.Items.Add(Item("Remove from this playlist", () => c.Remove(row), "IcoDelete"));
+        menu.Items.Add(Item("Not interested", () => Shell.NotInterested(row.Track), "IcoBlock"));
 
         var songCard = new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Song, row.Track.Title, row.Track.ArtistLine, row.Track.ThumbnailUrl,
             row.Track.VideoId, null, null, row.Track);

@@ -14,6 +14,7 @@ public sealed partial class TrackRowViewModel(Track track, int number) : Observa
 {
     [ObservableProperty] private bool _isLiked;
     [ObservableProperty] private bool _isCurrent;
+    [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private Tune.Core.Offline.DownloadState _download;
     [ObservableProperty] private double _downloadProgress;
 

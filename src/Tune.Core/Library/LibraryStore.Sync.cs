@@ -102,7 +102,7 @@ public sealed partial class LibraryStore
             Exec("UPDATE sync_items SET pushed = 0");
             Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'like', video_id, 1 FROM likes");
             Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'playlist', uid, 1 FROM playlists");
-            Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'setting', key, 1 FROM settings WHERE key IN ('home.layout', 'speeddial.pins')");
+            Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'setting', key, 1 FROM settings WHERE key IN ('home.layout', 'speeddial.pins', 'taste.notInterested')");
             Exec("""
                 INSERT OR IGNORE INTO sync_items (kind, key, updated_at)
                 SELECT 'plays', strftime('%Y%m%d', at / 1000, 'unixepoch'), 1 FROM plays WHERE remote = 0 GROUP BY 2

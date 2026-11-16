@@ -25,7 +25,8 @@ public sealed record Card(
     string? VideoId,
     string? BrowseId,
     string? PlaylistId,
-    Track? Track);
+    Track? Track,
+    bool Pinned = false);
 
 /// <summary>A Home row. <paramref name="IsList"/>: a grid of song rows (Quick picks) instead of big cards;
 /// <paramref name="IsSpeedDial"/>: pages of 3×3 square tiles.</summary>

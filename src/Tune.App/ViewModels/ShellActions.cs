@@ -109,6 +109,14 @@ public sealed partial class ShellViewModel
     public void Prefetch(IEnumerable<Track> tracks, Tune.Core.Streams.PrefetchPriority priority) =>
         Services.Prefetcher.Request(tracks.Select(t => t.VideoId).ToList(), priority);
 
+    /// <summary>"Not interested": out of Home, quick picks and radios (synced).</summary>
+    public void NotInterested(Track t)
+    {
+        Services.Library.SetNotInterested(t.VideoId);
+        ShowToast("Got it — you won't get this song in recommendations");
+        HomeChanged();
+    }
+
     public void PlayNext(Track t)
     {
         Services.Playback.Queue.PlayNext(t);

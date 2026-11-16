@@ -128,6 +128,17 @@ public partial class Views
         menu.IsOpen = true;
     }
 
+    /// <summary>Selection bar: add the chosen songs to a playlist (or a new one).</summary>
+    private void AddSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (Shell.Page is not CollectionViewModel c) return;
+        var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom };
+        menu.Items.Add(Item("New playlist", () => c.AddSelectedTo(null), "IcoPlaylistAdd"));
+        foreach (var p in Shell.Services.Library.GetPlaylists().Where(p => p.Id != c.PlaylistId))
+            menu.Items.Add(Item(p.Name, () => c.AddSelectedTo(p)));
+        menu.IsOpen = true;
+    }
+
     private static async Task PlayAsync(CollectionTarget target, bool shuffle)
     {
         IReadOnlyList<Tune.Core.Models.Track> tracks;

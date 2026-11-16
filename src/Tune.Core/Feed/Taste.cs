@@ -19,8 +19,10 @@ public sealed class Taste
     private readonly DateTimeOffset _now;
 
     public Taste(IEnumerable<(Track Track, DateTimeOffset At)> plays, IEnumerable<Track> liked,
-        IEnumerable<(string VideoId, DateTimeOffset At)> skips, DateTimeOffset now)
+        IEnumerable<(string VideoId, DateTimeOffset At)> skips, DateTimeOffset now, IReadOnlySet<string>? notInterested = null)
     {
+        notInterested ??= new HashSet<string>();
+        plays = plays.Where(p => !notInterested.Contains(p.Track.VideoId));
         _now = now;
         var acc = new Dictionary<string, (Track T, double L, double A, int P, DateTimeOffset? Last, int S, bool Like)>();
         foreach (var (t, at) in plays)
@@ -50,7 +52,7 @@ public sealed class Taste
         }
         SkippedIds = skips.Where(s => (now - s.At).TotalDays < 60).GroupBy(s => s.VideoId)
             .Where(g => g.Count() >= 2 && (!acc.TryGetValue(g.Key, out var e) || (e.P <= 1 && !e.Like)))
-            .Select(g => g.Key).ToHashSet();
+            .Select(g => g.Key).Concat(notInterested).ToHashSet();
         foreach (var (id, e) in acc)
         {
             _songs[id] = new Entry(e.T, e.L, e.A, e.P, e.Last, e.S, e.Like);

@@ -34,7 +34,7 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
     public Taste LoadTaste()
     {
         var now = clock.Now;
-        return new Taste(lib.GetPlays(now - HistoryWindow), lib.GetLiked(), lib.GetSkips(now - TimeSpan.FromDays(90)), now);
+        return new Taste(lib.GetPlays(now - HistoryWindow), lib.GetLiked(), lib.GetSkips(now - TimeSpan.FromDays(90)), now, lib.GetNotInterested());
     }
 
     /// <param name="fresh">A manual refresh: radios refetched, other seeds, quick picks reshuffled.</param>
@@ -112,11 +112,11 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
                 if (lib.PlaylistIdByUid(p[5..]) is not { } id) continue; // deleted
                 var info = lib.GetPlaylists().FirstOrDefault(x => x.Id == id);
                 if (info is null) continue;
-                cards.Add(pin with { Title = info.Name, ThumbnailUrl = info.ThumbnailUrl ?? pin.ThumbnailUrl });
+                cards.Add(pin with { Title = info.Name, ThumbnailUrl = info.ThumbnailUrl ?? pin.ThumbnailUrl, Pinned = true });
             }
-            else cards.Add(pin);
+            else cards.Add(pin with { Pinned = true });
         }
-        var pinnedSongs = cards.Where(c => c.Kind == CardKind.Song).Select(c => c.VideoId).ToHashSet();
+        var pinnedSongs = cards.Where(c => c.Kind == CardKind.Song).Select(c => c.VideoId).Concat(taste.SkippedIds).ToHashSet();
         var songs = taste.SpeedDial(SpeedDialMax).ToList();
         // little history yet: fill a full page with what you played lately and your likes
         if (songs.Count < 9)

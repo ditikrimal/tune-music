@@ -197,6 +197,11 @@
                         </Border>
                         <TextBlock Text="{Binding Title}" Foreground="White" FontFamily="{StaticResource UiFont}" FontSize="14" FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis" Margin="11,0,11,10" VerticalAlignment="Bottom" />
+                        <!-- pinned: a small pin in the corner -->
+                        <Border Width="26" Height="26" CornerRadius="13" Background="#B0000000" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                                Visibility="{Binding Pinned, Converter={StaticResource BoolToVis}}" ToolTip="Pinned">
+                            <p:Icon Data="{StaticResource IcoPin}" Size="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                         <Border x:Name="hover" Background="#40000000" Opacity="0">
                             <Border Width="46" Height="46" CornerRadius="23" Background="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <p:Icon Data="{StaticResource IcoPlay}" Size="22" Foreground="{DynamicResource OnAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -226,8 +231,8 @@
                 <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource SpeedDialTileTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <!-- three rows, then the next column -->
-                            <WrapPanel Orientation="Vertical" Height="540" />
+                            <!-- two rows, then the next column (a wide window shows many columns) -->
+                            <WrapPanel Orientation="Vertical" Height="360" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
@@ -474,6 +479,20 @@
                 <Setter TargetName="num" Property="Text" Value="&#xE995;" />
                 <Setter TargetName="num" Property="FontFamily" Value="{StaticResource IconFont}" />
             </DataTrigger>
+            <!-- selecting songs: an empty circle on each row, a filled check when chosen -->
+            <DataTrigger Binding="{Binding DataContext.IsSelecting, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True">
+                <Setter TargetName="num" Property="Text" Value="&#xEA3A;" />
+                <Setter TargetName="num" Property="FontFamily" Value="{StaticResource IconFont}" />
+                <Setter TargetName="num" Property="FontSize" Value="18" />
+                <Setter TargetName="num" Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                <Setter TargetName="row" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                <Setter TargetName="num" Property="Text" Value="&#xEC61;" />
+                <Setter TargetName="num" Property="FontFamily" Value="{StaticResource IconFont}" />
+                <Setter TargetName="num" Property="FontSize" Value="18" />
+                <Setter TargetName="num" Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -662,7 +681,42 @@
                     </StackPanel>
                 </StackPanel>
             </Grid>
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="32,24,24,12">
+            <!-- selecting songs: what to do with them -->
+            <Border DockPanel.Dock="Top" Margin="32,24,24,12" Height="56" CornerRadius="28" Background="{DynamicResource CardBrush}" Padding="20,0,10,0"
+                    Visibility="{Binding IsSelecting, Converter={StaticResource BoolToVis}}">
+                <DockPanel VerticalAlignment="Center">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource HeaderPill}" Content="Done" Command="{Binding ToggleSelectingCommand}" Margin="6,0,0,0" />
+                    <Button DockPanel.Dock="Right" Style="{StaticResource HeaderPill}" Content="Select all" Command="{Binding SelectAllCommand}" Margin="6,0,0,0" />
+                    <TextBlock Text="{Binding SelectedText}" Style="{StaticResource Body}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,18,0" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Play these" Command="{Binding PlaySelectedCommand}">
+                            <p:Icon Data="{StaticResource IcoPlay}" Size="20" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Play next" Command="{Binding PlaySelectedNextCommand}">
+                            <p:Icon Data="{StaticResource IcoPlayNext}" Size="20" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Add to playlist" Click="AddSelected_Click">
+                            <p:Icon Data="{StaticResource IcoPlaylistAdd}" Size="20" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Download" Command="{Binding DownloadSelectedCommand}">
+                            <p:Icon Data="{StaticResource IcoDownload}" Size="20" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Remove downloads" Command="{Binding RemoveSelectedDownloadsCommand}"
+                                Visibility="{Binding AnySelectedDownloaded, Converter={StaticResource BoolToVis}}">
+                            <p:Icon Data="{StaticResource IcoDownloadDone}" Size="20" Foreground="{DynamicResource AccentBrush}" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="{Binding RemoveSelectedText}" Command="{Binding RemoveSelectedCommand}"
+                                Visibility="{Binding CanRemoveSelected, Converter={StaticResource BoolToVis}}">
+                            <p:Icon Data="{StaticResource IcoDelete}" Size="20" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="40" Height="40" ToolTip="Not interested" Command="{Binding NotInterestedSelectedCommand}">
+                            <p:Icon Data="{StaticResource IcoBlock}" Size="20" />
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="32,24,24,12"
+                        Visibility="{Binding IsSelecting, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}">
                 <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}" Width="56" Height="56" FontSize="20"
                         Command="{Binding PlayCommand}" ToolTip="Play" />
                 <Button Style="{StaticResource IconButton}" Content="&#xE8B1;" FontSize="24" Width="48" Height="48" Margin="16,0,0,0"
@@ -673,6 +727,8 @@
                         Visibility="{Binding CanDownloadAll, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Download all" />
                 <Button x:Name="playlistMenu" Style="{StaticResource IconButton}" Content="&#xE712;" FontSize="22" Width="48" Height="48" Margin="8,0,0,0"
                         Click="PlaylistMenu_Click" ToolTip="More options" />
+                <Button Style="{StaticResource IconButton}" Content="&#xE762;" FontSize="20" Width="48" Height="48" Margin="8,0,0,0"
+                        Command="{Binding ToggleSelectingCommand}" ToolTip="Select songs (or Ctrl+click / Shift+click)" AutomationProperties.Name="Select songs" />
             </StackPanel>
             <!-- how far along this page's downloads are -->
             <StackPanel DockPanel.Dock="Top" Margin="36,0,40,10" Visibility="{Binding DownloadSummary, Converter={StaticResource NullToVis}}">
@@ -1020,6 +1076,9 @@
                         <!-- signed in: sync now / sign out -->
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
                                     Visibility="{Binding Shell.IsSignedIn, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Auto sync" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Shell.AutoSync}" VerticalAlignment="Center" Margin="0,0,18,0"
+                                      AutomationProperties.Name="Auto sync" ToolTip="Off: syncs only when you click Sync now" />
                             <Button Content="Sync now" Command="{Binding Shell.SyncNowCommand}" Margin="0,0,10,0" AutomationProperties.Name="Sync now" />
                             <Button Content="Sign out" Command="{Binding Shell.SignOutCommand}" AutomationProperties.Name="Sign out" />
                         </StackPanel>

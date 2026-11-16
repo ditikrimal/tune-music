@@ -3,18 +3,22 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Tune.App.Platform;
 
 /// <summary>
 /// Browser-style smooth wheel scrolling for every ScrollViewer in the app: each wheel notch moves a target,
-/// and the view eases towards it frame by frame. The innermost viewer that can scroll that way gets the wheel,
-/// so horizontal shelves pass vertical wheel movement to the page.
+/// and the view eases towards it once per displayed frame. The innermost viewer that can scroll that way gets
+/// the wheel, so horizontal shelves pass vertical wheel movement to the page.
+/// While a viewer moves, its content ignores the mouse (no hover highlights, card lifts or tooltips flickering
+/// past the pointer — each of those costs a redraw mid-scroll); hover comes back a moment after it stops.
 /// </summary>
 public static class SmoothScroll
 {
-    private const double PixelsPerNotch = 120;   // one wheel notch
-    private const double SmoothingSeconds = 0.075; // time constant of the ease-out
+    private const double PixelsPerNotch = 120;     // one wheel notch
+    private const double SmoothingSeconds = 0.09;  // time constant of the ease-out
+    private static readonly TimeSpan HoverBackAfter = TimeSpan.FromMilliseconds(140);
 
     private sealed class State
     {
@@ -22,6 +26,8 @@ public static class SmoothScroll
         public bool Animating;
         public bool Horizontal;
         public TimeSpan Last;
+        public UIElement? Muted;
+        public DispatcherTimer? HoverTimer;
     }
 
     private static readonly ConditionalWeakTable<ScrollViewer, State> States = new();
@@ -50,6 +56,7 @@ public static class SmoothScroll
         var from = state.Animating ? state.Target : current;
         state.Target = Math.Clamp(from + pixels, 0, max);
         state.Horizontal = horizontal;
+        MuteHover(sv, state);
         if (state.Animating) return;
         state.Animating = true;
         state.Last = TimeSpan.Zero;
@@ -64,6 +71,8 @@ public static class SmoothScroll
         {
             var sv = Active[i];
             if (!States.TryGetValue(sv, out var s)) { Active.RemoveAt(i); continue; }
+            // WPF can raise Rendering more than once per displayed frame: step once per frame, or motion judders
+            if (now == s.Last) continue;
             var dt = s.Last == TimeSpan.Zero ? 1 / 60.0 : Math.Min((now - s.Last).TotalSeconds, 0.05);
             s.Last = now;
             var horizontal = s.Horizontal;
@@ -74,11 +83,40 @@ public static class SmoothScroll
                 Set(sv, s.Target, horizontal);
                 s.Animating = false;
                 Active.RemoveAt(i);
+                RestoreHoverSoon(s);
                 continue;
             }
             Set(sv, current + diff * (1 - Math.Exp(-dt / SmoothingSeconds)), horizontal);
         }
         if (Active.Count == 0) CompositionTarget.Rendering -= OnFrame;
+    }
+
+    private static void MuteHover(ScrollViewer sv, State s)
+    {
+        s.HoverTimer?.Stop();
+        if (s.Muted is not null || sv.Content is not UIElement content) return;
+        // the viewer itself keeps receiving the wheel while its content ignores the mouse
+        if (sv.Background is null) sv.Background = Brushes.Transparent;
+        content.IsHitTestVisible = false;
+        s.Muted = content;
+    }
+
+    private static void RestoreHoverSoon(State s)
+    {
+        if (s.Muted is null) return;
+        s.HoverTimer ??= new DispatcherTimer(DispatcherPriority.Input) { Interval = HoverBackAfter, Tag = s };
+        s.HoverTimer.Tick -= OnHoverTimer;
+        s.HoverTimer.Tick += OnHoverTimer;
+        s.HoverTimer.Start();
+    }
+
+    private static void OnHoverTimer(object? sender, EventArgs e)
+    {
+        if (sender is not DispatcherTimer { Tag: State s } timer) return;
+        timer.Stop();
+        if (s.Animating || s.Muted is null) return;
+        s.Muted.IsHitTestVisible = true;
+        s.Muted = null;
     }
 
     private static void Set(ScrollViewer sv, double offset, bool horizontal)

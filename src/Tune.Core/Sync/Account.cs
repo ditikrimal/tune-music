@@ -32,8 +32,8 @@ public sealed class AccountSync : IDisposable
         DeviceId = lib.GetSetting("sync.device") is { Length: > 0 } d ? d : NewDevice(lib);
         if (Get("account.uid") is { } uid && Get("account.refresh") is { } refresh)
             _session = new AuthSession(uid, Get("account.email"), Get("account.name"), Get("account.photo"), "", refresh, DateTimeOffset.MinValue);
-        _timer = new Timer(_ => _ = SyncAsync(skipIfBusy: true), null, Timeout.Infinite, Timeout.Infinite);
-        _debounce = new Timer(_ => _ = SyncAsync(skipIfBusy: true), null, Timeout.Infinite, Timeout.Infinite);
+        _timer = new Timer(_ => { if (AutoSync) _ = SyncAsync(skipIfBusy: true); }, null, Timeout.Infinite, Timeout.Infinite);
+        _debounce = new Timer(_ => { if (AutoSync) _ = SyncAsync(skipIfBusy: true); }, null, Timeout.Infinite, Timeout.Infinite);
         lib.LocalChanged += OnLocalChanged;
     }
 
@@ -46,13 +46,25 @@ public sealed class AccountSync : IDisposable
         long.TryParse(Get("sync.last"), CultureInfo.InvariantCulture, out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds(ms) : null;
     public string? LastError { get; private set; }
 
+    /// <summary>Sync by itself (after changes, on start, every few minutes, when Tune comes to the front). Off: only "Sync now".</summary>
+    public bool AutoSync
+    {
+        get => _lib.GetSetting("sync.auto") != "0";
+        set
+        {
+            _lib.SetSetting("sync.auto", value ? "1" : "0");
+            if (value && IsSignedIn) _timer.Change(TimeSpan.Zero, Every);
+            Changed?.Invoke();
+        }
+    }
+
     /// <summary>Signed in/out, or a sync started/finished (status text may have changed). Any thread.</summary>
     public event Action? Changed;
 
     /// <summary>Tune came to the front: sync unless it just did, so other devices' changes show up without waiting.</summary>
     public void SyncSoon()
     {
-        if (IsSignedIn && (LastSynced is not { } last || DateTimeOffset.UtcNow - last > TimeSpan.FromSeconds(20)))
+        if (IsSignedIn && AutoSync && (LastSynced is not { } last || DateTimeOffset.UtcNow - last > TimeSpan.FromSeconds(20)))
             _ = SyncAsync(skipIfBusy: true);
     }
 
@@ -139,7 +151,7 @@ public sealed class AccountSync : IDisposable
 
     private void OnLocalChanged()
     {
-        if (IsSignedIn) _debounce.Change(AfterChange, Timeout.InfiniteTimeSpan);
+        if (IsSignedIn && AutoSync) _debounce.Change(AfterChange, Timeout.InfiniteTimeSpan);
     }
 
     private void Save(AuthSession s)

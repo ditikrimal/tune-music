@@ -26,6 +26,18 @@ public sealed partial class ShellViewModel
     /// <summary>Sidebar entry: your name, or "Profile" when signed out.</summary>
     public string AccountNavTitle => IsSignedIn ? AccountName.Split(' ')[0] : "Profile";
     public bool IsSyncing => Services.Account?.IsSyncing == true;
+
+    /// <summary>Settings > account card: sync by itself, or only on "Sync now".</summary>
+    public bool AutoSync
+    {
+        get => Services.Account?.AutoSync != false;
+        set
+        {
+            if (Services.Account is { } a) a.AutoSync = value;
+            OnPropertyChanged();
+            ShowToast(value ? "Syncs by itself" : "Syncs only when you tap Sync now");
+        }
+    }
     /// <summary>Above the speed dial: your name in capitals.</summary>
     public string AccountLabel => IsSignedIn ? AccountName.ToUpperInvariant() : "";
     public string AccountInitial => AccountName.Length > 0 ? AccountName[..1].ToUpperInvariant() : "?";

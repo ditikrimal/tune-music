@@ -6,7 +6,24 @@ namespace Tune.Core.Library;
 public sealed partial class LibraryStore
 {
     /// <summary>Settings that follow the account to every device (Home layout, speed dial pins).</summary>
-    public static readonly IReadOnlySet<string> SyncedSettings = new HashSet<string> { "home.layout", "speeddial.pins" };
+    public static readonly IReadOnlySet<string> SyncedSettings = new HashSet<string> { "home.layout", "speeddial.pins", NotInterestedKey };
+
+    /// <summary>Songs you said you're not interested in (comma-separated ids, newest first; synced).</summary>
+    public const string NotInterestedKey = "taste.notInterested";
+
+    public IReadOnlySet<string> GetNotInterested() =>
+        (GetSetting(NotInterestedKey) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+
+    /// <summary>"Not interested": the song stays out of Home, quick picks and radios. Returns false if it already was.</summary>
+    public bool SetNotInterested(string videoId, bool notInterested = true)
+    {
+        var ids = (GetSetting(NotInterestedKey) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var had = ids.Remove(videoId);
+        if (notInterested) ids.Insert(0, videoId);
+        if (had == notInterested) return false;
+        SetSetting(NotInterestedKey, string.Join(',', ids.Take(1000)));
+        return true;
+    }
 
     private void MigrateTaste() =>
         Exec("""
