@@ -58,7 +58,8 @@ data class Card(
     val track: Track? = null,
 )
 
-data class Shelf(val title: String, val items: List<Card>, val isLocal: Boolean = false)
+/** A Home row; [isList] = a grid of song rows (Quick picks) instead of big cards. */
+data class Shelf(val title: String, val items: List<Card>, val isLocal: Boolean = false, val isList: Boolean = false)
 
 data class Collection(val title: String, val subtitle: String?, val thumbnail: String?, val tracks: List<Track>)
 

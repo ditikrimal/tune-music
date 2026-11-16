@@ -178,7 +178,7 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
             var feed = await _shell.Services.Feed.BuildAsync();
             Shelves.Clear();
             // a calm Home: at most 6 rows of 12 — the rest is noise
-            foreach (var s in feed.Shelves.Take(6)) Shelves.Add(s with { Items = s.Items.Take(12).ToList() });
+            foreach (var s in feed.Shelves.Take(7)) Shelves.Add(s with { Items = s.Items.Take(s.IsList ? 20 : 12).ToList() });
             Offline = feed.Offline;
             if (Offline) ReloadOffline();
             _shell.Prefetch(feed.Shelves.SelectMany(sh => sh.Items.Take(6)).Where(c => c.Track is not null).Select(c => c.Track!).Take(12),

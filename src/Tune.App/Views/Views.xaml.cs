@@ -97,6 +97,29 @@ public partial class Views : ResourceDictionary
         menu.IsOpen = true;
     }
 
+    // ---------- Quick picks: the row's songs become the queue ----------
+
+    private static List<Tune.Core.Models.Track> ShelfTracks(object sender) =>
+        Ancestor<ItemsControl>(sender as DependencyObject) is { } list && list.ItemsSource is IEnumerable<Tune.Core.Models.Card> cards
+            ? cards.Where(c => c.Track is not null).Select(c => c.Track!).ToList()
+            : (sender as FrameworkElement)?.DataContext is Tune.Core.Models.Shelf shelf
+                ? shelf.Items.Where(c => c.Track is not null).Select(c => c.Track!).ToList()
+                : [];
+
+    private void QuickPick_Click(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Tune.Core.Models.Card { Track: { } t }) return;
+        if (e.OriginalSource is DependencyObject d && Ancestor<Button>(d) is not null) return; // the ⋯ button
+        var tracks = ShelfTracks(sender);
+        _ = Shell.Services.Playback.PlayListAsync(tracks, Math.Max(0, tracks.FindIndex(x => x.VideoId == t.VideoId)));
+    }
+
+    private void QuickPicksPlayAll_Click(object sender, RoutedEventArgs e)
+    {
+        var tracks = ShelfTracks(sender);
+        if (tracks.Count > 0) _ = Shell.Services.Playback.PlayListAsync(tracks, 0);
+    }
+
     private void CardMore_Click(object sender, RoutedEventArgs e)
     {
         if (CardTrack(sender) is not { } t) return;

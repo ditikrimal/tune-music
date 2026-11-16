@@ -147,4 +147,31 @@ public class FeedBuilderTests : IDisposable
         var feed = await Builder().BuildAsync();
         Assert.Equal(["Because you played Title b"], feed.Shelves.Where(s => s.Title.StartsWith("Because")).Select(s => s.Title));
     }
+
+    [Fact]
+    public async Task Quick_picks_mix_radios_without_repeating_the_because_rows()
+    {
+        foreach (var id in new[] { "a", "b", "c", "d" })
+        {
+            _lib.RecordPlay(T(id), Now);
+            _api.Radios[T(id).VideoId] = [T(id), .. Enumerable.Range(0, 25).Select(i => T(id + "r" + i))];
+        }
+        var feed = await Builder().BuildAsync();
+        Assert.Equal(["Recently played", "Quick picks"], feed.Shelves.Take(2).Select(s => s.Title));
+        var picks = feed.Shelves[1];
+        Assert.True(picks.IsList);
+        Assert.Equal(20, picks.Items.Count);
+        var because = feed.Shelves.Where(s => s.Title.StartsWith("Because")).SelectMany(s => s.Items).Select(c => c.VideoId).ToHashSet();
+        Assert.DoesNotContain(picks.Items, c => because.Contains(c.VideoId));
+        Assert.Equal(picks.Items.Count, picks.Items.Select(c => c.VideoId).Distinct().Count());
+        Assert.True(picks.Items.Select(c => c.VideoId![..1]).Distinct().Count() >= 3); // drawn from several radios
+    }
+
+    [Fact]
+    public async Task No_quick_picks_without_enough_songs()
+    {
+        _lib.RecordPlay(T("a"), Now);
+        _api.Radios[T("a").VideoId] = [T("a"), T("x")];
+        Assert.DoesNotContain((await Builder().BuildAsync()).Shelves, s => s.Title == "Quick picks");
+    }
 }

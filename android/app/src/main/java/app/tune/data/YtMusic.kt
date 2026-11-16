@@ -245,11 +245,14 @@ object Parsers {
 
     private fun carousel(shelf: JSONObject): Shelf? {
         val title = shelf.at("header", "musicCarouselShelfBasicHeaderRenderer", "title").runsText()?.takeIf { it.isNotBlank() } ?: return null
-        val items = ItemParser.safeMap(shelf.items("contents")) { c ->
+        val contents = shelf.items("contents")
+        val items = ItemParser.safeMap(contents) { c ->
             c.obj("musicTwoRowItemRenderer")?.let { ItemParser.twoRowItem(it) }
                 ?: c.obj("musicResponsiveListItemRenderer")?.let { ItemParser.responsiveItem(it) }
         }
-        return Shelf(title, items)
+        // rows of songs ("Quick picks", "Trending songs"...) are shown as a song grid
+        val listRows = contents.count { it.obj("musicResponsiveListItemRenderer") != null }
+        return Shelf(title, items, isList = listRows > contents.size / 2 && items.count { it.track != null } > items.size / 2)
     }
 
     private fun header(root: JSONObject) =

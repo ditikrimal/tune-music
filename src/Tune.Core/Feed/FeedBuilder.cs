@@ -19,6 +19,9 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
     private static readonly TimeSpan SeedWindow = TimeSpan.FromDays(14);
     private static readonly TimeSpan ArtistWindow = TimeSpan.FromDays(30);
     private static readonly TimeSpan RadioTtl = TimeSpan.FromHours(6);
+    private const int QuickPicksMax = 20;
+    private const int QuickPicksMin = 8;
+    private const int QuickExtraSeeds = 3;
 
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, IReadOnlyList<Track> Tracks)> _radioCache = new();
 
@@ -36,6 +39,11 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
         if (seeds.Count == 0) seeds = recent.Take(BecauseRows).ToList();
         var radios = await Task.WhenAll(seeds.Select(s => RadioAsync(s.VideoId, now, ct))).ConfigureAwait(false);
 
+        // more favourites feed Quick picks (their radios are fetched alongside)
+        var favourites = lib.GetTopTracks(now - ArtistWindow, BecauseRows + QuickExtraSeeds + 6).Select(s => s.Track).ToList();
+        var extraSeeds = favourites.Where(f => seeds.All(s => s.VideoId != f.VideoId)).Take(QuickExtraSeeds).ToList();
+        var extraRadios = await Task.WhenAll(extraSeeds.Select(s => RadioAsync(s.VideoId, now, ct))).ConfigureAwait(false);
+
         var shown = new HashSet<string>(seeds.Select(s => s.VideoId));
         for (var i = 0; i < seeds.Count; i++)
         {
@@ -44,6 +52,10 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
             if (items.Count > 0)
                 shelves.Add(new Shelf("Because you played " + seeds[i].Title, items, IsLocal: true));
         }
+
+        var picks = QuickPicks(radios, extraRadios, favourites, shown);
+        if (picks.Count >= QuickPicksMin)
+            shelves.Insert(recent.Count >= MinRowItems ? 1 : 0, new Shelf("Quick picks", picks.Select(SongCard).ToList(), IsLocal: true, IsList: true));
 
         var top = lib.GetTopArtists(now - ArtistWindow, TopArtists).Where(a => a.Artist.BrowseId is not null).ToList();
         var pictures = await Task.WhenAll(top.Select(a => ArtistPictureAsync(a.Artist.BrowseId!, now, ct))).ConfigureAwait(false);
@@ -56,6 +68,32 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
         var (discovery, offline) = await discoveryTask.ConfigureAwait(false);
         shelves.AddRange(discovery);
         return new FeedResult(shelves, offline);
+    }
+
+    /// <summary>
+    /// Like YouTube Music's Quick picks: mostly new songs close to what you play (round-robin across several radios,
+    /// deeper than the "Because you played" rows so nothing repeats), with a familiar favourite every few songs.
+    /// </summary>
+    private static List<Track> QuickPicks(IReadOnlyList<Track>?[] becauseRadios, IReadOnlyList<Track>?[] extraRadios,
+        IReadOnlyList<Track> favourites, HashSet<string> shown)
+    {
+        var pools = becauseRadios.Select(r => (r ?? []).Skip(BecauseItems + 1).ToList())
+            .Concat(extraRadios.Select(r => (r ?? []).Skip(1).ToList()))
+            .Where(p => p.Count > 0).ToList();
+        var fresh = new List<Track>();
+        for (var depth = 0; fresh.Count < QuickPicksMax && pools.Any(p => depth < p.Count); depth++)
+            foreach (var pool in pools)
+                if (depth < pool.Count && fresh.Count < QuickPicksMax && shown.Add(pool[depth].VideoId)) fresh.Add(pool[depth]);
+
+        var familiar = new Queue<Track>(favourites.Where(f => shown.Add(f.VideoId)));
+        var picks = new List<Track>();
+        foreach (var t in fresh)
+        {
+            if (picks.Count >= QuickPicksMax) break;
+            if (picks.Count % 5 == 2 && familiar.Count > 0) picks.Add(familiar.Dequeue()); // a favourite every 5 songs
+            if (picks.Count < QuickPicksMax) picks.Add(t);
+        }
+        return picks;
     }
 
     private async Task<(IReadOnlyList<Shelf>, bool Offline)> DiscoveryAsync(CancellationToken ct)

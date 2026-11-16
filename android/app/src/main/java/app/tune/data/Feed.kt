@@ -24,12 +24,20 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
 
             var seeds = lib.topTracks(now - 14 * DAY, 3)
             if (seeds.isEmpty()) seeds = recent.take(3)
-            val radios = seeds.map { s -> async { radio(s.videoId, now) } }.awaitAll()
+            val favourites = lib.topTracks(now - 30 * DAY, 12)
+            val extraSeeds = favourites.filter { f -> seeds.none { it.videoId == f.videoId } }.take(3)
+            val radios = seeds.map { s -> async { radio(s.videoId, now) } }
+            val extraRadios = extraSeeds.map { s -> async { radio(s.videoId, now) } }
+            val because = radios.awaitAll()
+            val extra = extraRadios.awaitAll()
             val shown = seeds.map { it.videoId }.toMutableSet()
             seeds.forEachIndexed { i, seed ->
-                val items = radios[i]?.filter { shown.add(it.videoId) }?.take(12)?.map(::songCard).orEmpty()
+                val items = because[i]?.filter { shown.add(it.videoId) }?.take(12)?.map(::songCard).orEmpty()
                 if (items.isNotEmpty()) shelves += Shelf("Because you played ${seed.title}", items, isLocal = true)
             }
+            val picks = quickPicks(because, extra, favourites, shown)
+            if (picks.size >= 8)
+                shelves.add(if (recent.size >= 3) 1 else 0, Shelf("Quick picks", picks.map(::songCard), isLocal = true, isList = true))
 
             val top = lib.topArtists(now - 30 * DAY, 8).filter { it.browseId != null }
             val pics = top.map { a -> async { picture(a.browseId!!, now) } }.awaitAll()
@@ -39,6 +47,26 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
             val d = discovery.await()
             Feed(shelves + d.orEmpty(), offline = d == null)
         }
+    }
+
+    /** Like YouTube Music's Quick picks: new songs close to what you play (several radios, round-robin, deeper than the
+     *  "Because you played" rows so nothing repeats) with a familiar favourite every few songs. Same as the Windows app. */
+    private fun quickPicks(because: List<List<Track>?>, extra: List<List<Track>?>, favourites: List<Track>, shown: MutableSet<String>): List<Track> {
+        val pools = (because.map { it.orEmpty().drop(13) } + extra.map { it.orEmpty().drop(1) }).filter { it.isNotEmpty() }
+        val fresh = mutableListOf<Track>()
+        var depth = 0
+        while (fresh.size < 20 && pools.any { depth < it.size }) {
+            for (p in pools) if (depth < p.size && fresh.size < 20 && shown.add(p[depth].videoId)) fresh += p[depth]
+            depth++
+        }
+        val familiar = ArrayDeque(favourites.filter { shown.add(it.videoId) })
+        val picks = mutableListOf<Track>()
+        for (t in fresh) {
+            if (picks.size >= 20) break
+            if (picks.size % 5 == 2 && familiar.isNotEmpty()) picks += familiar.removeFirst()
+            if (picks.size < 20) picks += t
+        }
+        return picks
     }
 
     private fun radio(videoId: String, now: Long): List<Track>? {

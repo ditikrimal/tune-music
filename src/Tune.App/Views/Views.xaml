@@ -176,6 +176,65 @@
         </DataTemplate.Triggers>
     </DataTemplate>
 
+    <!-- ================= Quick picks: a grid of song rows, 4 per column, paged sideways ================= -->
+    <DataTemplate x:Key="QuickPickTemplate" DataType="{x:Type m:Card}">
+        <Border x:Name="row" Width="400" Height="64" CornerRadius="10" Background="Transparent" Padding="6" Margin="0,0,10,0" Cursor="Hand"
+                MouseLeftButtonUp="QuickPick_Click" MouseRightButtonUp="Card_RightClick" MouseEnter="Card_MouseEnter">
+            <DockPanel>
+                <Grid DockPanel.Dock="Left" Width="52" Height="52">
+                    <Border CornerRadius="6" Background="#282828" ClipToBounds="True">
+                        <Image Width="52" Height="52" Stretch="UniformToFill" p:Art.Url="{Binding ThumbnailUrl}" />
+                    </Border>
+                    <Border x:Name="playOverlay" CornerRadius="6" Background="#99000000" Opacity="0">
+                        <p:Icon Data="{StaticResource IcoPlay}" Size="24" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+                <Button x:Name="more" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Opacity="0" Click="CardMore_Click" ToolTip="More options">
+                    <p:Icon Data="{StaticResource IcoMore}" Size="18" />
+                </Button>
+                <StackPanel VerticalAlignment="Center" Margin="12,0,4,0">
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Style="{StaticResource Subtle}" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,3,0,0">
+                        <Run Text="{Binding Subtitle, Mode=OneWay}" /><Run x:Name="albumSep" Text=" • " /><Run Text="{Binding Track.Album.Title, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <DataTemplate.Triggers>
+            <Trigger SourceName="row" Property="IsMouseOver" Value="True">
+                <Setter TargetName="row" Property="Background" Value="#14FFFFFF" />
+                <Setter TargetName="playOverlay" Property="Opacity" Value="1" />
+                <Setter TargetName="more" Property="Opacity" Value="1" />
+            </Trigger>
+            <DataTrigger Binding="{Binding Track.Album}" Value="{x:Null}">
+                <Setter TargetName="albumSep" Property="Text" Value="" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="QuickPicksShelfTemplate" DataType="{x:Type m:Shelf}">
+        <StackPanel x:Name="shelf" Background="Transparent">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,10">
+                    <Button Style="{DynamicResource HeaderPill}" Content="Play all" Click="QuickPicksPlayAll_Click" Margin="0,0,12,0" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Click="ShelfLeft_Click" ToolTip="Back" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Margin="8,0,0,0" Click="ShelfRight_Click" ToolTip="More" />
+                </StackPanel>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
+            </DockPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False">
+                <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource QuickPickTemplate}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <!-- fills a column of 4 rows, then the next column -->
+                            <WrapPanel Orientation="Vertical" Height="256" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+        </StackPanel>
+    </DataTemplate>
+
     <!-- ================= featured card: tall, tinted with the art's own colour ================= -->
     <DataTemplate x:Key="FeaturedCardTemplate" DataType="{x:Type m:Card}">
         <Button x:Name="card" Width="210" Height="292" Margin="0,0,18,0" Cursor="Hand" Focusable="False" RenderTransformOrigin="0.5,0.5"
@@ -415,7 +474,7 @@
                            Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
                 <ItemsControl ItemsSource="{Binding Shelves}" Visibility="{Binding Offline, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}">
                     <ItemsControl.ItemTemplateSelector>
-                        <sh:FirstItemTemplateSelector First="{StaticResource FeaturedShelfTemplate}" Rest="{StaticResource ShelfTemplate}" />
+                        <sh:FirstItemTemplateSelector First="{StaticResource FeaturedShelfTemplate}" Rest="{StaticResource ShelfTemplate}" List="{StaticResource QuickPicksShelfTemplate}" />
                     </ItemsControl.ItemTemplateSelector>
                 </ItemsControl>
             </StackPanel>

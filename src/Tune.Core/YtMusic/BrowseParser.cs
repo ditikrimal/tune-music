@@ -31,11 +31,15 @@ public static class BrowseParser
     {
         var title = shelf.At("header", "musicCarouselShelfBasicHeaderRenderer", "title").RunsText();
         if (string.IsNullOrWhiteSpace(title)) return null;
-        var items = ItemParser.SafeMap(shelf.Items("contents"), c =>
+        var contents = shelf.Items("contents").ToList();
+        var items = ItemParser.SafeMap(contents, c =>
             c.At("musicTwoRowItemRenderer") is { } two ? ItemParser.TwoRowItem(two)
             : c.At("musicResponsiveListItemRenderer") is { } list ? ItemParser.ResponsiveItem(list)
             : null);
-        return new Shelf(title, items);
+        // rows of songs (YouTube Music's "Quick picks", "Trending songs"...) are shown as a song grid
+        var listRows = contents.Count(c => c.At("musicResponsiveListItemRenderer") is not null);
+        var isList = listRows > contents.Count / 2 && items.Count(i => i.Track is not null) > items.Count / 2;
+        return new Shelf(title, items, IsList: isList);
     }
 
     // ---------- album / playlist ----------

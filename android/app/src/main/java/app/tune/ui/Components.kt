@@ -326,3 +326,48 @@ fun AddToPlaylistDialog() {
         dismissButton = { TextButton(onClick = { app.addToPlaylist = null }) { Text("Cancel", color = c.subtle) } },
     )
 }
+
+/**
+ * Quick picks (like YouTube Music): song rows four to a column, swiped sideways a column at a time.
+ * Tapping a song plays it with the rest of the picks queued; Play all starts from the top.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun QuickPicksRow(shelf: Shelf) {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val tracks = remember(shelf) { shelf.items.mapNotNull { it.track } }
+    val columns = remember(tracks) { tracks.chunked(4) }
+    val ui by app.player.ui.collectAsState()
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 24.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(shelf.title, style = Type.section, color = c.text, modifier = Modifier.weight(1f))
+        Text("Play all", style = Type.bodyStrong.copy(fontSize = 13.sp), color = c.text,
+            modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(c.card).clickable { app.playList(tracks, 0) }
+                .padding(horizontal = 14.dp, vertical = 7.dp))
+    }
+    val state = androidx.compose.foundation.lazy.rememberLazyListState()
+    val screen = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+    LazyRow(state = state, contentPadding = PaddingValues(horizontal = 8.dp),
+        flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(state, androidx.compose.foundation.gestures.snapping.SnapPosition.Start)) {
+        items(columns.size) { col ->
+            Column(Modifier.width(screen - 48.dp)) {
+                columns[col].forEach { t ->
+                    val index = col * 4 + columns[col].indexOf(t)
+                    val current = ui.track?.videoId == t.videoId
+                    Row(Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(10.dp))
+                        .background(if (current) c.accentSoft else Color.Transparent)
+                        .combinedClickable(onClick = { app.playList(tracks, index) }, onLongClick = { app.menuFor = t; app.menuPlaylistId = null })
+                        .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Art(t.thumbnail, 48.dp)
+                        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                            Text(t.title, style = Type.bodyStrong, color = if (current) c.accentText else c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(listOfNotNull(t.artistLine.ifEmpty { null }, t.album?.title).joinToString(" \u2022 "),
+                                style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        IconBtn(Ico.More, "More options", size = 20.dp, box = 40.dp) { app.menuFor = t; app.menuPlaylistId = null }
+                    }
+                }
+            }
+        }
+    }
+}

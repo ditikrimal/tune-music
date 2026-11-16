@@ -101,7 +101,12 @@ fun HomeScreen() {
         }
         val feed = state?.getOrNull()
         if (feed == null) { item { Loading() }; return@LazyColumn }
-        feed.shelves.take(8).forEachIndexed { i, shelf -> item(key = "shelf$i") { ShelfRow(shelf.copy(items = shelf.items.take(12)), featured = i == 0 && shelf.isLocal) } }
+        feed.shelves.take(9).forEachIndexed { i, shelf ->
+            item(key = "shelf$i") {
+                if (shelf.isList) QuickPicksRow(shelf.copy(items = shelf.items.take(20)))
+                else ShelfRow(shelf.copy(items = shelf.items.take(12)), featured = i == 0 && shelf.isLocal)
+            }
+        }
     }
 }
 

@@ -102,8 +102,12 @@ public sealed class FirstItemTemplateSelector : System.Windows.Controls.DataTemp
     public DataTemplate? First { get; set; }
     public DataTemplate? Rest { get; set; }
 
+    /// <summary>For song-grid shelves (Quick picks).</summary>
+    public DataTemplate? List { get; set; }
+
     public override DataTemplate? SelectTemplate(object? item, DependencyObject container)
     {
+        if (item is Tune.Core.Models.Shelf { IsList: true } && List is not null) return List;
         var owner = System.Windows.Controls.ItemsControl.ItemsControlFromItemContainer(container);
         return owner is not null && owner.Items.Count > 0 && ReferenceEquals(owner.Items[0], item) ? First : Rest;
     }
