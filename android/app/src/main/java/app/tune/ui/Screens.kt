@@ -1,6 +1,9 @@
 package app.tune.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -243,6 +246,7 @@ private fun TopResult(card: Card) {
 
 // ============================== Library ==============================
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen() {
     val app = LocalApp.current
@@ -251,7 +255,8 @@ fun LibraryScreen() {
     val dv by app.graph.downloads.version.collectAsState()
     val playlists = remember(version) { app.graph.library.playlists() }
     val likedCount = remember(version) { app.graph.library.liked().size }
-    val historyCount = remember(version) { app.graph.library.history(500).size }
+    val history = remember(version) { app.graph.library.history(20).map { it.first } }
+    val ui by app.player.ui.collectAsState()
     val downloaded = remember(dv) { app.graph.downloads.downloaded().size }
     var naming by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -274,16 +279,38 @@ fun LibraryScreen() {
                 IconBtn(Ico.Add, "New playlist", tint = c.text, size = 26.dp) { naming = true }
             }
         }
-        // three bright tiles for the built-in collections
-        item {
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LibraryTile(Ico.Heart, "Liked", "$likedCount songs", listOf(c.accent, Color(0xFFE0457B)), Modifier.weight(1f)) { app.nav.navigate("liked") }
-                LibraryTile(Ico.Download, "Downloads", "$downloaded songs", listOf(Color(0xFF14B8A6), Color(0xFF0E7490)), Modifier.weight(1f)) { app.nav.navigate("downloads") }
-                LibraryTile(Ico.History, "History", "$historyCount songs", listOf(Color(0xFFF59E0B), Color(0xFFDC5A1E)), Modifier.weight(1f)) { app.nav.navigate("history") }
+        // like YouTube's "You" tab: your recent history first, as a row you can swipe
+        if (history.isNotEmpty()) {
+            item {
+                Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("History", style = Type.section, color = c.text, modifier = Modifier.weight(1f))
+                    Text("See all", style = Type.bodyStrong.copy(fontSize = 13.sp), color = c.text,
+                        modifier = Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, c.track, RoundedCornerShape(16.dp))
+                            .clickable { app.nav.navigate("history") }.padding(horizontal = 14.dp, vertical = 6.dp))
+                }
+            }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    itemsIndexed(history, key = { _, t -> "h" + t.videoId }) { i, t ->
+                        val current = ui.track?.videoId == t.videoId
+                        Column(Modifier.width(132.dp).clip(RoundedCornerShape(12.dp)).combinedClickable(
+                            onClick = { app.playList(history, i) }, onLongClick = { app.menuFor = t; app.menuPlaylistId = null }).padding(6.dp)) {
+                            Art(t.thumbnail, 120.dp, corner = 10.dp)
+                            Text(t.title, style = Type.bodyStrong.copy(fontSize = 14.sp), color = if (current) c.accentText else c.text,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                            Text(t.artistLine, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
         }
+        // the built-in collections as calm rows
+        item { Spacer(Modifier.height(10.dp)) }
+        item { LibraryRow(Ico.Heart, "Liked songs", "$likedCount songs") { app.nav.navigate("liked") } }
+        item { LibraryRow(Ico.Download, "Downloads", "$downloaded songs \u2022 play without internet") { app.nav.navigate("downloads") } }
+        item { LibraryRow(Ico.History, "History", "Everything you played, by day") { app.nav.navigate("history") } }
         item {
-            Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Playlists", style = Type.section, color = c.text, modifier = Modifier.weight(1f))
                 if (playlists.isNotEmpty()) Text("${playlists.size}", style = Type.caption, color = c.subtle)
             }
@@ -307,16 +334,19 @@ fun LibraryScreen() {
     }
 }
 
+/** A quiet library row: icon in a soft tile, title, subtitle, chevron (same rhythm as the playlist rows). */
 @Composable
-private fun LibraryTile(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, colors: List<Color>,
-                        modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier.height(118.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(colors)).clickable(onClick = onClick).padding(14.dp)) {
-        Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+private fun LibraryRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    val c = LocalTune.current
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(58.dp).clip(RoundedCornerShape(12.dp)).background(c.card), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = c.accentText, modifier = Modifier.size(26.dp))
         }
-        Spacer(Modifier.weight(1f))
-        Text(title, style = Type.bodyStrong, color = Color.White, maxLines = 1)
-        Text(subtitle, style = Type.caption, color = Color(0xD9FFFFFF), maxLines = 1)
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(title, style = Type.bodyStrong, color = c.text)
+            Text(subtitle, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(Ico.ChevronRight, null, tint = c.subtle, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -344,8 +374,8 @@ fun HistoryScreen() {
         item { BackRow() }
         item {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFDC5A1E)))),
-                    contentAlignment = Alignment.Center) { Icon(Ico.History, null, tint = Color.White, modifier = Modifier.size(32.dp)) }
+                Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(c.card),
+                    contentAlignment = Alignment.Center) { Icon(Ico.History, null, tint = c.accentText, modifier = Modifier.size(30.dp)) }
                 Column(Modifier.padding(start = 16.dp)) {
                     Text("History", style = Type.title1.copy(fontSize = 26.sp), color = c.text)
                     Text("${items.size} songs you played", style = Type.caption, color = c.subtle)
