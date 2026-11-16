@@ -481,10 +481,11 @@
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
         <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Padding" Value="40,0,16,0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
-                    <Border x:Name="b" Background="#242424" CornerRadius="22" BorderBrush="Transparent" BorderThickness="2" Padding="40,0,16,0" Height="44">
+                    <Border x:Name="b" Background="#242424" CornerRadius="22" BorderBrush="Transparent" BorderThickness="2" Padding="{TemplateBinding Padding}" Height="44">
                         <Grid>
                             <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
                             <TextBlock x:Name="hint" Text="What do you want to play?" Style="{StaticResource Subtle}" FontSize="14"
@@ -496,7 +497,7 @@
                             <Setter TargetName="hint" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="b" Property="BorderBrush" Value="White" />
+                            <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="b" Property="Background" Value="#2A2A2A" />

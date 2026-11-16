@@ -83,6 +83,21 @@ public partial class Views : ResourceDictionary
         e.Handled = true;
     }
 
+    private void Card_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Tune.Core.Models.Card card) return;
+        e.Handled = true;
+        if (card.Track is { } t)
+        {
+            ShowTrackMenu((FrameworkElement)sender, new TrackRowViewModel(t, 0) { IsLiked = Shell.Services.Library.IsLiked(t.VideoId) });
+            return;
+        }
+        var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.MousePoint };
+        var what = card.Kind switch { Tune.Core.Models.CardKind.Album => "album", Tune.Core.Models.CardKind.Artist => "artist", _ => "playlist" };
+        menu.Items.Add(Item($"Open {what}", () => Shell.OpenCardCommand.Execute(card)));
+        menu.IsOpen = true;
+    }
+
     private void CardMore_Click(object sender, RoutedEventArgs e)
     {
         if (CardTrack(sender) is not { } t) return;

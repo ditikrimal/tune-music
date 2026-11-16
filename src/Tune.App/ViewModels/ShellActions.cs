@@ -103,13 +103,19 @@ public sealed partial class ShellViewModel
         if (Page is CollectionViewModel { PlaylistId: { } id } page && id == playlist.Id) page.Reload();
     }
 
+    /// <summary>Asks for a playlist name (null = cancelled). Set by the main window.</summary>
+    public Func<string, string?> AskPlaylistName { get; set; } = s => s;
+
+    public string SuggestedPlaylistName => $"My playlist #{Services.Library.GetPlaylists().Count + 1}";
+
     public void AddToNewPlaylist(Track t)
     {
+        if (AskPlaylistName(SuggestedPlaylistName) is not { } name) return;
         var lib = Services.Library;
-        var id = lib.CreatePlaylist($"My playlist #{lib.GetPlaylists().Count + 1}");
+        var id = lib.CreatePlaylist(name);
         lib.AddToPlaylist(id, t);
         ReloadPlaylists();
-        ShowToast("Added to a new playlist");
+        ShowToast($"Added to {name}");
     }
 
     public void SetLiked(Track t, bool liked)

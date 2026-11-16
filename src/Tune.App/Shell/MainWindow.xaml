@@ -127,7 +127,9 @@
                 </StackPanel>
             </DockPanel>
 
-            <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding Page}" Focusable="False">
+            <!-- hidden behind Now Playing: nothing shows through its edges or reacts to the pointer -->
+            <ContentControl x:Name="PageHost" Grid.Row="1" Content="{Binding Page}" Focusable="False"
+                            Visibility="{Binding NowPlaying.IsOpen, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}">
                 <ContentControl.RenderTransform>
                     <TranslateTransform x:Name="PageSlide" />
                 </ContentControl.RenderTransform>
@@ -228,8 +230,9 @@
                     <Button Style="{StaticResource ToggleIconButton}" Content="&#xE8FD;" ToolTip="Queue"
                             Command="{Binding DataContext.ToggleQueueCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             Tag="{Binding DataContext.IsQueueOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:BoolToOnConverter.Instance}}" />
-                    <Button Style="{StaticResource IconButton}" Content="&#xE740;" ToolTip="Now playing and lyrics (F)"
-                            Command="{Binding DataContext.NowPlaying.ToggleCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Button Style="{StaticResource ToggleIconButton}" Content="&#xE720;" ToolTip="Lyrics (F)" AutomationProperties.Name="Lyrics"
+                            Command="{Binding DataContext.NowPlaying.ToggleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Tag="{Binding DataContext.NowPlaying.IsOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:BoolToOnConverter.Instance}}" />
                     <Button x:Name="MiniButton" Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Mini-player" Click="Mini_Click" />
                     <TextBlock Text="&#xE767;" FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="8,0" />

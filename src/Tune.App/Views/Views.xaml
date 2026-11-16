@@ -21,7 +21,6 @@
                 <TextBlock Text="{Binding Album.Title, StringFormat=Album · {0}}" Style="{StaticResource Caption}" Margin="0,8,0,0"
                            Visibility="{Binding Album, Converter={StaticResource NullToVis}}" />
                 <TextBlock Text="{Binding Duration, Converter={x:Static sh:DurationConverter.Instance}}" Style="{StaticResource Caption}" Margin="0,2,0,0" />
-                <TextBlock Text="Click to play · right-click for more" Style="{StaticResource Caption}" Foreground="{DynamicResource AccentBrush}" Margin="0,10,0,0" />
             </StackPanel>
         </StackPanel>
     </DataTemplate>
@@ -59,6 +58,7 @@
     <!-- ================= card (album / playlist / artist / song) ================= -->
     <DataTemplate x:Key="CardTemplate" DataType="{x:Type m:Card}">
         <Button x:Name="card" Width="196" Margin="0,0,12,0" Cursor="Hand" Focusable="False" MouseEnter="Card_MouseEnter" RenderTransformOrigin="0.5,0.5"
+                MouseRightButtonUp="Card_RightClick"
                 Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
@@ -158,7 +158,7 @@
     <!-- ================= featured card: tall, tinted with the art's own colour ================= -->
     <DataTemplate x:Key="FeaturedCardTemplate" DataType="{x:Type m:Card}">
         <Button x:Name="card" Width="210" Height="292" Margin="0,0,18,0" Cursor="Hand" Focusable="False" RenderTransformOrigin="0.5,0.5"
-                MouseEnter="Card_MouseEnter" AutomationProperties.Name="{Binding Title}"
+                MouseEnter="Card_MouseEnter" MouseRightButtonUp="Card_RightClick" AutomationProperties.Name="{Binding Title}"
                 Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}">
             <Button.RenderTransform>
                 <TranslateTransform />

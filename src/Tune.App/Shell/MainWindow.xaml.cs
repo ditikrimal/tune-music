@@ -238,7 +238,8 @@ public partial class MainWindow : Window
     private void NewPlaylist_Click(object sender, RoutedEventArgs e)
     {
         var lib = Vm.Services.Library;
-        var id = lib.CreatePlaylist($"My playlist #{lib.GetPlaylists().Count + 1}");
+        if (NameDialog.Ask(this, "New playlist", Vm.SuggestedPlaylistName) is not { } name) return;
+        var id = lib.CreatePlaylist(name);
         Vm.ReloadPlaylists();
         Vm.GoToCommand.Execute($"playlist:{id}");
     }

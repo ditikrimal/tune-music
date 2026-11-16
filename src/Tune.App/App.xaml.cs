@@ -197,6 +197,7 @@ public partial class App : Application
         Shell.InitPages();
         MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Window };
         MainWin.MiniPlayerRequested += ToggleMini;
+        Shell.AskPlaylistName = suggested => NameDialog.Ask(MainWin, "New playlist", suggested);
         Shell.GoToCommand.Execute("home");
         _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
 
