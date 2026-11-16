@@ -27,8 +27,9 @@ public sealed record Card(
     string? PlaylistId,
     Track? Track);
 
-/// <summary>A Home row. <paramref name="IsList"/>: a grid of song rows (Quick picks) instead of big cards.</summary>
-public sealed record Shelf(string Title, IReadOnlyList<Card> Items, bool IsLocal = false, bool IsList = false);
+/// <summary>A Home row. <paramref name="IsList"/>: a grid of song rows (Quick picks) instead of big cards;
+/// <paramref name="IsSpeedDial"/>: pages of 3×3 square tiles.</summary>
+public sealed record Shelf(string Title, IReadOnlyList<Card> Items, bool IsLocal = false, bool IsList = false, bool IsSpeedDial = false);
 
 public sealed record Collection(string Title, string? Subtitle, string? ThumbnailUrl, IReadOnlyList<Track> Tracks);
 

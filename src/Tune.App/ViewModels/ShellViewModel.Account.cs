@@ -26,6 +26,8 @@ public sealed partial class ShellViewModel
     /// <summary>Sidebar entry: your name, or "Profile" when signed out.</summary>
     public string AccountNavTitle => IsSignedIn ? AccountName.Split(' ')[0] : "Profile";
     public bool IsSyncing => Services.Account?.IsSyncing == true;
+    /// <summary>Above the speed dial: your name in capitals.</summary>
+    public string AccountLabel => IsSignedIn ? AccountName.ToUpperInvariant() : "";
     public string AccountInitial => AccountName.Length > 0 ? AccountName[..1].ToUpperInvariant() : "?";
     public string? AccountPhoto => Services.Account?.Profile?.PhotoUrl is { Length: > 0 } u ? u : null;
 
@@ -53,6 +55,7 @@ public sealed partial class ShellViewModel
         OnPropertyChanged(nameof(AccountTitle));
         OnPropertyChanged(nameof(AccountNavTitle));
         OnPropertyChanged(nameof(IsSyncing));
+        OnPropertyChanged(nameof(AccountLabel));
         OnPropertyChanged(nameof(AccountEmail));
         OnPropertyChanged(nameof(AccountInitial));
         OnPropertyChanged(nameof(AccountPhoto));
@@ -111,6 +114,7 @@ public sealed partial class ShellViewModel
     /// <summary>Changes from another device were applied: reload what shows likes, playlists or history.</summary>
     public void OnSyncApplied()
     {
+        HomeChanged(); // pins / layout may have come from the phone
         ReloadPlaylists();
         LikesChanged();
         Player.Refresh();

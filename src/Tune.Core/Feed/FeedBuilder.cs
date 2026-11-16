@@ -8,102 +8,174 @@ namespace Tune.Core.Feed;
 
 public sealed record FeedResult(IReadOnlyList<Shelf> Shelves, bool Offline);
 
-/// <summary>Builds the Home feed: local rows from play history first, then YouTube Music's anonymous discovery rows.</summary>
+/// <summary>
+/// Builds Home in the user's layout (Settings > Home): speed dial, quick picks, because-you-played, forgotten
+/// favourites, top artists, recently played, then YouTube Music's own rows. Everything personal is ranked by
+/// <see cref="Taste"/> (plays with recency, likes, skips) and changes day to day; a manual refresh reshuffles.
+/// </summary>
 public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
 {
-    private const int RecentMax = 12;
     private const int MinRowItems = 3;
     private const int BecauseRows = 3;
     private const int BecauseItems = 12;
-    private const int TopArtists = 8;
-    private static readonly TimeSpan SeedWindow = TimeSpan.FromDays(14);
-    private static readonly TimeSpan ArtistWindow = TimeSpan.FromDays(30);
-    private static readonly TimeSpan RadioTtl = TimeSpan.FromHours(6);
+    private const int RadioSeeds = 6;
+    private const int SpeedDialMax = 27;
     private const int QuickPicksMax = 20;
     private const int QuickPicksMin = 8;
-    private const int QuickExtraSeeds = 3;
+    private const int QuickFamiliar = 6;
+    private static readonly TimeSpan HistoryWindow = TimeSpan.FromDays(365);
+    private static readonly TimeSpan RadioTtl = TimeSpan.FromHours(6);
 
     private readonly ConcurrentDictionary<string, (DateTimeOffset At, IReadOnlyList<Track> Tracks)> _radioCache = new();
 
     /// <summary>Randomness for refreshes (tests pin it).</summary>
     public Random Random { get; init; } = Random.Shared;
 
-    /// <param name="fresh">A manual refresh: radios refetched, the "Because you played" seeds picked among more
-    /// favourites and Quick picks reshuffled, so Home actually changes.</param>
+    public Taste LoadTaste()
+    {
+        var now = clock.Now;
+        return new Taste(lib.GetPlays(now - HistoryWindow), lib.GetLiked(), lib.GetSkips(now - TimeSpan.FromDays(90)), now);
+    }
+
+    /// <param name="fresh">A manual refresh: radios refetched, other seeds, quick picks reshuffled.</param>
     public async Task<FeedResult> BuildAsync(bool fresh = false, CancellationToken ct = default)
     {
         var now = clock.Now;
-        var discoveryTask = DiscoveryAsync(ct);
+        var layout = HomeLayout.Load(lib).Where(s => s.Visible).Select(s => s.Section).ToList();
+        var discoveryTask = layout.Contains(HomeSection.Discovery) ? DiscoveryAsync(ct) : Task.FromResult<(IReadOnlyList<Shelf>, bool)>(([], false));
+        var taste = LoadTaste();
+        // the same picks all day (Home doesn't jump around between opens); new ones tomorrow or on refresh
+        var random = fresh ? Random : new Random(now.UtcDateTime.DayOfYear * 7919 + now.Year);
 
-        var shelves = new List<Shelf>();
-        var recent = lib.GetRecent(RecentMax);
-        if (recent.Count >= MinRowItems)
-            shelves.Add(new Shelf("Recently played", recent.Select(SongCard).ToList(), IsLocal: true));
-
-        var seeds = fresh
-            ? WeightedPick(lib.GetTopTracks(now - SeedWindow, 8).Select(s => s.Track).ToList(), BecauseRows)
-            : lib.GetTopTracks(now - SeedWindow, BecauseRows).Select(s => s.Track).ToList();
-        if (seeds.Count == 0) seeds = recent.Take(BecauseRows).ToList();
+        var seeds = taste.Seeds(RadioSeeds, random).ToList();
+        if (seeds.Count == 0) seeds = lib.GetRecent(RadioSeeds).ToList();
         var radios = await Task.WhenAll(seeds.Select(s => RadioAsync(s.VideoId, now, ct, fresh))).ConfigureAwait(false);
 
-        // more favourites feed Quick picks (their radios are fetched alongside)
-        var favourites = lib.GetTopTracks(now - ArtistWindow, BecauseRows + QuickExtraSeeds + 6).Select(s => s.Track).ToList();
-        var extraSeeds = favourites.Where(f => seeds.All(s => s.VideoId != f.VideoId)).Take(QuickExtraSeeds).ToList();
-        var extraRadios = await Task.WhenAll(extraSeeds.Select(s => RadioAsync(s.VideoId, now, ct, fresh))).ConfigureAwait(false);
+        var shelves = new Dictionary<HomeSection, List<Shelf>>();
+        var shown = new HashSet<string>(); // songs already on Home (no row repeats another)
 
-        var shown = new HashSet<string>(seeds.Select(s => s.VideoId));
-        for (var i = 0; i < seeds.Count; i++)
+        if (layout.Contains(HomeSection.SpeedDial) && SpeedDial(taste) is { Count: > 0 } dial)
+            shelves[HomeSection.SpeedDial] = [new Shelf("Speed dial", dial, IsLocal: true, IsSpeedDial: true)];
+
+        if (layout.Contains(HomeSection.QuickPicks))
         {
-            if (radios[i] is not { } radio) continue;
-            var items = radio.Where(t => shown.Add(t.VideoId)).Take(BecauseItems).Select(SongCard).ToList();
-            if (items.Count > 0)
-                shelves.Add(new Shelf("Because you played " + seeds[i].Title, items, IsLocal: true));
+            var picks = QuickPicks(taste, radios, shown, random, jitter: fresh);
+            if (picks.Count >= QuickPicksMin)
+            {
+                shelves[HomeSection.QuickPicks] = [new Shelf("Quick picks", picks.Select(SongCard).ToList(), IsLocal: true, IsList: true)];
+                foreach (var t in picks) shown.Add(t.VideoId);
+            }
         }
 
-        var picks = QuickPicks(radios, extraRadios, favourites, shown, fresh ? Random : null);
-        if (picks.Count >= QuickPicksMin)
-            shelves.Insert(recent.Count >= MinRowItems ? 1 : 0, new Shelf("Quick picks", picks.Select(SongCard).ToList(), IsLocal: true, IsList: true));
+        if (layout.Contains(HomeSection.Because))
+        {
+            var rows = new List<Shelf>();
+            for (var i = 0; i < seeds.Count && rows.Count < BecauseRows; i++)
+            {
+                if (radios[i] is not { } radio) continue;
+                var items = Taste.CapPerArtist(radio.Skip(1).Where(t => !taste.SkippedIds.Contains(t.VideoId) && !shown.Contains(t.VideoId)
+                                                                     && seeds.All(s => s.VideoId != t.VideoId)), 3)
+                    .Take(BecauseItems).ToList();
+                foreach (var t in items) shown.Add(t.VideoId);
+                if (items.Count > 0) rows.Add(new Shelf("Because you played " + seeds[i].Title, items.Select(SongCard).ToList(), IsLocal: true));
+            }
+            shelves[HomeSection.Because] = rows;
+        }
 
-        var top = lib.GetTopArtists(now - ArtistWindow, TopArtists).Where(a => a.Artist.BrowseId is not null).ToList();
-        var pictures = await Task.WhenAll(top.Select(a => ArtistPictureAsync(a.Artist.BrowseId!, now, ct))).ConfigureAwait(false);
-        var artists = top
-            .Select((a, i) => new Card(CardKind.Artist, a.Artist.Name, "Artist", pictures[i], null, a.Artist.BrowseId, null, null))
-            .ToList();
-        if (artists.Count >= MinRowItems)
-            shelves.Add(new Shelf("Your top artists", artists, IsLocal: true));
+        if (layout.Contains(HomeSection.Forgotten) && taste.Forgotten(BecauseItems) is { Count: >= MinRowItems } forgotten)
+            shelves[HomeSection.Forgotten] = [new Shelf("Forgotten favourites", forgotten.Select(SongCard).ToList(), IsLocal: true)];
+
+        if (layout.Contains(HomeSection.Artists))
+        {
+            var top = taste.TopArtists(8);
+            var pictures = await Task.WhenAll(top.Select(a => ArtistPictureAsync(a.BrowseId!, now, ct))).ConfigureAwait(false);
+            var artists = top.Select((a, i) => new Card(CardKind.Artist, a.Name, "Artist", pictures[i], null, a.BrowseId, null, null)).ToList();
+            if (artists.Count >= MinRowItems) shelves[HomeSection.Artists] = [new Shelf("Your top artists", artists, IsLocal: true)];
+        }
+
+        if (layout.Contains(HomeSection.Recent) && lib.GetRecent(12) is { Count: >= MinRowItems } recent)
+            shelves[HomeSection.Recent] = [new Shelf("Recently played", recent.Select(SongCard).ToList(), IsLocal: true)];
 
         var (discovery, offline) = await discoveryTask.ConfigureAwait(false);
-        shelves.AddRange(discovery);
-        return new FeedResult(shelves, offline);
+        shelves[HomeSection.Discovery] = discovery.ToList();
+        return new FeedResult(layout.SelectMany(s => shelves.GetValueOrDefault(s) ?? []).ToList(), offline);
+    }
+
+    /// <summary>Pins first (your own playlists kept up to date: name, art, deleted), then the songs you come back to.</summary>
+    public IReadOnlyList<Card> SpeedDial(Taste taste)
+    {
+        var cards = new List<Card>();
+        foreach (var pin in SpeedDialPins.Load(lib))
+        {
+            if (pin.PlaylistId is { } p && p.StartsWith("tune:", StringComparison.Ordinal))
+            {
+                if (lib.PlaylistIdByUid(p[5..]) is not { } id) continue; // deleted
+                var info = lib.GetPlaylists().FirstOrDefault(x => x.Id == id);
+                if (info is null) continue;
+                cards.Add(pin with { Title = info.Name, ThumbnailUrl = info.ThumbnailUrl ?? pin.ThumbnailUrl });
+            }
+            else cards.Add(pin);
+        }
+        var pinnedSongs = cards.Where(c => c.Kind == CardKind.Song).Select(c => c.VideoId).ToHashSet();
+        var songs = taste.SpeedDial(SpeedDialMax).Where(t => !pinnedSongs.Contains(t.VideoId));
+        if (taste.IsEmpty) songs = lib.GetLiked().Take(SpeedDialMax);
+        cards.AddRange(songs.Select(SongCard));
+        return cards.Take(SpeedDialMax).ToList();
     }
 
     /// <summary>
-    /// Like YouTube Music's Quick picks: mostly new songs close to what you play (round-robin across several radios,
-    /// deeper than the "Because you played" rows so nothing repeats), with a familiar favourite every few songs.
+    /// Like YouTube Music's Quick picks: mostly new songs, ranked by how many of your radios suggest them (and how
+    /// early), boosted by artists you love; nothing you heard in the last day and a half or keep skipping; at most
+    /// two per artist; with a familiar favourite you haven't heard today every third song.
     /// </summary>
-    private static List<Track> QuickPicks(IReadOnlyList<Track>?[] becauseRadios, IReadOnlyList<Track>?[] extraRadios,
-        IReadOnlyList<Track> favourites, HashSet<string> shown, Random? shuffle = null)
+    private static List<Track> QuickPicks(Taste taste, IReadOnlyList<Track>?[] radios, IReadOnlySet<string> shown, Random random, bool jitter)
     {
-        var pools = becauseRadios.Select(r => (r ?? []).Skip(BecauseItems + 1).ToList())
-            .Concat(extraRadios.Select(r => (r ?? []).Skip(1).ToList()))
-            .Where(p => p.Count > 0).ToList();
-        if (shuffle is not null)
+        var candidates = new Dictionary<string, (Track Track, double Score)>();
+        foreach (var radio in radios)
         {
-            foreach (var p in pools) Shuffle(p, shuffle);
-            favourites = Shuffled(favourites, shuffle);
+            if (radio is null) continue;
+            for (var rank = 1; rank < radio.Count; rank++) // [0] is the seed itself
+            {
+                var t = radio[rank];
+                if (shown.Contains(t.VideoId) || taste.SkippedIds.Contains(t.VideoId)) continue;
+                var c = candidates.GetValueOrDefault(t.VideoId, (t, 0));
+                candidates[t.VideoId] = (t, c.Score + 1.0 / (1 + 0.12 * rank));
+            }
         }
-        var fresh = new List<Track>();
-        for (var depth = 0; fresh.Count < QuickPicksMax && pools.Any(p => depth < p.Count); depth++)
-            foreach (var pool in pools)
-                if (depth < pool.Count && fresh.Count < QuickPicksMax && shown.Add(pool[depth].VideoId)) fresh.Add(pool[depth]);
+        var ranked = candidates.Values
+            .Select(c =>
+            {
+                var s = c.Score * (1 + 0.8 * taste.ArtistAffinity(c.Track));
+                if (taste.HeardWithin(c.Track.VideoId, TimeSpan.FromHours(36))) s *= 0.15;
+                if (jitter) s *= 0.6 + 0.8 * random.NextDouble();
+                return (c.Track, Score: s);
+            })
+            .OrderByDescending(x => x.Score).Select(x => x.Track).ToList();
+        var fresh = new Queue<Track>(Taste.CapPerArtist(ranked.Where(t => !taste.Knows(t.VideoId)), 2));
 
-        var familiar = new Queue<Track>(favourites.Where(f => shown.Add(f.VideoId)));
+        var familiarPool = taste.Lately()
+            .Where(e => !shown.Contains(e.Track.VideoId) && !taste.HeardWithin(e.Track.VideoId, TimeSpan.FromHours(20)))
+            .Take(25).Select(e => (e.Track, Key: e.Lately * (0.5 + random.NextDouble()))).OrderByDescending(x => x.Key).Select(x => x.Track);
+        var familiar = new Queue<Track>(Taste.CapPerArtist(familiarPool, 1).Take(QuickFamiliar));
+        // songs you know that the radios suggested also count as familiar
+        foreach (var t in ranked.Where(t => taste.Knows(t.VideoId) && !taste.HeardWithin(t.VideoId, TimeSpan.FromHours(20)) && familiar.All(f => f.VideoId != t.VideoId)).Take(2))
+            familiar.Enqueue(t);
+
         var picks = new List<Track>();
-        foreach (var t in fresh)
+        var perArtist = new Dictionary<string, int>();
+        bool Fits(Track t)
         {
-            if (picks.Count >= QuickPicksMax) break;
-            if (picks.Count % 5 == 2 && familiar.Count > 0) picks.Add(familiar.Dequeue()); // a favourite every 5 songs
-            if (picks.Count < QuickPicksMax) picks.Add(t);
+            if (picks.Any(p => p.VideoId == t.VideoId)) return false;
+            var key = t.Artists.Count > 0 ? Taste.ArtistKey(t.Artists[0]) : t.VideoId;
+            if (perArtist.GetValueOrDefault(key) >= 2) return false;
+            perArtist[key] = perArtist.GetValueOrDefault(key) + 1;
+            return true;
+        }
+        while (picks.Count < QuickPicksMax && (fresh.Count > 0 || familiar.Count > 0))
+        {
+            var wantFamiliar = picks.Count % 3 == 1 && familiar.Count > 0;
+            var next = wantFamiliar || fresh.Count == 0 ? familiar.Dequeue() : fresh.Dequeue();
+            if (Fits(next)) picks.Add(next);
         }
         return picks;
     }
@@ -119,39 +191,6 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
             Log.Warn("Discovery rows unavailable", e);
             return ([], true);
         }
-    }
-
-    /// <summary>Picks <paramref name="count"/> items, favouring the front of the list (rank 1 is likelier than rank 8).</summary>
-    private List<Track> WeightedPick(List<Track> ranked, int count)
-    {
-        var pool = ranked.ToList();
-        var chosen = new List<Track>();
-        while (chosen.Count < count && pool.Count > 0)
-        {
-            var total = pool.Count * (pool.Count + 1) / 2.0;
-            var roll = Random.NextDouble() * total;
-            var i = 0;
-            for (var acc = (double)pool.Count; roll > acc && i < pool.Count - 1; acc += pool.Count - ++i) { }
-            chosen.Add(pool[i]);
-            pool.RemoveAt(i);
-        }
-        return chosen;
-    }
-
-    private static void Shuffle<T>(List<T> list, Random r)
-    {
-        for (var i = list.Count - 1; i > 0; i--)
-        {
-            var j = r.Next(i + 1);
-            (list[i], list[j]) = (list[j], list[i]);
-        }
-    }
-
-    private static List<T> Shuffled<T>(IEnumerable<T> items, Random r)
-    {
-        var l = items.ToList();
-        Shuffle(l, r);
-        return l;
     }
 
     private async Task<IReadOnlyList<Track>?> RadioAsync(string videoId, DateTimeOffset now, CancellationToken ct, bool bypassCache = false)

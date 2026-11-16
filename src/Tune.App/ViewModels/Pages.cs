@@ -164,6 +164,9 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
         _ => "Good evening",
     };
 
+    /// <summary>Something on Home changed (pins, layout): rebuild next time it shows.</summary>
+    public void Invalidate() => _loadedAt = DateTimeOffset.MinValue;
+
     /// <summary>Called when the page is shown again; reloads if the feed is old.</summary>
     public void OnShown()
     {
@@ -335,10 +338,22 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
     }
 
     public static CollectionViewModel Album(ShellViewModel s, Card c) =>
-        new(s, CollectionKind.Album, c.Title, null, ct => s.Services.Api.GetAlbumAsync(c.BrowseId!, ct)) { ThumbnailUrl = c.ThumbnailUrl };
+        new(s, CollectionKind.Album, c.Title, null, ct => s.Services.Api.GetAlbumAsync(c.BrowseId!, ct)) { ThumbnailUrl = c.ThumbnailUrl, SourceCard = c };
 
     public static CollectionViewModel YtPlaylist(ShellViewModel s, Card c) =>
-        new(s, CollectionKind.YtPlaylist, c.Title, null, ct => s.Services.Api.GetPlaylistAsync(c.PlaylistId!, ct)) { ThumbnailUrl = c.ThumbnailUrl };
+        new(s, CollectionKind.YtPlaylist, c.Title, null, ct => s.Services.Api.GetPlaylistAsync(c.PlaylistId!, ct)) { ThumbnailUrl = c.ThumbnailUrl, SourceCard = c };
+
+    /// <summary>The card this page was opened from (albums / YouTube playlists): what "Pin to speed dial" pins.</summary>
+    public Card? SourceCard { get; init; }
+
+    /// <summary>What pinning this page puts on the speed dial (null: can't be pinned, e.g. Downloads).</summary>
+    public Card? PinCard => Kind switch
+    {
+        CollectionKind.LocalPlaylist when PlaylistId is { } id && _shell.Services.Library.PlaylistUid(id) is { } uid =>
+            Tune.Core.Feed.SpeedDialPins.LocalPlaylistCard(uid, Title, ThumbnailUrl),
+        CollectionKind.Album or CollectionKind.YtPlaylist => SourceCard is { } c ? c with { Title = Title, ThumbnailUrl = ThumbnailUrl ?? c.ThumbnailUrl } : null,
+        _ => null,
+    };
 
     public static CollectionViewModel Liked(ShellViewModel s) =>
         new(s, CollectionKind.Liked, "Liked songs", "liked", _ =>

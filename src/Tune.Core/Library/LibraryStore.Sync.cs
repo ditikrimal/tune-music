@@ -10,6 +10,8 @@ public static class SyncKinds
     public const string Playlist = "playlist";
     /// <summary>Key = a UTC day (yyyyMMdd): this device's plays that day travel as one document.</summary>
     public const string Plays = "plays";
+    /// <summary>A synced setting (Home layout, speed dial pins); key = the setting key.</summary>
+    public const string Setting = "setting";
 }
 
 /// <summary>Something changed here at <paramref name="UpdatedAt"/> (ms) and has not reached the account yet.</summary>
@@ -100,6 +102,7 @@ public sealed partial class LibraryStore
             Exec("UPDATE sync_items SET pushed = 0");
             Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'like', video_id, 1 FROM likes");
             Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'playlist', uid, 1 FROM playlists");
+            Exec("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'setting', key, 1 FROM settings WHERE key IN ('home.layout', 'speeddial.pins')");
             Exec("""
                 INSERT OR IGNORE INTO sync_items (kind, key, updated_at)
                 SELECT 'plays', strftime('%Y%m%d', at / 1000, 'unixepoch'), 1 FROM plays WHERE remote = 0 GROUP BY 2

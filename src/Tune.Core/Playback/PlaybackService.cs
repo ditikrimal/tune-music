@@ -222,9 +222,13 @@ public sealed class PlaybackService
             return;
         }
 
+        // leaving a song early (it played a bit but never counted as a play): a skip, for recommendations
+        if (resetTrackState && _loaded && !_recorded && _playingId is { } skipped && _player.Position >= TimeSpan.FromSeconds(3))
+            _lib.RecordSkip(skipped, _clock.Now);
         var (gen, ct) = BeginLoad();
         if (resetTrackState)
         {
+            _playingId = track.VideoId;
             _recorded = false;
             _lookaheadDone = false;
             _reloadTried = false;
@@ -554,6 +558,8 @@ public sealed class PlaybackService
             }
         }
     }
+
+    private string? _playingId;
 
     private void RecordPlay()
     {

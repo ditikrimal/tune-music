@@ -22,6 +22,17 @@ public sealed class EqualsToTagConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
+/// <summary>Visible when the value equals the parameter (e.g. the settings category shown).</summary>
+public sealed class EqualsToVisConverter : IValueConverter
+{
+    public static readonly EqualsToVisConverter Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Equals(value?.ToString(), parameter?.ToString()) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
 public sealed class BoolToOnConverter : IValueConverter
 {
     public static readonly BoolToOnConverter Instance = new();
@@ -105,8 +116,12 @@ public sealed class FirstItemTemplateSelector : System.Windows.Controls.DataTemp
     /// <summary>For song-grid shelves (Quick picks).</summary>
     public DataTemplate? List { get; set; }
 
+    /// <summary>For the speed dial (square tiles in pages).</summary>
+    public DataTemplate? SpeedDial { get; set; }
+
     public override DataTemplate? SelectTemplate(object? item, DependencyObject container)
     {
+        if (item is Tune.Core.Models.Shelf { IsSpeedDial: true } && SpeedDial is not null) return SpeedDial;
         if (item is Tune.Core.Models.Shelf { IsList: true } && List is not null) return List;
         var owner = System.Windows.Controls.ItemsControl.ItemsControlFromItemContainer(container);
         return owner is not null && owner.Items.Count > 0 && ReferenceEquals(owner.Items[0], item) ? First : Rest;

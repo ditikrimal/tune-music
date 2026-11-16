@@ -11,7 +11,7 @@ public sealed record SyncResult(int Pulled, int Pushed, bool ChangedHere);
 /// </summary>
 public sealed class SyncEngine(LibraryStore lib, ISyncRemote remote, string deviceId)
 {
-    public const string Likes = "likes", Playlists = "playlists", Plays = "plays";
+    public const string Likes = "likes", Playlists = "playlists", Plays = "plays", Settings = "settings";
     private const int Page = 300;
 
     public async Task<SyncResult> SyncAsync(CancellationToken ct = default)
@@ -46,6 +46,12 @@ public sealed class SyncEngine(LibraryStore lib, ISyncRemote remote, string devi
         }
         pulled += playDocs.Docs.Count;
         playDocs.Commit();
+
+        var settingDocs = await PullAllAsync(Settings, ct).ConfigureAwait(false);
+        foreach (var d in settingDocs.Docs)
+            if (d.Str("value") is { } value) changed |= lib.ApplySetting(d.Id, value, d.Long("updatedAt"));
+        pulled += settingDocs.Docs.Count;
+        settingDocs.Commit();
 
         // ---- push ----
         var pending = lib.PendingSync();
@@ -88,6 +94,10 @@ public sealed class SyncEngine(LibraryStore lib, ISyncRemote remote, string devi
                     ["tracks"] = SyncFormat.TracksJson(plays.Select(x => x.Track).DistinctBy(t => t.VideoId)),
                     ["updatedAt"] = item.UpdatedAt,
                 });
+            case SyncKinds.Setting:
+                return lib.GetSetting(item.Key) is { } value
+                    ? new RemoteDoc(Settings, item.Key, new Dictionary<string, object?> { ["value"] = value, ["updatedAt"] = item.UpdatedAt })
+                    : null;
             default:
                 return null;
         }
@@ -132,6 +142,6 @@ public sealed class SyncEngine(LibraryStore lib, ISyncRemote remote, string devi
 
     public static void ResetCursors(LibraryStore lib)
     {
-        foreach (var c in new[] { Likes, Playlists, Plays }) lib.SetSetting($"sync.cursor.{c}", "");
+        foreach (var c in new[] { Likes, Playlists, Plays, Settings }) lib.SetSetting($"sync.cursor.{c}", "");
     }
 }

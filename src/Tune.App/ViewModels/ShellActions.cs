@@ -37,6 +37,9 @@ public sealed partial class ShellViewModel
             case CardKind.Album when card.BrowseId is not null:
                 Navigate(CollectionViewModel.Album(this, card));
                 break;
+            case CardKind.Playlist when card.PlaylistId is { } pid && pid.StartsWith("tune:", StringComparison.Ordinal):
+                if (Services.Library.PlaylistIdByUid(pid[5..]) is { } local) GoToCommand.Execute($"playlist:{local}");
+                break;
             case CardKind.Playlist when card.PlaylistId is not null:
                 Navigate(CollectionViewModel.YtPlaylist(this, card));
                 break;
@@ -44,6 +47,23 @@ public sealed partial class ShellViewModel
                 Navigate(new ArtistViewModel(this, card.BrowseId, card.Title));
                 break;
         }
+    }
+
+    public bool IsPinned(Card card) => Tune.Core.Feed.SpeedDialPins.IsPinned(Services.Library, card);
+
+    /// <summary>Pin to / unpin from the speed dial (Home rebuilds when shown next, or right away if it's open).</summary>
+    public void TogglePin(Card card)
+    {
+        var pinned = Tune.Core.Feed.SpeedDialPins.Toggle(Services.Library, card);
+        ShowToast(pinned ? "Pinned to speed dial" : "Removed from speed dial");
+        HomeChanged();
+    }
+
+    /// <summary>Pins or the Home layout changed: rebuild Home.</summary>
+    public void HomeChanged()
+    {
+        _home?.Invalidate();
+        if (Page is HomeViewModel home) home.OnShown();
     }
 
     /// <summary>The green play button on a card: plays an album/playlist straight away.</summary>

@@ -94,6 +94,7 @@ public partial class Views : ResourceDictionary
         var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.MousePoint };
         var what = card.Kind switch { Tune.Core.Models.CardKind.Album => "album", Tune.Core.Models.CardKind.Artist => "artist", _ => "playlist" };
         menu.Items.Add(Item($"Open {what}", () => Shell.OpenCardCommand.Execute(card)));
+        if (card.Kind != Tune.Core.Models.CardKind.Artist) menu.Items.Add(PinItem(card));
         menu.IsOpen = true;
     }
 
@@ -105,6 +106,18 @@ public partial class Views : ResourceDictionary
             : (sender as FrameworkElement)?.DataContext is Tune.Core.Models.Shelf shelf
                 ? shelf.Items.Where(c => c.Track is not null).Select(c => c.Track!).ToList()
                 : [];
+
+    /// <summary>Speed dial: a song plays with the dial's other songs after it; a pinned album/playlist opens.</summary>
+    private void SpeedDialTile_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Tune.Core.Models.Card card) return;
+        if (card.Track is { } t)
+        {
+            var tracks = ShelfTracks(sender);
+            _ = Shell.Services.Playback.PlayListAsync(tracks, Math.Max(0, tracks.FindIndex(x => x.VideoId == t.VideoId)));
+        }
+        else Shell.OpenCardCommand.Execute(card);
+    }
 
     private void QuickPick_Click(object sender, MouseButtonEventArgs e)
     {
@@ -165,6 +178,10 @@ public partial class Views : ResourceDictionary
         if (Shell.Page is CollectionViewModel { IsLocal: true } c)
             menu.Items.Add(Item("Remove from this playlist", () => c.Remove(row)));
 
+        var songCard = new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Song, row.Track.Title, row.Track.ArtistLine, row.Track.ThumbnailUrl,
+            row.Track.VideoId, null, null, row.Track);
+        menu.Items.Add(PinItem(songCard));
+
         var dl = Shell.Services.Downloads.StateOf(row.Track.VideoId);
         menu.Items.Add(dl == Tune.Core.Offline.DownloadState.None
             ? Item("Download", () => Shell.Download([row.Track]))
@@ -179,6 +196,9 @@ public partial class Views : ResourceDictionary
 
         menu.IsOpen = true;
     }
+
+    private static MenuItem PinItem(Tune.Core.Models.Card card) =>
+        Item(Shell.IsPinned(card) ? "Unpin from speed dial" : "Pin to speed dial", () => Shell.TogglePin(card));
 
     private static MenuItem Item(string header, Action action)
     {
@@ -212,6 +232,7 @@ public partial class Views : ResourceDictionary
         if (c.AnyDownloaded)
             menu.Items.Add(Item(c.IsDownloads ? "Remove all downloads" : "Remove downloads from this " + (c.Kind == CollectionKind.Album ? "album" : "playlist"),
                 c.RemoveAllDownloads));
+        if (c.PinCard is { } pin) menu.Items.Add(PinItem(pin));
         if (c.IsLocal)
         {
             menu.Items.Add(Item("Rename", () => c.BeginRenameCommand.Execute(null)));

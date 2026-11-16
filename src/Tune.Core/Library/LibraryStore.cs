@@ -49,6 +49,7 @@ public sealed partial class LibraryStore : IDisposable, Tune.Core.Streams.IStrea
         if (Scalar("SELECT 1 FROM pragma_table_info('downloads') WHERE name = 'smart'") is null)
             Exec("ALTER TABLE downloads ADD COLUMN smart INTEGER NOT NULL DEFAULT 0;");
         MigrateSync();
+        MigrateTaste();
     }
 
     public void Dispose() => _db.Dispose();
@@ -388,8 +389,11 @@ public sealed partial class LibraryStore : IDisposable, Tune.Core.Streams.IStrea
 
     public string? GetSetting(string key) => Scalar("SELECT value FROM settings WHERE key = $k", ("$k", key)) as string;
 
-    public void SetSetting(string key, string value) =>
+    public void SetSetting(string key, string value)
+    {
         Exec("INSERT INTO settings (key, value) VALUES ($k, $v) ON CONFLICT(key) DO UPDATE SET value = excluded.value", ("$k", key), ("$v", value));
+        if (SyncedSettings.Contains(key)) Touch(SyncKinds.Setting, key); // Home layout + pins follow the account
+    }
 
     // ---------- helpers ----------
 
