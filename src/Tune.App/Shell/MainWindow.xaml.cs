@@ -187,6 +187,11 @@ public partial class MainWindow : Window
 
     private void OfflinePill_Click(object sender, MouseButtonEventArgs e) => Vm.GoToCommand.Execute("downloads");
 
+    private void ProfilePopup_Opened(object? sender, EventArgs e) => Vm.RefreshAccount();
+
+    /// <summary>A menu row in the account card was used: close the card.</summary>
+    private void ProfileMenu_Click(object sender, RoutedEventArgs e) => ProfileButton.IsChecked = false;
+
     private void Sleep_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not ViewModels.ShellViewModel { Player: var player }) return;

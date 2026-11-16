@@ -219,6 +219,7 @@ public partial class App : Application
         // account sync: likes/playlists/history from other devices arrive here
         _library.SyncApplied += () => Dispatcher.BeginInvoke(Shell.OnSyncApplied);
         _account?.Start();
+        Shell.RefreshAccount();
         _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
 
         // media keys + Windows media flyout need a window handle; creating it doesn't show the window

@@ -20,12 +20,17 @@ public sealed partial class ShellViewModel
     public bool IsSignedOut => AccountAvailable && !IsSignedIn;
     public string AccountName => Services.Account?.Profile is { } p ? p.Name ?? p.Email ?? "Signed in" : "";
     public string? AccountEmail => Services.Account?.Profile?.Email;
+    public string AccountGreeting => $"Hi, {AccountName.Split(' ')[0]}!";
     public string AccountInitial => AccountName.Length > 0 ? AccountName[..1].ToUpperInvariant() : "?";
     public string? AccountPhoto => Services.Account?.Profile?.PhotoUrl is { Length: > 0 } u ? u : null;
 
     public void RefreshAccount()
     {
-        if (Services.Account is not { } account) return;
+        if (Services.Account is not { } account)
+        {
+            AccountStatus = "Sign-in isn't available in this version of Tune.";
+            return;
+        }
         if (!_accountHooked)
         {
             _accountHooked = true;
@@ -34,11 +39,12 @@ public sealed partial class ShellViewModel
         AccountStatus = !account.IsSignedIn ? "Sign in to keep your likes, playlists and history on every device — and get them back after a reinstall."
             : account.IsSyncing ? "Syncing…"
             : account.LastError is { } err ? $"Couldn't sync: {err}"
-            : account.LastSynced is { } at ? $"Synced {Ago(at)}"
+            : account.LastSynced is { } at ? $"Likes, playlists and history synced {Ago(at)}"
             : "Waiting to sync";
         OnPropertyChanged(nameof(IsSignedIn));
         OnPropertyChanged(nameof(IsSignedOut));
         OnPropertyChanged(nameof(AccountName));
+        OnPropertyChanged(nameof(AccountGreeting));
         OnPropertyChanged(nameof(AccountEmail));
         OnPropertyChanged(nameof(AccountInitial));
         OnPropertyChanged(nameof(AccountPhoto));
