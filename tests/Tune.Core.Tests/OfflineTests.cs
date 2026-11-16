@@ -34,7 +34,7 @@ public sealed class FakeOffline : IOfflineSource
     public FakeNetwork Net { get; } = new();
     public IConnectivity Network => Net;
     public string? LocalPath(string videoId) => Files.GetValueOrDefault(videoId);
-    public IReadOnlyList<Track> DownloadedTracks() => Downloads;
+    public IReadOnlyList<Track> PlayableTracks() => Downloads;
 
     public void Add(Track t)
     {

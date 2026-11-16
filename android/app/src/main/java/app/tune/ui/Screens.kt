@@ -106,6 +106,7 @@ fun HomeScreen() {
                 IconBtn(Ico.Settings, "Settings") { app.nav.navigate("settings") }
             }
         }
+        item { UpdateBanner() }
         if (!online || state?.getOrNull()?.offline == true) {
             item { OfflineHome() }
             return@LazyColumn
@@ -613,6 +614,7 @@ fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
             }
         }
         item { SmartSection() }
+        item { UpdatesSection() }
         item { ImportSection() }
         item {
             val dv by app.graph.downloads.version.collectAsState()
@@ -630,6 +632,84 @@ fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
                 }.padding(12.dp))
             }
             Text("Tune ${BuildConfigLite.VERSION}", style = Type.caption, color = c.subtle, modifier = Modifier.padding(20.dp))
+        }
+    }
+}
+
+/**
+ * Downloads the new APK and opens Android's installer. The first time, Android needs "Allow from this source"
+ * for Tune: we open that screen and the user taps Update again.
+ */
+private fun startUpdate(app: AppState, context: android.content.Context, scope: kotlinx.coroutines.CoroutineScope) {
+    val updater = app.graph.updater
+    val release = updater.available.value ?: return
+    if (updater.progress.value != null) return
+    if (!updater.canInstall()) {
+        app.graph.toast("Allow Tune to install updates, then tap Update again")
+        runCatching { context.startActivity(updater.openInstallPermission()) }
+        return
+    }
+    scope.launch {
+        runCatching { updater.download(release) }
+            .onSuccess { context.startActivity(it) }
+            .onFailure { app.graph.toast("The update didn’t download — try again on Wi-Fi") }
+    }
+}
+
+/** Home: a newer Tune is out. One tap downloads it and opens the installer (your library stays). */
+@Composable
+private fun UpdateBanner() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val release by app.graph.updater.available.collectAsState()
+    val progress by app.graph.updater.progress.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val r = release ?: return
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card)
+        .padding(start = 18.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Tune ${r.versionName} is available", style = Type.bodyStrong, color = c.text)
+            Text(if (progress != null) "Downloading… ${((progress ?: 0f) * 100).toInt()}%" else "Update to get the newest features and fixes.",
+                style = Type.caption, color = c.subtle)
+        }
+        Box(Modifier.clip(RoundedCornerShape(20.dp)).background(if (progress != null) c.track else c.accent)
+            .clickable(enabled = progress == null) { startUpdate(app, context, scope) }.padding(horizontal = 18.dp, vertical = 10.dp)) {
+            Text("Update", style = Type.bodyStrong, color = if (progress != null) c.subtle else c.onAccent)
+        }
+    }
+}
+
+/** Settings > Updates: this version, and a button to check now / install. */
+@Composable
+private fun UpdatesSection() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val updater = app.graph.updater
+    val release by updater.available.collectAsState()
+    val progress by updater.progress.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        Text("UPDATES", style = Type.label, color = c.subtle, modifier = Modifier.padding(top = 28.dp, bottom = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Tune ${updater.currentVersion}", style = Type.bodyStrong, color = c.text)
+                Text(when {
+                    progress != null -> "Downloading… ${((progress ?: 0f) * 100).toInt()}%"
+                    release != null -> "Tune ${release!!.versionName} is available."
+                    else -> status ?: "Tune checks for new versions every few hours."
+                }, style = Type.caption, color = c.subtle)
+            }
+            Text(if (release != null) "Update" else "Check", style = Type.bodyStrong, color = c.accentText,
+                modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable(enabled = progress == null) {
+                    if (release != null) startUpdate(app, context, scope)
+                    else {
+                        status = "Checking…"
+                        scope.launch { status = if (updater.check(force = true) == null) "You have the latest version." else null }
+                    }
+                }.padding(12.dp))
         }
     }
 }

@@ -288,11 +288,15 @@ public sealed class PlaybackService
     {
         if (IsOffline) return;
         var items = Queue.Items;
+        var keep = new List<Track>();
+        if (Queue.Current is { } now) keep.Add(now);
         for (int i = Queue.CurrentIndex + 1, n = 0; i < items.Count && n < PrepareAhead; i++, n++)
         {
             var id = items[i].VideoId;
+            keep.Add(items[i]);
             if (_offline?.LocalPath(id) is null && !_resolver.IsKnown(id)) Spawn(() => _resolver.PrepareAsync(id));
         }
+        _offline?.KeepForOffline(keep); // the streaming cache saves these for offline
     }
 
     /// <summary>Resume after a long pause: fresh URL, same position. Without network it stays paused.</summary>
@@ -367,7 +371,7 @@ public sealed class PlaybackService
                 return;
             }
         }
-        var downloads = _offline!.DownloadedTracks();
+        var downloads = _offline!.PlayableTracks();
         if (downloads.Count == 0)
         {
             Stop();

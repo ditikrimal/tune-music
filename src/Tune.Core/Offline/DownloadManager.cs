@@ -18,8 +18,11 @@ public interface IOfflineSource
 
     IConnectivity Network { get; }
 
-    /// <summary>Downloaded songs, newest first.</summary>
-    IReadOnlyList<Track> DownloadedTracks();
+    /// <summary>Songs that play without internet (downloads first, newest first; then the streaming cache).</summary>
+    IReadOnlyList<Track> PlayableTracks();
+
+    /// <summary>Playing online: the current song and the next few, so the cache can keep them for offline.</summary>
+    void KeepForOffline(IReadOnlyList<Track> tracks) { }
 }
 
 /// <summary>
@@ -28,7 +31,6 @@ public interface IOfflineSource
 /// </summary>
 public sealed class DownloadManager : IOfflineSource, IDisposable
 {
-    private const long ChunkBytes = 4L * 1024 * 1024; // googlevideo throttles long single requests; ranged chunks stay fast
     private const int MaxAttempts = 3;
 
     private readonly LibraryStore _lib;
@@ -121,6 +123,12 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
         get { lock (_gate) return _queue.Count; }
     }
 
+    /// <summary>Copy of a song from the streaming cache, so downloading it needs no data. Set by the app.</summary>
+    public Func<string, string?>? FromCache { get; set; }
+
+    public IReadOnlyList<Track> PlayableTracks() => DownloadedTracks();
+
+    /// <summary>Downloaded songs, newest first.</summary>
     public IReadOnlyList<Track> DownloadedTracks() =>
         _lib.GetDownloads().Where(d => _files.ContainsKey(d.Track.VideoId)).Select(d => d.Track).ToList();
 
@@ -129,12 +137,21 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
 
     public long DownloadedBytes() => _lib.GetDownloads().Where(d => _files.ContainsKey(d.Track.VideoId)).Sum(d => d.Bytes);
 
-    public void Enqueue(IEnumerable<Track> tracks)
+    /// <summary>Video ids that smart downloads picked (and may swap out later).</summary>
+    public IReadOnlySet<string> SmartIds() => _lib.SmartDownloadIds();
+
+    /// <summary>
+    /// Adds songs to download. <paramref name="smart"/>: picked by smart downloads, which may remove them later;
+    /// asking for a song yourself always makes it yours (never removed automatically). Returns how many were new.
+    /// </summary>
+    public int Enqueue(IEnumerable<Track> tracks, bool smart = false)
     {
+        var list = tracks.DistinctBy(t => t.VideoId).ToList();
+        if (!smart) _lib.ClaimDownloads(list.Select(t => t.VideoId));
         var fresh = new List<Track>();
         lock (_gate)
         {
-            foreach (var t in tracks.DistinctBy(t => t.VideoId))
+            foreach (var t in list)
             {
                 if (_files.ContainsKey(t.VideoId) || _queue.Any(q => q.VideoId == t.VideoId)) continue;
                 _queue.Add(t);
@@ -142,10 +159,11 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
                 fresh.Add(t);
             }
         }
-        if (fresh.Count == 0) return;
-        _lib.AddDownloads(fresh, _clock.Now);
+        if (fresh.Count == 0) return 0;
+        _lib.AddDownloads(fresh, _clock.Now, smart);
         foreach (var t in fresh) Changed?.Invoke(t.VideoId);
         _wake.Release();
+        return fresh.Count;
     }
 
     /// <summary>Deletes the song's file (or stops its download) and takes it off the list.</summary>
@@ -235,8 +253,17 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
     private async Task DownloadAsync(Track track, CancellationToken ct)
     {
         var id = track.VideoId;
-        var url = await _resolver.ResolveAsync(id, ct).ConfigureAwait(false);
         var part = Path.Combine(_dir, id + ".part");
+        if (FromCache?.Invoke(id) is { } cached && File.Exists(cached))
+        {
+            // already streamed in full: copy it instead of downloading again
+            File.Copy(cached, part, overwrite: true);
+            var copy = Path.Combine(_dir, id + Path.GetExtension(cached));
+            File.Move(part, copy, overwrite: true);
+            await FinishAsync(track, copy, new FileInfo(copy).Length, ct).ConfigureAwait(false);
+            return;
+        }
+        var url = await _resolver.ResolveAsync(id, ct).ConfigureAwait(false);
         long bytes;
         try
         {
@@ -266,7 +293,12 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
 
         var file = Path.Combine(_dir, id + ExtensionFor(url));
         File.Move(part, file, overwrite: true);
+        await FinishAsync(track, file, bytes, ct).ConfigureAwait(false);
+    }
 
+    private async Task FinishAsync(Track track, string file, long bytes, CancellationToken ct)
+    {
+        var id = track.VideoId;
         string? art = null;
         if (_saveArt is not null && track.ThumbnailUrl is { } thumb)
         {
@@ -280,50 +312,12 @@ public sealed class DownloadManager : IOfflineSource, IDisposable
         Log.Info($"Downloaded {id} ({bytes / 1024} KB)");
     }
 
-    /// <summary>Downloads in ranged chunks, reporting progress. Returns the size.</summary>
-    private async Task<long> FetchAsync(Uri url, string target, CancellationToken ct)
-    {
-        long? total = ContentLength(url);
-        long done = 0;
-        await using var file = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true);
-        while (total is null || done < total)
+    private Task<long> FetchAsync(Uri url, string target, CancellationToken ct) =>
+        ChunkedDownload.FetchAsync(_http, url, target, fraction =>
         {
-            var end = done + ChunkBytes - 1;
-            if (total is { } t) end = Math.Min(end, t - 1);
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(done, end);
-            using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            if (resp.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable && total is null) break; // we read it all
-            resp.EnsureSuccessStatusCode();
-            total ??= resp.Content.Headers.ContentRange?.Length ?? (resp.StatusCode == HttpStatusCode.OK ? resp.Content.Headers.ContentLength : null);
-            await using var body = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            var before = done;
-            var buffer = new byte[1 << 16];
-            int n;
-            var lastTick = Environment.TickCount64;
-            while ((n = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
-            {
-                await file.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
-                done += n;
-                // report a few times a second: a whole song is often a single chunk
-                if (total is { } totalBytes && Environment.TickCount64 - lastTick > 150)
-                {
-                    lastTick = Environment.TickCount64;
-                    lock (_gate) _activeProgress = Math.Clamp((double)done / totalBytes, 0, 1);
-                    if (_active is { } a) Changed?.Invoke(a.Id);
-                }
-            }
-            if (done == before) throw new IOException("The server sent no data");
-            if (total is { } tt)
-            {
-                lock (_gate) _activeProgress = Math.Clamp((double)done / tt, 0, 1);
-                if (_active is { } a) Changed?.Invoke(a.Id);
-            }
-            if (resp.StatusCode == HttpStatusCode.OK) break; // the server ignored the range and sent everything
-        }
-        if (total is { } size && done < size) throw new IOException($"Download stopped at {done} of {size} bytes");
-        return done;
-    }
+            lock (_gate) _activeProgress = fraction;
+            if (_active is { } a) Changed?.Invoke(a.Id);
+        }, ct);
 
     /// <summary>googlevideo links carry the size ("clen") and type ("mime") in the query string.</summary>
     public static long? ContentLength(Uri url) =>

@@ -48,6 +48,7 @@ class Graph(context: Context) {
     val streamCache = StreamCache(context)
     val downloads = Downloads(context, library, streams, http, online, unmetered) { id, target -> streamCache.copyTo(id, target) }
     val smart = SmartDownloads(library, yt, downloads)
+    val updater = app.tune.data.Updater(context, http, library)
     init { downloads.onNotice = { toast(it) } }
 
     /** Playable without internet: downloaded, or fully in the streaming cache. */

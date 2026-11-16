@@ -70,7 +70,7 @@ import app.tune.ui.TuneTheme
 import app.tune.ui.Type
 import kotlinx.coroutines.delay
 
-object BuildConfigLite { const val VERSION = "1.2.0" }
+object BuildConfigLite { const val VERSION = "1.3.0" }
 
 class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -98,6 +98,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
     val app = LocalApp.current
+    // new Tune release on GitHub? (at most every few hours; shows the Update banner on Home)
+    androidx.compose.runtime.LaunchedEffect(Unit) { app.graph.updater.check() }
     val c = LocalTune.current
     Box(Modifier.fillMaxSize().background(c.base)) {
         // a soft accent glow at the top of every page

@@ -126,7 +126,7 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
 
     public void ReloadOffline()
     {
-        OfflineTracks = Rows.From(_shell, _shell.Services.Downloads.DownloadedTracks());
+        OfflineTracks = Rows.From(_shell, _shell.Services.Offline.PlayableTracks());
         OnPropertyChanged(nameof(HasOfflineTracks));
         OnPropertyChanged(nameof(OfflineSummary));
     }
@@ -665,6 +665,11 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey);
         _startWithWindows = key?.GetValue("Tune") is not null;
         RefreshCacheSize();
+        _smartEnabled = Smart.Enabled;
+        _smartCountName = Smart.Target.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _audioCacheEnabled = _shell.Services.Cache.Enabled;
+        RefreshSmartStatus();
+        RefreshAudioCache();
     }
 
     public string? NavKey => "settings";
@@ -705,6 +710,90 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     }
 
     partial void OnSyncedLyricsChanged(bool value) => Lib.SetSetting("lyrics.synced", value ? "1" : "0");
+
+    // ---- offline: smart downloads + streaming cache ----
+    [ObservableProperty] private bool _smartEnabled;
+    [ObservableProperty] private string _smartCountName = "100";
+    [ObservableProperty] private string _smartStatus = "";
+    [ObservableProperty] private bool _isSmartRunning;
+    [ObservableProperty] private bool _audioCacheEnabled;
+    [ObservableProperty] private string _audioCacheStatus = "";
+
+    /// <summary>For the update row, which lives on the shell.</summary>
+    public ShellViewModel Shell => _shell;
+
+    private Tune.Core.Offline.SmartDownloads Smart => _shell.Services.Smart;
+
+    private void RefreshSmartStatus()
+    {
+        var n = Smart.SmartCount;
+        SmartStatus = !Smart.Enabled ? "Off" : Smart.LastRun is { } last
+            ? $"{ShellViewModel.Songs(n)} picked · updated {last.LocalDateTime:d MMM, HH:mm}"
+            : "Runs once a day on Wi-Fi or another unmetered connection";
+    }
+
+    private void RefreshAudioCache()
+    {
+        var cache = _shell.Services.Cache;
+        AudioCacheStatus = $"{ShellViewModel.Songs(cache.Ids().Count)} · {cache.UsedBytes() / (1024.0 * 1024):0} MB of {cache.MaxBytes / (1024 * 1024 * 1024.0):0.#} GB";
+    }
+
+    partial void OnSmartEnabledChanged(bool value)
+    {
+        Smart.Enabled = value;
+        if (!value) _ = RunSmart(); // switching off removes what it picked (your own downloads stay)
+        RefreshSmartStatus();
+    }
+
+    [RelayCommand]
+    private void PickSmartCount(string count)
+    {
+        if (!int.TryParse(count, out var n)) return;
+        Smart.Target = n;
+        SmartCountName = count;
+    }
+
+    [RelayCommand]
+    private async Task RunSmart()
+    {
+        if (IsSmartRunning) return;
+        IsSmartRunning = true;
+        SmartStatus = Smart.Enabled ? "Picking songs…" : "Removing smart downloads…";
+        try
+        {
+            var (added, removed) = await Task.Run(() => Smart.RefreshAsync());
+            if (Smart.Enabled)
+                _shell.ShowToast(added == 0 && removed == 0 ? "Smart downloads are up to date"
+                    : $"Smart downloads: {ShellViewModel.Songs(added)} to download, {removed} swapped out");
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            Tune.Core.Util.Log.Warn("Smart downloads failed", e);
+            _shell.ShowToast("Smart downloads couldn't run — are you online?");
+        }
+        finally
+        {
+            IsSmartRunning = false;
+            RefreshSmartStatus();
+        }
+    }
+
+    partial void OnAudioCacheEnabledChanged(bool value)
+    {
+        _shell.Services.Cache.Enabled = value;
+        RefreshAudioCache();
+    }
+
+    [RelayCommand]
+    private void ClearAudioCache()
+    {
+        _shell.Services.Cache.Clear();
+        RefreshAudioCache();
+        _shell.ShowToast("Streaming cache cleared");
+    }
+
+    [RelayCommand]
+    private Task CheckUpdates() => _shell.HasUpdate ? _shell.InstallUpdateCommand.ExecuteAsync(null) : _shell.CheckForUpdateAsync(userAsked: true);
 
     partial void OnCloseToTrayChanged(bool value) => Lib.SetSetting("window.closeToTray", value ? "1" : "0");
 

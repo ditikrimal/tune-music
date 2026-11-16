@@ -19,4 +19,8 @@ public sealed record AppServices(
     StreamPrefetcher Prefetcher,
     Tune.Core.Lyrics.LyricsService Lyrics,
     Tune.Core.Offline.DownloadManager Downloads,
-    Tune.Core.Offline.IConnectivity Network);
+    Tune.Core.Offline.IConnectivity Network,
+    Tune.Core.Offline.AudioCache Cache,
+    Tune.Core.Offline.OfflineLibrary Offline,
+    Tune.Core.Offline.SmartDownloads Smart,
+    AppUpdater Updater);

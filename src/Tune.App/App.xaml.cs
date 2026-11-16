@@ -115,6 +115,8 @@ public partial class App : Application
         // GPU rendering (default) — software rendering saved ~50 MB but made scrolling choppy.
         SmoothScroll.Register();
 
+        // started by the updater: let the old copy quit first, so this one takes over the single-instance lock
+        AppUpdater.WaitForPrevious(e.Args);
         _mutex = new Mutex(true, MutexName, out var first);
         if (!first)
         {
@@ -184,14 +186,24 @@ public partial class App : Application
             });
         art.LocalFallback = _downloads.ArtFor;
         art.IsOffline = () => !_network.IsOnline;
+        // streaming cache: songs played online are kept for offline (downloads are separate and never touched)
+        var downloads = _downloads;
+        _cache = new Tune.Core.Offline.AudioCache(_library, resolver, downloadHttp, Path.Combine(dataDir, "cache", "audio"), _network,
+            downloads.IsDownloaded);
+        _downloads.FromCache = _cache.LocalPath; // downloading a song you've streamed copies it instead of fetching it again
+        var offline = new Tune.Core.Offline.OfflineLibrary(_downloads, _cache, _library);
+        var smart = new Tune.Core.Offline.SmartDownloads(_library, api, _downloads, clock);
         var playback = new PlaybackService(new PlayQueue(), resolver, _player, _library, sponsorBlock, api,
-            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock, _downloads);
+            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock, offline);
         Task.Run(art.Trim);
 
+        var updater = new AppUpdater(toolsHttp, dataDir);
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics,
-            _downloads, _network);
+            _downloads, _network, _cache, offline, smart, updater);
         _downloads.Start();
+        _cache.Start();
         _network.Start();
+        AppUpdater.CleanUp();
         ThemeManager.Load(_library);
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();
@@ -217,6 +229,28 @@ public partial class App : Application
                     await StartWorkerAsync(tools, dataDir, restart: true); // load the new yt-dlp
             }), Dispatcher).Start();
 
+        // smart downloads: once a day, only on an unmetered connection (checked hourly; first look after 2 minutes)
+        var smartTimer = new DispatcherTimer(TimeSpan.FromMinutes(2), DispatcherPriority.Background, (s, args) =>
+        {
+            ((DispatcherTimer)s!).Interval = TimeSpan.FromHours(1);
+            if (smart.Enabled && smart.IsDue && _network.IsOnline && IsUnmetered())
+                Task.Run(async () =>
+                {
+                    try { await smart.RefreshAsync(); }
+                    catch (Exception ex) { Log.Warn("Smart downloads failed", ex); }
+                });
+        }, Dispatcher);
+        smartTimer.Start();
+
+        // new Tune releases: shortly after start, then every 6 hours (Tune can run for weeks from the tray)
+        if (e.Args.Contains("--after-update")) Shell.ShowToast($"Tune is updated to {AppUpdater.Current.ToString(3)}");
+        var updateTimer = new DispatcherTimer(TimeSpan.FromSeconds(20), DispatcherPriority.Background, (s, args) =>
+        {
+            ((DispatcherTimer)s!).Interval = TimeSpan.FromHours(6);
+            _ = Shell.CheckForUpdateAsync(userAsked: false);
+        }, Dispatcher);
+        updateTimer.Start();
+
         _activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
         new Thread(() =>
         {
@@ -227,6 +261,25 @@ public partial class App : Application
 
     private static MiniPlayerWindow? _mini;
     private static TrayIcon? _tray;
+    private Tune.Core.Offline.AudioCache? _cache;
+
+    /// <summary>Wi-Fi/Ethernet without a data cap (Windows' "metered connection" setting is respected).</summary>
+    private static bool IsUnmetered()
+    {
+        try
+        {
+            var profile = global::Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile();
+            if (profile is null) return false;
+            var cost = profile.GetConnectionCost();
+            return cost.NetworkCostType is global::Windows.Networking.Connectivity.NetworkCostType.Unrestricted or global::Windows.Networking.Connectivity.NetworkCostType.Unknown
+                && !cost.Roaming && !cost.OverDataLimit;
+        }
+        catch (Exception e)
+        {
+            Log.Warn("Couldn't read the connection cost", e);
+            return true;
+        }
+    }
 
     public static void ToggleMini()
     {
@@ -305,6 +358,7 @@ public partial class App : Application
     {
         Shell?.Player.SaveVolume();
         _downloads?.Dispose();
+        _cache?.Dispose();
         _network?.Dispose();
         _media?.Dispose();
         _worker?.Dispose();

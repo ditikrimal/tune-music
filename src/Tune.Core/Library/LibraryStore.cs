@@ -45,6 +45,9 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
                 valid_until INTEGER NOT NULL, available_at INTEGER NOT NULL, source TEXT NOT NULL DEFAULT 'exe');
             PRAGMA user_version=3;
             """);
+        // smart downloads: songs Tune picked itself (it may swap them out); 0 = the user asked for it
+        if (Scalar("SELECT 1 FROM pragma_table_info('downloads') WHERE name = 'smart'") is null)
+            Exec("ALTER TABLE downloads ADD COLUMN smart INTEGER NOT NULL DEFAULT 0;");
     }
 
     public void Dispose() => _db.Dispose();
@@ -93,6 +96,49 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
             .Take(max)
             .ToList();
 
+    /// <summary>Per song since <paramref name="since"/>: how often and when last played (for smart downloads).</summary>
+    public IReadOnlyList<(Track Track, int Plays, DateTimeOffset LastPlayed)> GetPlayStats(DateTimeOffset since)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("""
+                SELECT t.json, COUNT(*) AS n, MAX(p.at) FROM plays p JOIN tracks t ON t.video_id = p.video_id
+                WHERE p.at >= $since GROUP BY p.video_id
+                """, ("$since", since.ToUnixTimeMilliseconds()));
+            using var r = cmd.ExecuteReader();
+            var list = new List<(Track, int, DateTimeOffset)>();
+            while (r.Read())
+                if (Deserialize(r.GetString(0)) is { } t) list.Add((t, r.GetInt32(1), DateTimeOffset.FromUnixTimeMilliseconds(r.GetInt64(2))));
+            return list;
+        }
+    }
+
+    /// <summary>Remembers songs' details (e.g. songs kept in the streaming cache, so they can be listed offline).</summary>
+    public void SaveTracks(IEnumerable<Track> tracks)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            foreach (var t in tracks) SaveTrack(t);
+            tx.Commit();
+        }
+    }
+
+    /// <summary>The saved details of these songs (unknown ids are skipped), in the order given.</summary>
+    public IReadOnlyList<Track> GetTracks(IEnumerable<string> videoIds)
+    {
+        var found = new Dictionary<string, Track>();
+        lock (_gate)
+        {
+            foreach (var id in videoIds.Distinct())
+            {
+                using var cmd = Command("SELECT json FROM tracks WHERE video_id = $v", ("$v", id));
+                if (cmd.ExecuteScalar() is string json && Deserialize(json) is { } t) found[id] = t;
+            }
+        }
+        return videoIds.Distinct().Where(found.ContainsKey).Select(id => found[id]).ToList();
+    }
+
     // ---------- likes ----------
 
     public bool IsLiked(string videoId) => Scalar("SELECT 1 FROM likes WHERE video_id = $v", ("$v", videoId)) is not null;
@@ -118,7 +164,7 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
     // ---------- downloads ----------
 
     /// <summary>Adds songs to the download list (already listed ones keep their place and file).</summary>
-    public void AddDownloads(IEnumerable<Track> tracks, DateTimeOffset at)
+    public void AddDownloads(IEnumerable<Track> tracks, DateTimeOffset at, bool smart = false)
     {
         lock (_gate)
         {
@@ -127,8 +173,8 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
             foreach (var t in tracks)
             {
                 SaveTrack(t);
-                Exec("INSERT INTO downloads (video_id, added_at) VALUES ($v, $at) ON CONFLICT(video_id) DO NOTHING",
-                    ("$v", t.VideoId), ("$at", ms--)); // newest-first list still shows a batch in the order given
+                Exec("INSERT INTO downloads (video_id, added_at, smart) VALUES ($v, $at, $s) ON CONFLICT(video_id) DO NOTHING",
+                    ("$v", t.VideoId), ("$at", ms--), ("$s", smart ? 1 : 0)); // newest-first list still shows a batch in the order given
             }
             tx.Commit();
         }
@@ -137,6 +183,29 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
     public void SetDownloaded(string videoId, string path, string? artPath, long bytes) =>
         Exec("UPDATE downloads SET path = $p, art_path = $a, bytes = $b WHERE video_id = $v",
             ("$v", videoId), ("$p", path), ("$a", (object?)artPath ?? DBNull.Value), ("$b", bytes));
+
+    /// <summary>The user asked for these songs: smart downloads must never remove them.</summary>
+    public void ClaimDownloads(IEnumerable<string> videoIds)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            foreach (var id in videoIds) Exec("UPDATE downloads SET smart = 0 WHERE video_id = $v AND smart = 1", ("$v", id));
+            tx.Commit();
+        }
+    }
+
+    public IReadOnlySet<string> SmartDownloadIds()
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("SELECT video_id FROM downloads WHERE smart = 1");
+            using var r = cmd.ExecuteReader();
+            var set = new HashSet<string>();
+            while (r.Read()) set.Add(r.GetString(0));
+            return set;
+        }
+    }
 
     public void RemoveDownload(string videoId) => Exec("DELETE FROM downloads WHERE video_id = $v", ("$v", videoId));
 
