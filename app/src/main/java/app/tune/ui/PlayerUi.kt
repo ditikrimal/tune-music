@@ -124,7 +124,8 @@ fun NowPlaying() {
     BackHandler { if (pane != NpPane.Art) pane = NpPane.Art else app.nowPlayingOpen = false }
     LaunchedEffect(app.queueOpen) { if (app.queueOpen) { pane = NpPane.Queue; app.queueOpen = false } }
 
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.32f), c.base, c.base)))
+    // solid base first: the gradient alone is see-through and the page behind showed at the top
+    Box(Modifier.fillMaxSize().background(c.base).background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.32f), c.base, c.base)))
         .pointerInput(Unit) { detectVerticalDragGestures { _, dy -> if (dy > 40 && pane == NpPane.Art) app.nowPlayingOpen = false } }) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -187,6 +188,7 @@ private fun PaneButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 }
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 private fun SeekBar(durationMs: Long) {
     val app = LocalApp.current
     val c = LocalTune.current
@@ -202,10 +204,19 @@ private fun SeekBar(durationMs: Long) {
     }
     val max = durationMs.coerceAtLeast(1).toFloat()
     Column(Modifier.padding(top = 8.dp)) {
+        val fraction = (shown / max).coerceIn(0f, 1f)
+        // Tune's bar (same as Windows): thin accent fill, round accent thumb
         Slider(value = shown.coerceIn(0f, max), valueRange = 0f..max,
             onValueChange = { dragging = true; dragValue = it },
             onValueChangeFinished = { dragging = false; heldMs = dragValue.toLong(); app.player.seek(dragValue.toLong()) },
-            colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.track))
+            thumb = {
+                Box(Modifier.size(if (dragging) 20.dp else 16.dp).shadow(4.dp, CircleShape).clip(CircleShape).background(c.accent))
+            },
+            track = {
+                Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(c.track)) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(c.accent))
+                }
+            })
         Row(Modifier.fillMaxWidth().offset(y = (-6).dp)) {
             Text(formatDuration((shown / 1000).toInt()), style = Type.caption, color = c.subtle, modifier = Modifier.weight(1f))
             Text(formatDuration((durationMs / 1000).toInt()), style = Type.caption, color = c.subtle)

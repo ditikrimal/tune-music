@@ -112,7 +112,9 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
         }
 
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            MiniPlayer(Modifier.fillMaxWidth())
+            // fade the page out above the mini player / tabs
+            Box(Modifier.fillMaxWidth().height(28.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF121212)))))
+            MiniPlayer(Modifier.fillMaxWidth().background(Color(0xFF121212)))
             BottomBar()
         }
 
@@ -131,8 +133,7 @@ private fun BottomBar() {
     val entry by app.nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val tabs = listOf(Triple("home", "Home", Ico.Home), Triple("search", "Search", Ico.Search), Triple("library", "Library", Ico.Library))
-    Row(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF0121212), Color(0xFF121212))))
-        .navigationBarsPadding().padding(top = 10.dp, bottom = 6.dp)) {
+    Row(Modifier.fillMaxWidth().background(Color(0xFF121212)).navigationBarsPadding().padding(top = 8.dp, bottom = 6.dp)) {
         tabs.forEach { (key, label, icon) ->
             val on = route == key || (key == "library" && route in setOf("liked", "downloads", "local/{id}"))
             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable {

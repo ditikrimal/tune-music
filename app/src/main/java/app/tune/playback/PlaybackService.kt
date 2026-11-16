@@ -90,6 +90,7 @@ class PlaybackService : MediaSessionService() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         session = MediaSession.Builder(this, player).setSessionActivity(open).build()
+        restoreSession()
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) })
     }
 
@@ -109,8 +110,37 @@ class PlaybackService : MediaSessionService() {
         return out
     }
 
+    // ---------- remember the queue, so Tune reopens where you left off ----------
+
+    private fun saveSession(now: Boolean = false) {
+        val items = (0 until player.mediaItemCount).mapNotNull { player.getMediaItemAt(it).track()?.toJson() }
+        if (items.isEmpty()) return
+        val json = org.json.JSONObject()
+            .put("queue", org.json.JSONArray(items.takeLast(300)))
+            .put("index", player.currentMediaItemIndex - (items.size - items.takeLast(300).size))
+            .put("position", player.currentPosition)
+            .put("shuffle", player.shuffleModeEnabled).put("repeat", player.repeatMode)
+        if (now) app.graph.library.setSetting("session", json.toString())
+        else scope.launch(Dispatchers.IO) { app.graph.library.setSetting("session", json.toString()) }
+    }
+
+    private fun restoreSession() {
+        val json = app.graph.library.setting("session")?.let { runCatching { org.json.JSONObject(it) }.getOrNull() } ?: return
+        val arr = json.optJSONArray("queue") ?: return
+        val tracks = (0 until arr.length()).mapNotNull { Track.fromJson(arr.optJSONObject(it)) }
+        if (tracks.isEmpty()) return
+        player.shuffleModeEnabled = json.optBoolean("shuffle")
+        player.repeatMode = json.optInt("repeat")
+        player.setMediaItems(tracks.map { it.toMediaItem() }, json.optInt("index").coerceIn(0, tracks.size - 1), json.optLong("position"))
+        player.prepare() // paused: press play to continue
+    }
+
     private val listener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) { if (!isPlaying) saveSession() }
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) { saveSession() }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            saveSession()
             recordJob?.cancel()
             val track = mediaItem?.track() ?: return
             retriedFor = null
@@ -169,6 +199,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        saveSession(now = true)
         scope.cancel()
         session?.run { player.release(); release() }
         session = null
