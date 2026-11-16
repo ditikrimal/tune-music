@@ -322,8 +322,9 @@
                 <Setter TargetName="row" Property="Opacity" Value="0.4" />
             </DataTrigger>
             <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                <Setter TargetName="title" Property="Foreground" Value="{DynamicResource AccentBrush}" />
-                <Setter TargetName="num" Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                <Setter TargetName="row" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                <Setter TargetName="title" Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                <Setter TargetName="num" Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
                 <Setter TargetName="num" Property="Text" Value="&#xE995;" />
                 <Setter TargetName="num" Property="FontFamily" Value="{StaticResource IconFont}" />
             </DataTrigger>
@@ -495,7 +496,7 @@
                         Tag="{Binding AllDownloaded, Converter={x:Static sh:BoolToOnConverter.Instance}}"
                         Visibility="{Binding CanDownloadAll, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Download all" />
                 <Button x:Name="playlistMenu" Style="{StaticResource IconButton}" Content="&#xE712;" FontSize="22" Width="48" Height="48" Margin="8,0,0,0"
-                        Visibility="{Binding IsLocal, Converter={StaticResource BoolToVis}}" Click="PlaylistMenu_Click" ToolTip="More options" />
+                        Click="PlaylistMenu_Click" ToolTip="More options" />
             </StackPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding Message}" Style="{StaticResource Subtle}" FontSize="15" Margin="44,12,0,0"
                        Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />

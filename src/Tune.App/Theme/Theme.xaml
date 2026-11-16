@@ -17,6 +17,8 @@
     <SolidColorBrush x:Key="CardHoverBrush" Color="{StaticResource CardHoverColor}" />
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="AccentSoftBrush" Color="#2E1DB954" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#1DB954" />
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#551DB954" />
     <SolidColorBrush x:Key="OnAccentBrush" Color="Black" />
     <SolidColorBrush x:Key="TextBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="SubtleTextBrush" Color="#B3B3B3" />
@@ -110,11 +112,14 @@
         <Setter Property="Width" Value="38" />
         <Setter Property="Height" Value="38" />
         <Setter Property="FontSize" Value="15" />
-        <Setter Property="Foreground" Value="#000000" />
+        <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bg" Background="White" CornerRadius="19" RenderTransformOrigin="0.5,0.5">
+                    <Border x:Name="bg" Background="{DynamicResource AccentBrush}" CornerRadius="19" RenderTransformOrigin="0.5,0.5">
+                        <Border.Effect>
+                            <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="14" ShadowDepth="0" Opacity="0.45" />
+                        </Border.Effect>
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -308,7 +313,7 @@
                         </Trigger>
                         <Trigger Property="Tag" Value="On">
                             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-                            <Setter TargetName="bg" Property="Background" Value="#1FFFFFFF" />
+                            <Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -395,7 +400,7 @@
                     <Grid Height="16" Background="Transparent">
                         <Track x:Name="PART_Track">
                             <Track.DecreaseRepeatButton>
-                                <RepeatButton x:Name="fill" Style="{StaticResource SliderRepeat}" Background="White" Command="Slider.DecreaseLarge" />
+                                <RepeatButton x:Name="fill" Style="{StaticResource SliderRepeat}" Background="{DynamicResource AccentBrush}" Command="Slider.DecreaseLarge" />
                             </Track.DecreaseRepeatButton>
                             <Track.IncreaseRepeatButton>
                                 <RepeatButton Style="{StaticResource SliderRepeat}" Background="{DynamicResource TrackBrush}" Command="Slider.IncreaseLarge" />
@@ -407,7 +412,7 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="fill" Property="Background" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="fill" Property="Background" Value="{DynamicResource AccentTextBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -424,6 +429,7 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="b" Property="Opacity" Value="1" />
+                            <Setter TargetName="b" Property="Background" Value="{DynamicResource AccentBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

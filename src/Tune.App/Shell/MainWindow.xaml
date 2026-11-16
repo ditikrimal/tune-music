@@ -65,6 +65,8 @@
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=liked|&#xEB52;}" Content="Liked songs" />
                     <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="downloads" AutomationProperties.Name="Downloads"
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=downloads|&#xE896;}" Content="Downloads" />
+                    <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="settings" AutomationProperties.Name="Settings"
+                            Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=settings|&#xE713;}" Content="Settings" />
 
                     <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="8,14" />
                     <DockPanel Margin="16,0,4,8">
@@ -105,8 +107,6 @@
             <!-- title bar: back + window buttons (the empty area drags the window) -->
             <DockPanel Grid.Row="0" Margin="16,0,0,0">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Button Style="{StaticResource IconButton}" Content="&#xE713;" ToolTip="Settings" Margin="0,0,8,0"
-                            Command="{Binding GoToCommand}" CommandParameter="settings" />
                     <Button x:Name="MinButton" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Min_Click" />
                     <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize" Click="Max_Click" />
                     <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" />
@@ -152,7 +152,7 @@
 
         <!-- ===================== player bar ===================== -->
         <Border Grid.ColumnSpan="2" VerticalAlignment="Bottom" Height="88" Margin="14,0,14,14" CornerRadius="22"
-                Background="#EE161616" BorderBrush="#22FFFFFF" BorderThickness="1" DataContext="{Binding Player}">
+                Background="#EE161616" BorderBrush="{DynamicResource AccentBorderBrush}" BorderThickness="1" DataContext="{Binding Player}">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.55" />
             </Border.Effect>
@@ -178,7 +178,7 @@
                                 </Image.Clip>
                             </Image>
                         </Grid>
-                        <Ellipse Width="62" Height="62" Stroke="#30FFFFFF" StrokeThickness="1" />
+                        <Ellipse Width="62" Height="62" Stroke="{DynamicResource AccentBorderBrush}" StrokeThickness="1.5" />
                         <Ellipse Width="12" Height="12" Fill="#121212" Stroke="#40FFFFFF" StrokeThickness="1" />
                     </Grid>
                     <StackPanel Margin="14,0,8,0" VerticalAlignment="Center" MaxWidth="220">
@@ -191,6 +191,8 @@
                             <Binding Path="IsLiked" Converter="{x:Static sh:BoolToOnConverter.Instance}" />
                         </Button.Tag>
                     </Button>
+                    <Button Style="{StaticResource ToggleIconButton}" Content="{Binding DownloadGlyph}" Command="{Binding DownloadSongCommand}"
+                            ToolTip="{Binding DownloadTip}" Tag="{Binding DownloadTag}" AutomationProperties.Name="Download song" />
                 </StackPanel>
 
                 <!-- transport + seek -->

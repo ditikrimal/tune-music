@@ -60,7 +60,13 @@ public sealed partial class ShellViewModel : ObservableObject
     {
         Services = services;
         _ui = ui;
-        Player = new PlayerBarViewModel(services.Playback, services.Library, ui);
+        Player = new PlayerBarViewModel(services.Playback, services.Library, ui, services.Downloads);
+        Player.DownloadRequested += t =>
+        {
+            if (Services.Downloads.StateOf(t.VideoId) == Tune.Core.Offline.DownloadState.Done)
+                ShowToast("Downloaded — remove it from the ⋯ menu or Downloads");
+            else Download([t]);
+        };
         Queue = new QueueViewModel(this, ui);
         NowPlaying = new NowPlayingViewModel(Player, services.Lyrics);
         Player.PropertyChanged += (_, e) =>
@@ -131,6 +137,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     private void OnDownloadChanged(string videoId)
     {
+        if (Player.Track?.VideoId == videoId) Player.RefreshDownload();
         foreach (var r in VisibleRows)
             if (r.Track.VideoId == videoId) r.SyncDownload(Services.Downloads, IsOffline);
         if (Page is CollectionViewModel c)

@@ -42,6 +42,11 @@ public partial class Views : ResourceDictionary
     private void TrackRow_Click(object sender, MouseButtonEventArgs e)
     {
         if (Row(sender) is not { } row) return;
+        if (row.IsUnavailable)
+        {
+            Shell.ShowToast($"{row.Title} isn't downloaded — it plays when you're back online");
+            return;
+        }
         switch (Shell.Page)
         {
             case CollectionViewModel c: c.PlayRowCommand.Execute(row); break;
@@ -163,10 +168,19 @@ public partial class Views : ResourceDictionary
 
     private void PlaylistMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (Shell.Page is not CollectionViewModel { IsLocal: true } c) return;
+        if (Shell.Page is not CollectionViewModel c) return;
         var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom };
-        menu.Items.Add(Item("Rename", () => c.BeginRenameCommand.Execute(null)));
-        menu.Items.Add(Item("Delete playlist", () => c.DeletePlaylistCommand.Execute(null)));
+        if (!c.IsDownloads && !c.AllDownloaded && c.Tracks.Count > 0)
+            menu.Items.Add(Item(c.AnyDownloaded ? "Download the new songs" : "Download", () => c.ToggleDownloadAllCommand.Execute(null)));
+        if (c.AnyDownloaded)
+            menu.Items.Add(Item(c.IsDownloads ? "Remove all downloads" : "Remove downloads from this " + (c.Kind == CollectionKind.Album ? "album" : "playlist"),
+                c.RemoveAllDownloads));
+        if (c.IsLocal)
+        {
+            menu.Items.Add(Item("Rename", () => c.BeginRenameCommand.Execute(null)));
+            menu.Items.Add(Item("Delete playlist", () => c.DeletePlaylistCommand.Execute(null)));
+        }
+        if (menu.Items.Count == 0) return;
         menu.IsOpen = true;
     }
 

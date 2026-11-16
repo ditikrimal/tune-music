@@ -361,26 +361,31 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
 
     /// <summary>Every song here is downloaded (or on its way): the header button shows "on".</summary>
     public bool AllDownloaded => Tracks.Count > 0 && Tracks.All(r => r.Download != Tune.Core.Offline.DownloadState.None);
-    public string DownloadAllTip => AllDownloaded ? "Remove downloads" : "Download — play without internet";
+    public bool AnyDownloaded => Tracks.Any(r => r.Download != Tune.Core.Offline.DownloadState.None);
+    public string DownloadAllTip => AllDownloaded ? "Downloaded — plays without internet" : AnyDownloaded ? "Download the new songs" : "Download — play without internet";
 
+    /// <summary>Only ever adds: songs added to the playlist later are fetched by pressing it again. Removing is in the ⋯ menu.</summary>
     [RelayCommand]
     private void ToggleDownloadAll()
     {
         if (Tracks.Count == 0) return;
-        if (AllDownloaded)
-        {
-            _shell.RemoveDownloads(AllTracks);
-        }
-        else
-        {
-            _shell.Download(AllTracks);
-        }
+        if (AllDownloaded) _shell.ShowToast("Everything here is downloaded");
+        else _shell.Download(AllTracks);
     }
+
+    public void RemoveAllDownloads()
+    {
+        var mine = Tracks.Where(r => r.Download != Tune.Core.Offline.DownloadState.None).Select(r => r.Track).ToList();
+        if (mine.Count > 0) _shell.RemoveDownloads(mine);
+    }
+
+    public IReadOnlyList<Track> TrackList => AllTracks;
 
     /// <summary>A download state changed somewhere: refresh the header button.</summary>
     public void DownloadsChanged()
     {
         OnPropertyChanged(nameof(AllDownloaded));
+        OnPropertyChanged(nameof(AnyDownloaded));
         OnPropertyChanged(nameof(DownloadAllTip));
         OnPropertyChanged(nameof(CanDownloadAll));
     }

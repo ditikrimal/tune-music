@@ -188,6 +188,8 @@ public static class ThemeManager
         SetColor("AccentColor", Accent.Color);
         SetBrush("AccentSoftBrush", Color.FromArgb(0x2E, Accent.Color.R, Accent.Color.G, Accent.Color.B));
         SetBrush("OnAccentBrush", ColorMath.OnAccent(Accent.Color));
+        SetBrush("AccentTextBrush", ColorMath.AccentText(Accent.Color));
+        SetBrush("AccentBorderBrush", Color.FromArgb(0x55, Accent.Color.R, Accent.Color.G, Accent.Color.B));
         SetColor("HeaderColor", CurrentHeader(), animate: true);
     }
 

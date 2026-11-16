@@ -66,6 +66,15 @@ public static class ColorMath
         return x;
     }
 
+    /// <summary>The accent as text on the dark UI: dark/greyish accents are lifted until they read clearly.</summary>
+    public static Color AccentText(Color c)
+    {
+        var x = c;
+        for (var i = 0; i < 80 && AlbumColor.Luminance(x) < 0.22; i++)
+            x = Color.FromRgb((byte)Math.Min(255, x.R + 5), (byte)Math.Min(255, x.G + 5), (byte)Math.Min(255, x.B + 5));
+        return x;
+    }
+
     /// <summary>Text/icon colour on top of the accent: whichever of black/white contrasts more.</summary>
     public static Color OnAccent(Color accent)
     {

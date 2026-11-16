@@ -39,8 +39,41 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         return b;
     }
 
-    public PlayerBarViewModel(PlaybackService playback, LibraryStore lib, Dispatcher ui)
+    private readonly Tune.Core.Offline.DownloadManager? _downloads;
+    [ObservableProperty] private Tune.Core.Offline.DownloadState _download;
+
+    public string DownloadGlyph => Download == Tune.Core.Offline.DownloadState.Done ? "\uE73E" : "\uE896";
+    public string DownloadTag => Download == Tune.Core.Offline.DownloadState.None ? "Off" : "On";
+    public string DownloadTip => Download switch
     {
+        Tune.Core.Offline.DownloadState.Done => "Downloaded — plays without internet",
+        Tune.Core.Offline.DownloadState.None => "Download",
+        _ => "Downloading…",
+    };
+
+    partial void OnDownloadChanged(Tune.Core.Offline.DownloadState value)
+    {
+        OnPropertyChanged(nameof(DownloadGlyph));
+        OnPropertyChanged(nameof(DownloadTag));
+        OnPropertyChanged(nameof(DownloadTip));
+    }
+
+    /// <summary>Re-reads the playing song's download state.</summary>
+    public void RefreshDownload() =>
+        Download = Track is { } t && _downloads is not null ? _downloads.StateOf(t.VideoId) : Tune.Core.Offline.DownloadState.None;
+
+    /// <summary>Asks the shell to download (or explain) — it owns toasts.</summary>
+    public event Action<Track>? DownloadRequested;
+
+    [RelayCommand]
+    private void DownloadSong()
+    {
+        if (Track is { } t) DownloadRequested?.Invoke(t);
+    }
+
+    public PlayerBarViewModel(PlaybackService playback, LibraryStore lib, Dispatcher ui, Tune.Core.Offline.DownloadManager? downloads = null)
+    {
+        _downloads = downloads;
         _playback = playback;
         _lib = lib;
         _ui = ui;
@@ -193,6 +226,7 @@ public sealed partial class PlayerBarViewModel : ObservableObject
         IsPlaying = _playback.IsPlaying;
         IsLoading = _playback.IsLoading;
         IsLiked = current is not null && _lib.IsLiked(current.VideoId);
+        RefreshDownload();
         if (SleepAtEndOfSong && !_playback.PauseAfterCurrent)
         {
             SleepAtEndOfSong = false; // it fired
