@@ -39,6 +39,23 @@ class OfflineTests {
         assertEquals(mix.toSet().size, mix.size)
     }
 
+    @Test fun offline_stuck_rules() {
+        val s = app.tune.data.OfflineStall
+        // streaming song still playing from its buffer: leave it alone
+        assertFalse(s.isStuck(state = 3, failed = false, currentPlayable = false, justArrived = false))
+        // buffer ran dry on a song that isn't saved: move on (don't wait ~30 s for ExoPlayer to give up)
+        assertTrue(s.isStuck(state = 2, failed = false, currentPlayable = false, justArrived = false))
+        // a saved song that's briefly buffering is fine
+        assertFalse(s.isStuck(state = 2, failed = false, currentPlayable = true, justArrived = false))
+        // the queue ran out offline, or the song failed: move on
+        assertTrue(s.isStuck(state = 4, failed = false, currentPlayable = true, justArrived = false))
+        assertTrue(s.isStuck(state = 1, failed = true, currentPlayable = false, justArrived = false))
+        // just skipped onto a song that can't play offline: skip it straight away
+        assertTrue(s.isStuck(state = 3, failed = false, currentPlayable = false, justArrived = true))
+        // a second, late request after we already moved to a saved song must not skip that one too
+        assertFalse(s.isStuck(state = 2, failed = false, currentPlayable = true, justArrived = true))
+    }
+
     @Test fun offline_mix_without_seed_still_plays_something() {
         val mix = OfflineMix.build(null, listOf(t("a"), t("b")), null, emptyMap(), emptySet())
         assertEquals(setOf("a", "b"), mix.map { it.videoId }.toSet())

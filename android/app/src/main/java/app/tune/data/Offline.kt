@@ -136,3 +136,17 @@ object OfflineMix {
         return out
     }
 }
+
+/** Offline: when to stop waiting for the current song and move on to one saved on the phone. */
+object OfflineStall {
+    /**
+     * [state] is a Player.STATE_* value (1 idle, 2 buffering, 3 ready, 4 ended). [justArrived]: we just moved onto
+     * this song, so if it can't play offline there's no point starting it at all.
+     */
+    fun isStuck(state: Int, failed: Boolean, currentPlayable: Boolean, justArrived: Boolean): Boolean = when {
+        failed || state == 4 -> true                  // the song failed, or the queue ran out
+        currentPlayable -> false                      // a saved song: it'll play
+        justArrived -> true                           // not saved and nothing of it buffered yet
+        else -> state == 2                            // not saved, and its buffer has run dry
+    }
+}
