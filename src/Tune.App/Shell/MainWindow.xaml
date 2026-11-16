@@ -24,23 +24,49 @@
         <sh:NullToVisibilityConverter x:Key="NullToVis" />
         <sh:EqualsToTagConverter x:Key="EqualsToTag" />
 
-        <!-- a row in the account card: icon (Tag) + label -->
-        <Style x:Key="ProfileMenuItem" TargetType="Button">
-            <Setter Property="Focusable" Value="False" />
+        <!-- sidebar "you" entry: same geometry as NavItem, your avatar in the tile -->
+        <Style x:Key="ProfileNavItem" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Margin" Value="0,2" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="b" Background="Transparent" Padding="26,12">
+                        <Border x:Name="bg" Background="Transparent" CornerRadius="14" Padding="8,7">
                             <StackPanel Orientation="Horizontal">
-                                <p:Icon Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Foreground="{DynamicResource TextBrush}" Size="20" VerticalAlignment="Center" />
-                                <TextBlock Text="{TemplateBinding Content}" Style="{StaticResource Body}" FontSize="14" Margin="18,0,0,0" VerticalAlignment="Center" />
+                                <Grid Width="40" Height="40">
+                                    <Ellipse x:Name="ring" Margin="-3" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" Visibility="Collapsed" />
+                                    <Ellipse Fill="#14FFFFFF" />
+                                    <p:Icon Data="{StaticResource IcoPerson}" Foreground="{TemplateBinding Foreground}" Size="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Visibility="{Binding IsSignedIn, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" />
+                                    <Grid Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}">
+                                        <Ellipse Fill="{DynamicResource AccentBrush}" />
+                                        <TextBlock Text="{Binding AccountInitial}" Foreground="{DynamicResource OnAccentBrush}" FontFamily="{StaticResource UiFont}"
+                                                   FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        <Ellipse Visibility="{Binding AccountPhoto, Converter={StaticResource NullToVis}}">
+                                            <Ellipse.Fill>
+                                                <ImageBrush ImageSource="{Binding AccountPhoto, TargetNullValue={x:Null}}" Stretch="UniformToFill" />
+                                            </Ellipse.Fill>
+                                        </Ellipse>
+                                    </Grid>
+                                </Grid>
+                                <StackPanel VerticalAlignment="Center" Margin="14,0,0,0">
+                                    <TextBlock Text="{Binding AccountNavTitle}" Foreground="{TemplateBinding Foreground}" FontFamily="{StaticResource UiFont}" FontSize="15"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="130" />
+                                    <TextBlock Text="Account &amp; settings" Style="{StaticResource Caption}" FontSize="11" />
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="b" Property="Background" Value="{DynamicResource CardHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                <Setter TargetName="bg" Property="Background" Value="#14FFFFFF" />
                             </Trigger>
+                            <DataTrigger Binding="{Binding NavKey}" Value="settings">
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                <Setter TargetName="ring" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -100,8 +126,9 @@
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=downloads|&#xE896;}" Content="Downloads" />
                     <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="history" AutomationProperties.Name="History"
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=history|&#xE81C;}" Content="History" />
-                    <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="settings" AutomationProperties.Name="Settings"
-                            Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=settings|&#xE713;}" Content="Settings" />
+                    <!-- you: account on top, settings below (one page) -->
+                    <Button Style="{StaticResource ProfileNavItem}" Command="{Binding GoToCommand}" CommandParameter="settings" AutomationProperties.Name="Profile and settings"
+                            ToolTip="Account and settings" />
 
                     <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="8,14" />
                     <DockPanel Margin="16,0,4,8">
@@ -142,89 +169,6 @@
             <!-- title bar: back + window buttons (the empty area drags the window) -->
             <DockPanel Grid.Row="0" Margin="16,0,0,0">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
-                    <!-- profile: like YouTube / Google apps, the account card opens from the avatar -->
-                    <ToggleButton x:Name="ProfileButton" Focusable="False" Cursor="Hand" Margin="0,0,10,0" VerticalAlignment="Center"
-                                  ToolTip="Account" AutomationProperties.Name="Account"
-                                  IsHitTestVisible="{Binding IsOpen, ElementName=ProfilePopup, Converter={x:Static sh:InverseBoolConverter.Instance}}">
-                        <ToggleButton.Template>
-                            <ControlTemplate TargetType="ToggleButton">
-                                <Grid Width="32" Height="32" Background="Transparent">
-                                    <Ellipse x:Name="ring" Fill="{DynamicResource CardBrush}" />
-                                    <p:Icon Data="{StaticResource IcoPerson}" Foreground="{DynamicResource SubtleTextBrush}" Size="18"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            Visibility="{Binding IsSignedIn, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" />
-                                    <Grid Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}">
-                                        <Ellipse Fill="{DynamicResource AccentBrush}" />
-                                        <TextBlock Text="{Binding AccountInitial}" Foreground="{DynamicResource OnAccentBrush}" FontFamily="{StaticResource UiFont}"
-                                                   FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        <Ellipse Visibility="{Binding AccountPhoto, Converter={StaticResource NullToVis}}">
-                                            <Ellipse.Fill>
-                                                <ImageBrush ImageSource="{Binding AccountPhoto, TargetNullValue={x:Null}}" Stretch="UniformToFill" />
-                                            </Ellipse.Fill>
-                                        </Ellipse>
-                                    </Grid>
-                                </Grid>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="ring" Property="Fill" Value="{DynamicResource CardHoverBrush}" />
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </ToggleButton.Template>
-                    </ToggleButton>
-                    <Popup x:Name="ProfilePopup" PlacementTarget="{Binding ElementName=ProfileButton}" Placement="Bottom" HorizontalOffset="-300" VerticalOffset="8"
-                           StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
-                           IsOpen="{Binding IsChecked, ElementName=ProfileButton, Mode=TwoWay}" Opened="ProfilePopup_Opened">
-                        <Border Width="340" Margin="12" CornerRadius="24" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.45" />
-                            </Border.Effect>
-                            <StackPanel Margin="0,10,0,10">
-                                <Border Margin="10,0,10,6" CornerRadius="18" Background="{DynamicResource BaseBrush}" Padding="18,20">
-                                    <StackPanel HorizontalAlignment="Center">
-                                        <Grid Width="64" Height="64" HorizontalAlignment="Center">
-                                            <Ellipse Fill="{DynamicResource CardHoverBrush}" Visibility="{Binding IsSignedIn, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" />
-                                            <p:Icon Data="{StaticResource IcoPerson}" Foreground="{DynamicResource SubtleTextBrush}" Size="34" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                    Visibility="{Binding IsSignedIn, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" />
-                                            <Grid Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}">
-                                                <Ellipse Fill="{DynamicResource AccentBrush}" />
-                                                <TextBlock Text="{Binding AccountInitial}" Foreground="{DynamicResource OnAccentBrush}" FontFamily="{StaticResource UiFont}"
-                                                           FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                <Ellipse Visibility="{Binding AccountPhoto, Converter={StaticResource NullToVis}}">
-                                                    <Ellipse.Fill>
-                                                        <ImageBrush ImageSource="{Binding AccountPhoto, TargetNullValue={x:Null}}" Stretch="UniformToFill" />
-                                                    </Ellipse.Fill>
-                                                </Ellipse>
-                                            </Grid>
-                                        </Grid>
-                                        <!-- signed in -->
-                                        <StackPanel Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" HorizontalAlignment="Center">
-                                            <TextBlock Text="{Binding AccountGreeting}" Style="{StaticResource Body}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,12,0,0" />
-                                            <TextBlock Text="{Binding AccountEmail}" Style="{StaticResource Subtle}" HorizontalAlignment="Center" Margin="0,2,0,0" />
-                                            <TextBlock Text="{Binding AccountStatus}" Style="{StaticResource Subtle}" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"
-                                                       TextAlignment="Center" HorizontalAlignment="Center" Margin="0,10,0,0" />
-                                        </StackPanel>
-                                        <!-- signed out -->
-                                        <StackPanel Visibility="{Binding IsSignedIn, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" HorizontalAlignment="Center">
-                                            <TextBlock Text="Sign in to sync" Style="{StaticResource Body}" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,12,0,0" />
-                                            <TextBlock Text="{Binding AccountStatus}" Style="{StaticResource Subtle}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0" />
-                                            <Button Style="{StaticResource HeaderPill}" Content="Continue with Google" Command="{Binding SignInCommand}" HorizontalAlignment="Center" Margin="0,16,0,0"
-                                                    Visibility="{Binding AccountAvailable, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Continue with Google"
-                                                    IsEnabled="{Binding IsSigningIn, Converter={x:Static sh:InverseBoolConverter.Instance}}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-                                <Button Style="{StaticResource ProfileMenuItem}" Tag="{StaticResource IcoSync}" Content="Sync now" Command="{Binding SyncNowCommand}"
-                                        Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Sync now" />
-                                <Button Style="{StaticResource ProfileMenuItem}" Tag="{StaticResource IcoSettings}" Content="Settings" Command="{Binding GoToCommand}" CommandParameter="settings"
-                                        Click="ProfileMenu_Click" AutomationProperties.Name="Open settings" />
-                                <Button Style="{StaticResource ProfileMenuItem}" Tag="{StaticResource IcoDownload}" Content="Downloads" Command="{Binding GoToCommand}" CommandParameter="downloads"
-                                        Click="ProfileMenu_Click" AutomationProperties.Name="Open downloads" />
-                                <Button Style="{StaticResource ProfileMenuItem}" Tag="{StaticResource IcoLogout}" Content="Sign out" Command="{Binding SignOutCommand}"
-                                        Click="ProfileMenu_Click" Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Sign out" />
-                            </StackPanel>
-                        </Border>
-                    </Popup>
                     <Button x:Name="MinButton" Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Min_Click" />
                     <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize" Click="Max_Click" />
                     <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" />

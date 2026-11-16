@@ -49,6 +49,13 @@ public sealed class AccountSync : IDisposable
     /// <summary>Signed in/out, or a sync started/finished (status text may have changed). Any thread.</summary>
     public event Action? Changed;
 
+    /// <summary>Tune came to the front: sync unless it just did, so other devices' changes show up without waiting.</summary>
+    public void SyncSoon()
+    {
+        if (IsSignedIn && (LastSynced is not { } last || DateTimeOffset.UtcNow - last > TimeSpan.FromSeconds(20)))
+            _ = SyncAsync(skipIfBusy: true);
+    }
+
     /// <summary>Begins the schedule (first sync right away when signed in).</summary>
     public void Start()
     {

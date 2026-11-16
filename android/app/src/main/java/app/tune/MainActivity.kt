@@ -11,7 +11,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +75,12 @@ import kotlinx.coroutines.delay
 object BuildConfigLite { const val VERSION = "1.3.0" }
 
 class MainActivity : ComponentActivity() {
+    /** Back in Tune: catch up with changes made on other devices. */
+    override fun onStart() {
+        super.onStart()
+        (application as TuneApp).graph.account?.syncSoon()
+    }
+
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,21 +109,35 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
     // new Tune release on GitHub? (at most every few hours; shows the Update banner on Home)
     androidx.compose.runtime.LaunchedEffect(Unit) { app.graph.updater.check() }
     val c = LocalTune.current
+    // every page is opaque (with its own accent glow), so pages slide over each other cleanly
+    val page: @Composable (@Composable () -> Unit) -> Unit = { content ->
+        Box(Modifier.fillMaxSize().background(c.base)) {
+            Box(Modifier.fillMaxWidth().height(260.dp).background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.22f), Color.Transparent))))
+            content()
+        }
+    }
+    val tabs = setOf("home", "search", "library")
+    fun isTab(e: androidx.navigation.NavBackStackEntry) = e.destination.route in tabs
+    val slide = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntOffset>(320, easing = androidx.compose.animation.core.FastOutSlowInEasing)
     Box(Modifier.fillMaxSize().background(c.base)) {
-        // a soft accent glow at the top of every page
-        Box(Modifier.fillMaxWidth().height(260.dp).background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.22f), Color.Transparent))))
-        NavHost(app.nav, startDestination = "home", modifier = Modifier.fillMaxSize()) {
-            composable("home") { HomeScreen() }
-            composable("search") { SearchScreen() }
-            composable("library") { LibraryScreen() }
-            composable("liked") { CollectionScreen(CollectionKind.Liked, "liked") }
-            composable("downloads") { CollectionScreen(CollectionKind.Downloads, "downloads") }
-            composable("history") { HistoryScreen() }
-            composable("local/{id}") { CollectionScreen(CollectionKind.Local, it.arguments?.getString("id")!!) }
-            composable("album/{id}") { CollectionScreen(CollectionKind.Album, it.arguments?.getString("id")!!) }
-            composable("ytplaylist/{id}") { CollectionScreen(CollectionKind.YtPlaylist, it.arguments?.getString("id")!!) }
-            composable("artist/{id}") { ArtistScreen(it.arguments?.getString("id")!!) }
-            composable("settings") { SettingsScreen(accent, onAccent) }
+        NavHost(app.nav, startDestination = "home", modifier = Modifier.fillMaxSize(),
+            // pages slide in from the right and back out to the right; switching tabs is instant
+            enterTransition = { if (isTab(targetState)) androidx.compose.animation.EnterTransition.None else slideInHorizontally(slide) { it } },
+            exitTransition = { if (isTab(targetState)) androidx.compose.animation.ExitTransition.None else slideOutHorizontally(slide) { -it / 4 } },
+            popEnterTransition = { if (isTab(initialState) && isTab(targetState)) androidx.compose.animation.EnterTransition.None else slideInHorizontally(slide) { -it / 4 } },
+            popExitTransition = { if (isTab(initialState)) androidx.compose.animation.ExitTransition.None else slideOutHorizontally(slide) { it } },
+        ) {
+            composable("home") { page { HomeScreen() } }
+            composable("search") { page { SearchScreen() } }
+            composable("library") { page { LibraryScreen() } }
+            composable("liked") { page { CollectionScreen(CollectionKind.Liked, "liked") } }
+            composable("downloads") { page { CollectionScreen(CollectionKind.Downloads, "downloads") } }
+            composable("history") { page { HistoryScreen() } }
+            composable("local/{id}") { page { CollectionScreen(CollectionKind.Local, it.arguments?.getString("id")!!) } }
+            composable("album/{id}") { page { CollectionScreen(CollectionKind.Album, it.arguments?.getString("id")!!) } }
+            composable("ytplaylist/{id}") { page { CollectionScreen(CollectionKind.YtPlaylist, it.arguments?.getString("id")!!) } }
+            composable("artist/{id}") { page { ArtistScreen(it.arguments?.getString("id")!!) } }
+            composable("settings") { page { SettingsScreen(accent, onAccent) } }
         }
 
         // mini player + tabs: taps that land between their buttons stop here instead of reaching the page underneath

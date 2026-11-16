@@ -21,6 +21,11 @@ public sealed partial class ShellViewModel
     public string AccountName => Services.Account?.Profile is { } p ? p.Name ?? p.Email ?? "Signed in" : "";
     public string? AccountEmail => Services.Account?.Profile?.Email;
     public string AccountGreeting => $"Hi, {AccountName.Split(' ')[0]}!";
+    /// <summary>Profile card title: "Hi, Ditik!" or "Sign in to sync".</summary>
+    public string AccountTitle => IsSignedIn ? AccountGreeting : AccountAvailable ? "Sign in to sync" : "Not signed in";
+    /// <summary>Sidebar entry: your name, or "Profile" when signed out.</summary>
+    public string AccountNavTitle => IsSignedIn ? AccountName.Split(' ')[0] : "Profile";
+    public bool IsSyncing => Services.Account?.IsSyncing == true;
     public string AccountInitial => AccountName.Length > 0 ? AccountName[..1].ToUpperInvariant() : "?";
     public string? AccountPhoto => Services.Account?.Profile?.PhotoUrl is { Length: > 0 } u ? u : null;
 
@@ -45,6 +50,9 @@ public sealed partial class ShellViewModel
         OnPropertyChanged(nameof(IsSignedOut));
         OnPropertyChanged(nameof(AccountName));
         OnPropertyChanged(nameof(AccountGreeting));
+        OnPropertyChanged(nameof(AccountTitle));
+        OnPropertyChanged(nameof(AccountNavTitle));
+        OnPropertyChanged(nameof(IsSyncing));
         OnPropertyChanged(nameof(AccountEmail));
         OnPropertyChanged(nameof(AccountInitial));
         OnPropertyChanged(nameof(AccountPhoto));

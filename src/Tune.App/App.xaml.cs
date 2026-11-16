@@ -220,6 +220,7 @@ public partial class App : Application
         _library.SyncApplied += () => Dispatcher.BeginInvoke(Shell.OnSyncApplied);
         _account?.Start();
         Shell.RefreshAccount();
+        MainWin.Activated += (_, _) => _account?.SyncSoon(); // back in Tune: catch up with the phone
         _tray = new TrayIcon(Shell, ShowMain, ToggleMini, () => _mini?.IsVisible == true, Quit);
 
         // media keys + Windows media flyout need a window handle; creating it doesn't show the window

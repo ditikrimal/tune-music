@@ -73,7 +73,7 @@ val BottomClearance = PaddingValues(bottom = 150.dp)
 
 @Composable
 fun Loading() = Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-    CircularProgressIndicator(color = LocalTune.current.accent, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
+    TuneLoader(size = 40.dp)
 }
 
 @Composable

@@ -46,7 +46,7 @@ fun Avatar(state: AccountSync.State?, size: Dp) {
     val signedIn = state?.signedIn == true
     Box(Modifier.size(size).clip(CircleShape).background(if (signedIn) c.accent else c.card), contentAlignment = Alignment.Center) {
         if (signedIn) {
-            Text((state!!.name ?: state.email ?: "?").take(1).uppercase(), style = if (size > 40.dp) Type.title2 else Type.bodyStrong, color = c.onAccent)
+            Text((state!!.name ?: state.email ?: "?").take(1).uppercase(), style = when { size > 70.dp -> Type.title1; size > 40.dp -> Type.title2; else -> Type.bodyStrong }, color = c.onAccent)
             state.photo?.let { AsyncImage(it, "Your account", Modifier.fillMaxSize().clip(CircleShape)) }
         } else Icon(Ico.Person, "Account", tint = c.subtle, modifier = Modifier.size(size * 0.6f))
     }
@@ -85,21 +85,22 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                     Text("Tune", style = Type.bodyStrong, color = c.text, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(44.dp))
                 }
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(20.dp)).background(c.base).padding(18.dp),
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(20.dp)).background(c.base).padding(horizontal = 20.dp, vertical = 26.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     when {
                         account == null -> {
-                            Avatar(null, 64.dp)
+                            Avatar(null, 84.dp)
                             Text("Sign-in isn't available in this version.", style = Type.caption, color = c.subtle, textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(top = 12.dp))
                         }
                         state?.signedIn != true -> {
-                            Avatar(null, 64.dp)
-                            Text("Sign in to sync", style = Type.title2, color = c.text, modifier = Modifier.padding(top = 12.dp))
+                            Avatar(null, 84.dp)
+                            Text("Sign in to sync", style = Type.title2, color = c.text, modifier = Modifier.padding(top = 16.dp))
                             Text("Likes, playlists and history on all your devices.",
-                                style = Type.caption, color = c.subtle, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
-                            Text(if (busy) "Signing in…" else "Continue with Google", style = Type.bodyStrong, color = c.onAccent,
-                                modifier = Modifier.padding(top = 16.dp).clip(RoundedCornerShape(24.dp)).background(c.accent)
+                                style = Type.caption, color = c.subtle, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                            if (busy) TuneLoader(Modifier.padding(top = 20.dp), size = 32.dp)
+                            else Text("Continue with Google", style = Type.bodyStrong, color = c.onAccent,
+                                modifier = Modifier.padding(top = 18.dp).clip(RoundedCornerShape(24.dp)).background(c.accent)
                                     .clickable(enabled = !busy) {
                                         busy = true
                                         scope.launch {
@@ -116,10 +117,11 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                                     }.padding(horizontal = 24.dp, vertical = 12.dp))
                         }
                         else -> {
-                            Avatar(state, 64.dp)
+                            Avatar(state, 84.dp)
                             Text("Hi, ${(state.name ?: state.email ?: "there").substringBefore(' ')}!", style = Type.title2, color = c.text,
-                                modifier = Modifier.padding(top = 12.dp))
-                            state.email?.let { Text(it, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                modifier = Modifier.padding(top = 16.dp))
+                            state.email?.let { Text(it, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 6.dp)) }
                             val status = when {
                                 state.syncing -> "Syncing…"
                                 state.error != null -> "Couldn't sync: ${state.error}"
@@ -128,7 +130,10 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                                     else android.text.format.DateUtils.getRelativeTimeSpanString(state.lastSynced).toString().lowercase()
                                 else -> "Waiting to sync"
                             }
-                            Text(status, style = Type.caption, color = c.accentText, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp))
+                            Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (state.syncing) { TuneLoader(size = 14.dp); Spacer(Modifier.width(8.dp)) }
+                                Text(status, style = Type.caption, color = c.accentText, textAlign = TextAlign.Center)
+                            }
                         }
                     }
                 }

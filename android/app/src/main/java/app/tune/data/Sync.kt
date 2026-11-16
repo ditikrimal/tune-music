@@ -328,6 +328,13 @@ class AccountSync(private val lib: Library, private val http: OkHttpClient, val 
         }
     }
 
+    /** Tune came to the front: sync unless it just did (other devices' changes show up without waiting). */
+    fun syncSoon() {
+        if (session == null) return
+        if (System.currentTimeMillis() - (get("sync.last")?.toLongOrNull() ?: 0) < 20_000) return
+        scope.launch { syncNow(skipIfBusy = true) }
+    }
+
     suspend fun signInWithGoogle(googleIdToken: String) = withContext(Dispatchers.IO) {
         val s = auth.signInWithGoogle(googleIdToken)
         if (get("sync.lastUid") != s.uid) { SyncEngine.resetCursors(lib); lib.setSetting("sync.lastUid", s.uid) }
