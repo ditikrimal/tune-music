@@ -173,7 +173,7 @@ fun NowPlaying() {
                 IconBtn(if (ui.repeat == Player.REPEAT_MODE_ONE) Ico.RepeatOne else Ico.Repeat, "Repeat",
                     tint = if (ui.repeat != Player.REPEAT_MODE_OFF) c.accentText else c.subtle) { app.player.cycleRepeat() }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 28.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 36.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PaneButton(Ico.Lyrics, "Lyrics", pane == NpPane.Lyrics) { pane = if (pane == NpPane.Lyrics) NpPane.Art else NpPane.Lyrics }
                 SleepButton()
                 PaneButton(Ico.Queue, "Queue", pane == NpPane.Queue) { pane = if (pane == NpPane.Queue) NpPane.Art else NpPane.Queue }

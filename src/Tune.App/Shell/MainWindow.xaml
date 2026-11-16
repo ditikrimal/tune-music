@@ -336,8 +336,12 @@
                     <Button x:Name="MiniButton" Style="{StaticResource IconButton}" ToolTip="Mini-player" Click="Mini_Click">
                         <p:Icon Data="{StaticResource IcoMini}" />
                     </Button>
-                    <p:Icon Data="{StaticResource IcoVolume}" Foreground="{DynamicResource SubtleTextBrush}" VerticalAlignment="Center" Margin="8,0" />
-                    <Slider Width="100" Style="{StaticResource ThinSlider}" Minimum="0" Maximum="1" Value="{Binding Volume}" VerticalAlignment="Center" />
+                    <!-- scroll the wheel over the volume to turn it up / down -->
+                    <StackPanel Orientation="Horizontal" Background="Transparent" PreviewMouseWheel="Volume_MouseWheel" ToolTip="Volume (scroll to change)">
+                        <p:Icon Data="{StaticResource IcoVolume}" Foreground="{DynamicResource SubtleTextBrush}" VerticalAlignment="Center" Margin="8,0" />
+                        <Slider Width="100" Style="{StaticResource ThinSlider}" Minimum="0" Maximum="1" Value="{Binding Volume}" VerticalAlignment="Center"
+                                AutomationProperties.Name="Volume" />
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>

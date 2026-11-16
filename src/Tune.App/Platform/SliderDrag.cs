@@ -81,7 +81,13 @@ public static class SliderDrag
     private static void Follow(Slider s, MouseEventArgs e)
     {
         if (s.Template.FindName("PART_Track", s) is not Track track || track.ActualWidth <= 0) return;
-        var v = Math.Clamp(track.ValueFromPoint(e.GetPosition(track)), s.Minimum, s.Maximum);
+        // straight from where the pointer is on the bar (not relative to the thumb, which may be mid-move:
+        // Track.ValueFromPoint made the value flash to 0 or 100 % for a frame)
+        var thumb = track.Thumb?.ActualWidth ?? 0;
+        var usable = track.ActualWidth - thumb;
+        var x = e.GetPosition(track).X;
+        var fraction = usable > 1 ? (x - thumb / 2) / usable : x / track.ActualWidth;
+        var v = s.Minimum + Math.Clamp(fraction, 0, 1) * (s.Maximum - s.Minimum);
         s.SetCurrentValue(RangeBase.ValueProperty, v); // keeps a OneWay binding alive
     }
 }

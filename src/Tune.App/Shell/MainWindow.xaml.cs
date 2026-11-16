@@ -187,6 +187,13 @@ public partial class MainWindow : Window
 
     private void OfflinePill_Click(object sender, MouseButtonEventArgs e) => Vm.GoToCommand.Execute("downloads");
 
+    /// <summary>Wheel over the volume control: 5 % per notch.</summary>
+    private void Volume_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        e.Handled = true;
+        Vm.Player.Volume = Math.Clamp(Math.Round(Vm.Player.Volume + e.Delta / 120.0 * 0.05, 2), 0, 1);
+    }
+
     /// <summary>Right-click a playlist in the sidebar: the same options as on its page.</summary>
     private void SidebarPlaylist_RightClick(object sender, MouseButtonEventArgs e)
     {
