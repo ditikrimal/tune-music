@@ -58,6 +58,8 @@ class SmartDownloads(private val lib: Library, private val yt: YtMusic, private 
     val enabled: Boolean get() = lib.setting("smart.enabled") != "0"
     val target: Int get() = lib.setting("smart.count")?.toIntOrNull() ?: 100
     val lastRunMs: Long get() = lib.setting("smart.lastRun")?.toLongOrNull() ?: 0
+    /** The songs the last run picked, whoever downloaded them (many are often your own downloads already). */
+    val pickedIds: List<String> get() = lib.setting("smart.picks")?.split(',')?.filter { it.isNotBlank() }.orEmpty()
 
     /** Picks the set and queues/removes downloads to match it. Returns (added, removed). One at a time. */
     @Synchronized
@@ -73,6 +75,7 @@ class SmartDownloads(private val lib: Library, private val yt: YtMusic, private 
         val stale = downloads.smartIds() - want
         downloads.remove(stale)
         val added = downloads.enqueue(picks, smart = true)
+        lib.setSetting("smart.picks", want.joinToString(","))
         lib.setSetting("smart.lastRun", now.toString())
         Log.i("Tune", "Smart downloads: ${picks.size} picked, $added new, ${stale.size} swapped out")
         return added to stale.size

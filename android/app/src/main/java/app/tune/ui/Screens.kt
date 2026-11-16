@@ -776,8 +776,10 @@ private fun SmartSection() {
     val enabled = remember(version) { app.graph.smart.enabled }
     val target = remember(version) { app.graph.smart.target }
     val lookahead = remember(version) { app.graph.library.setting("lookahead.enabled") != "0" }
-    val ready = remember(dv) { app.graph.downloads.smartIds().count { app.graph.downloads.localFile(it) != null } }
-    val waiting = remember(dv) { app.graph.downloads.smartIds().count { app.graph.downloads.localFile(it) == null } }
+    // count every picked song that's on the phone, including ones you'd already downloaded yourself
+    val picked = remember(dv, version) { app.graph.smart.pickedIds }
+    val ready = remember(dv, version) { picked.count { app.graph.downloads.localFile(it) != null } }
+    val waiting = picked.size - ready
     val last = remember(version) { app.graph.smart.lastRunMs }
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.padding(horizontal = 20.dp)) {
@@ -805,7 +807,7 @@ private fun SmartSection() {
                 }
             }
             val ago = if (last == 0L) "not yet" else android.text.format.DateUtils.getRelativeTimeSpanString(last).toString().lowercase()
-            Text("$ready ready offline" + (if (waiting > 0) " · $waiting waiting for Wi-Fi" else "") + " · updated $ago",
+            Text("$ready of ${picked.size} ready offline" + (if (waiting > 0) " · $waiting waiting for Wi-Fi" else "") + " · updated $ago",
                 style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 10.dp))
             Text("Update now", style = Type.bodyStrong, color = c.accentText, modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(16.dp))
                 .clickable { SmartRefreshWorker.runNow(context); app.graph.toast("Updating smart downloads") }.padding(vertical = 8.dp))

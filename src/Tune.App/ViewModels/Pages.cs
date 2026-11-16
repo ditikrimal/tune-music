@@ -726,9 +726,10 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
 
     private void RefreshSmartStatus()
     {
-        var n = Smart.SmartCount;
+        var picked = Smart.PickedIds.Count;
+        var ready = Smart.ReadyCount;
         SmartStatus = !Smart.Enabled ? "Off" : Smart.LastRun is { } last
-            ? $"{ShellViewModel.Songs(n)} picked · updated {last.LocalDateTime:d MMM, HH:mm}"
+            ? $"{ready} of {ShellViewModel.Songs(picked)} ready offline · updated {last.LocalDateTime:d MMM, HH:mm}"
             : "Runs once a day on Wi-Fi or another unmetered connection";
     }
 

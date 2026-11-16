@@ -32,6 +32,13 @@ public sealed class SmartDownloads(LibraryStore lib, IYtMusic api, DownloadManag
 
     public int SmartCount => downloads.SmartIds().Count;
 
+    /// <summary>The songs the last run picked, whoever downloaded them (many are often your own downloads already).</summary>
+    public IReadOnlyList<string> PickedIds =>
+        (lib.GetSetting("smart.picks") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>How many of the picked songs can play offline right now.</summary>
+    public int ReadyCount => PickedIds.Count(downloads.IsDownloaded);
+
     /// <summary>Once a day is enough.</summary>
     public bool IsDue => LastRun is not { } last || clock.Now - last > TimeSpan.FromHours(20);
 
@@ -52,6 +59,7 @@ public sealed class SmartDownloads(LibraryStore lib, IYtMusic api, DownloadManag
             var stale = downloads.SmartIds().Where(id => !want.Contains(id)).ToList();
             downloads.Remove(stale);
             var added = downloads.Enqueue(picks, smart: true);
+            lib.SetSetting("smart.picks", string.Join(',', want));
             lib.SetSetting("smart.lastRun", clock.Now.ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
             Log.Info($"Smart downloads: {picks.Count} picked, {added} new, {stale.Count} swapped out");
             return (added, stale.Count);
