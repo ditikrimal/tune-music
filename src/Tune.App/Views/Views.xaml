@@ -443,7 +443,17 @@
     <DataTemplate DataType="{x:Type vm:HomeViewModel}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
             <StackPanel>
-                <TextBlock Text="{Binding Greeting}" Style="{StaticResource Title1}" Margin="0,0,0,4" />
+                <DockPanel Margin="0,0,0,4">
+                    <!-- refresh Home (F5): picks up what you've just been playing; spins while loading -->
+                    <Button x:Name="refresh" DockPanel.Dock="Right" Style="{StaticResource IconButton}" Command="{Binding LoadCommand}" ToolTip="Refresh (F5)"
+                            VerticalAlignment="Center" Width="40" Height="40" RenderTransformOrigin="0.5,0.5">
+                        <Button.RenderTransform>
+                            <RotateTransform />
+                        </Button.RenderTransform>
+                        <p:Icon Data="{StaticResource IcoRefresh}" Size="22" />
+                    </Button>
+                    <TextBlock Text="{Binding Greeting}" Style="{StaticResource Title1}" />
+                </DockPanel>
                 <!-- offline: Home becomes your downloads -->
                 <StackPanel Visibility="{Binding Offline, Converter={StaticResource BoolToVis}}" Margin="0,20,0,0">
                     <Border Style="{DynamicResource SettingGroup}" Padding="20,16" Margin="0,0,0,8">
@@ -479,6 +489,22 @@
                 </ItemsControl>
             </StackPanel>
         </ScrollViewer>
+            <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard x:Name="spin">
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="refresh" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                             From="0" To="360" Duration="0:0:0.9" RepeatBehavior="Forever" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+                <DataTrigger.ExitActions>
+                    <StopStoryboard BeginStoryboardName="spin" />
+                </DataTrigger.ExitActions>
+                <Setter TargetName="refresh" Property="IsEnabled" Value="False" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
     </DataTemplate>
 
     <!-- ================= Search ================= -->

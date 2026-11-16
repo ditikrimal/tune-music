@@ -138,7 +138,10 @@ private fun BottomBar() {
         tabs.forEach { (key, label, icon) ->
             val on = route == key || (key == "library" && route in setOf("liked", "downloads", "local/{id}"))
             Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable {
-                app.nav.navigate(key) { popUpTo("home") { saveState = true }; launchSingleTop = true; restoreState = true }
+                // a tab always lands on its main screen: Home pops back to itself (e.g. out of Settings),
+                // other tabs start fresh on top of Home — no stale pages restored on top
+                if (key == "home") app.nav.popBackStack("home", inclusive = false)
+                else if (route != key) app.nav.navigate(key) { popUpTo("home"); launchSingleTop = true }
             }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accentSoft else Color.Transparent).padding(horizontal = 18.dp, vertical = 4.dp)) {
                     Icon(icon, label, tint = if (on) c.accentText else c.subtle, modifier = Modifier.size(24.dp))

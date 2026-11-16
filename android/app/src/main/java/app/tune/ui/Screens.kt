@@ -85,8 +85,16 @@ fun HomeScreen() {
     val online by app.graph.online.collectAsState()
     val vm: Loader<Feed> = viewModel(key = "home")
     val state by vm.state.collectAsState()
+    val refreshing by vm.refreshing.collectAsState()
     LaunchedEffect(online) { if (online) vm.load(force = state?.getOrNull()?.offline == true) { app.graph.feed.build() } }
 
+    // pull down to rebuild Home from what you've been playing (and fresh YouTube Music rows)
+    @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = { if (online) vm.refresh { app.graph.feed.build() } },
+        modifier = Modifier.fillMaxSize(),
+    ) {
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
         item {
             Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -107,6 +115,7 @@ fun HomeScreen() {
                 else ShelfRow(shelf.copy(items = shelf.items.take(12)), featured = i == 0 && shelf.isLocal)
             }
         }
+    }
     }
 }
 

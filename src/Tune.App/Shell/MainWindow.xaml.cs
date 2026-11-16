@@ -93,6 +93,9 @@ public partial class MainWindow : Window
                 Vm.GoToCommand.Execute("search");
                 Dispatcher.BeginInvoke(FocusSearchBox, System.Windows.Threading.DispatcherPriority.Loaded);
                 break;
+            case Key.F5 when Vm.Page is HomeViewModel home:
+                home.LoadCommand.Execute(null);
+                break;
             case Key.Space when !typing:
                 p.PlayPauseCommand.Execute(null);
                 break;

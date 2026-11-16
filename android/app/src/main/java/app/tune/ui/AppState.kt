@@ -87,6 +87,21 @@ class Loader<T> : ViewModel() {
         if (force) _state.value = null
         viewModelScope.launch { _state.value = withContext(Dispatchers.IO) { runCatching { block() } } }
     }
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing
+
+    /** Pull-to-refresh: reload but keep showing the old content until the new one is ready (and if it fails). */
+    fun refresh(block: suspend () -> T) {
+        if (_refreshing.value) return
+        started = true
+        _refreshing.value = true
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { block() } }
+            if (r.isSuccess || _state.value == null) _state.value = r
+            _refreshing.value = false
+        }
+    }
 }
 
 @Composable
