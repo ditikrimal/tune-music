@@ -94,7 +94,7 @@ public partial class MainWindow : Window
                 Dispatcher.BeginInvoke(FocusSearchBox, System.Windows.Threading.DispatcherPriority.Loaded);
                 break;
             case Key.F5 when Vm.Page is HomeViewModel home:
-                home.LoadCommand.Execute(null);
+                home.RefreshCommand.Execute(null);
                 break;
             case Key.Space when !typing:
                 p.PlayPauseCommand.Execute(null);
@@ -238,12 +238,22 @@ public partial class MainWindow : Window
         if (Vm.Player.IsSeeking) Vm.Player.PreviewSeek(e.NewValue);
     }
 
-    private void NewPlaylist_Click(object sender, RoutedEventArgs e)
+    private async void NewPlaylist_Click(object sender, RoutedEventArgs e)
     {
-        var lib = Vm.Services.Library;
-        if (NameDialog.Ask(this, "New playlist", Vm.SuggestedPlaylistName) is not { } name) return;
-        var id = lib.CreatePlaylist(name);
-        Vm.ReloadPlaylists();
+        if (NameDialog.AskNewPlaylist(this, Vm.SuggestedPlaylistName) is not { } answer) return;
+        long id;
+        if (answer.IsLink)
+        {
+            Vm.ShowToast("Importing\u2026");
+            var (message, imported) = await Vm.ImportPlaylistAsync(answer.Text);
+            if (imported is not { } newId) { Vm.ShowToast(message); return; }
+            id = newId;
+        }
+        else
+        {
+            id = Vm.Services.Library.CreatePlaylist(answer.Text);
+            Vm.ReloadPlaylists();
+        }
         Vm.GoToCommand.Execute($"playlist:{id}");
     }
 

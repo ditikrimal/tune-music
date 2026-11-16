@@ -16,6 +16,7 @@ public sealed partial class ShellViewModel
         "home" => _home ??= new HomeViewModel(this),
         "search" => _search ??= new SearchViewModel(this),
         "liked" => CollectionViewModel.Liked(this),
+        "history" => CollectionViewModel.History(this),
         "downloads" => CollectionViewModel.Downloads(this),
         "settings" => new SettingsViewModel(this),
         _ when key.StartsWith("playlist:", StringComparison.Ordinal) && long.TryParse(key[9..], out var id) =>
@@ -101,6 +102,28 @@ public sealed partial class ShellViewModel
         ReloadPlaylists();
         ShowToast($"Added to {playlist.Name}");
         if (Page is CollectionViewModel { PlaylistId: { } id } page && id == playlist.Id) page.Reload();
+    }
+
+    /// <summary>Imports a YouTube Music playlist from a link into the library. Returns a message and the new playlist id.</summary>
+    public async Task<(string Message, long? Id)> ImportPlaylistAsync(string text)
+    {
+        if (Tune.Core.YtMusic.PlaylistLinks.Parse(text) is not { } listId)
+            return ("That doesn\u2019t look like a playlist link. It should contain list=\u2026", null);
+        try
+        {
+            var c = await Services.Api.GetPlaylistAsync(listId);
+            if (c.Tracks.Count == 0) return ("That playlist is empty or private (only public and unlisted playlists can be imported).", null);
+            var id = Services.Library.CreatePlaylist(c.Title);
+            Services.Library.AddManyToPlaylist(id, c.Tracks);
+            ReloadPlaylists();
+            ShowToast($"Imported {c.Title}");
+            return ($"Imported {Songs(c.Tracks.Count)} into \u201c{c.Title}\u201d.", id);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Tune.Core.Util.Log.Warn("Playlist import failed", e);
+            return ("Couldn\u2019t import \u2014 check the link and your connection.", null);
+        }
     }
 
     /// <summary>Asks for a playlist name (null = cancelled). Set by the main window.</summary>

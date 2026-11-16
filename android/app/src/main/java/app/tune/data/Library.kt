@@ -64,6 +64,13 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 2) 
         changed()
     }
 
+    /** Songs you played, each once at its latest play, newest first (History). */
+    fun history(max: Int): List<Pair<Track, Long>> = readableDatabase.rawQuery("""
+        SELECT t.json, MAX(p.at) AS last FROM plays p JOIN tracks t ON t.video_id = p.video_id
+        GROUP BY p.video_id ORDER BY last DESC LIMIT $max""", null).use { c ->
+        buildList { while (c.moveToNext()) Track.fromJson(c.getString(0))?.let { add(it to c.getLong(1)) } }
+    }
+
     fun recent(max: Int) = tracks("""
         SELECT t.json FROM (SELECT video_id, MAX(id) AS last FROM plays GROUP BY video_id) p
         JOIN tracks t ON t.video_id = p.video_id ORDER BY p.last DESC LIMIT $max""")

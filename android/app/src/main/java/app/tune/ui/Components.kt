@@ -265,22 +265,46 @@ fun MenuRow(icon: ImageVector, text: String, accent: Boolean = false, onClick: (
 // ---------------- dialogs ----------------
 
 @Composable
-fun NameDialog(title: String, suggested: String, ok: String = "Create", onDone: (String?) -> Unit) {
+fun NameDialog(title: String, suggested: String, ok: String = "Create", onLink: ((String) -> Unit)? = null, onDone: (String?) -> Unit) {
     val c = LocalTune.current
+    var linkMode by remember { mutableStateOf(false) }
     var value by remember { mutableStateOf(TextFieldValue(suggested, TextRange(0, suggested.length))) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    LaunchedEffect(linkMode) { focus.requestFocus() }
     AlertDialog(
         onDismissRequest = { onDone(null) },
         containerColor = c.card,
-        title = { Text(title, style = Type.title2, color = c.text) },
+        title = { Text(if (linkMode) "Import a playlist" else title, style = Type.title2, color = c.text) },
         text = {
-            OutlinedTextField(value, { value = it }, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                shape = RoundedCornerShape(22.dp),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.accent, cursorColor = c.accent, unfocusedBorderColor = c.track))
+            Column {
+                OutlinedTextField(value, { value = it }, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    placeholder = { if (linkMode) Text("https://music.youtube.com/playlist?list=\u2026", color = c.subtle, maxLines = 1) },
+                    shape = RoundedCornerShape(22.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = c.accent, cursorColor = c.accent, unfocusedBorderColor = c.track))
+                if (linkMode) Text("Paste a YouTube Music playlist link. Its songs become a new playlist.", style = Type.caption, color = c.subtle,
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp))
+            }
         },
-        confirmButton = { TextButton(onClick = { value.text.trim().takeIf { it.isNotEmpty() }?.let { onDone(it) } }) { Text(ok, color = c.accentText, fontWeight = FontWeight.SemiBold) } },
-        dismissButton = { TextButton(onClick = { onDone(null) }) { Text("Cancel", color = c.subtle) } },
+        confirmButton = {
+            TextButton(onClick = {
+                val text = value.text.trim()
+                if (text.isEmpty()) return@TextButton
+                if (linkMode) onLink?.invoke(text) else onDone(text)
+            }) { Text(if (linkMode) "Import" else ok, color = c.accentText, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // quiet link icon: switch between naming a new playlist and importing one from a link
+                if (onLink != null) IconBtn(Ico.Link, "Import from a YouTube Music link", tint = if (linkMode) c.accentText else c.subtle, size = 22.dp, box = 40.dp) {
+                    linkMode = !linkMode
+                    val pasted = clipboard.getText()?.text?.trim()?.takeIf { app.tune.data.PlaylistLinks.parse(it) != null }
+                    val t = if (linkMode) pasted.orEmpty() else suggested
+                    value = TextFieldValue(t, TextRange(0, t.length))
+                }
+                TextButton(onClick = { onDone(null) }) { Text("Cancel", color = c.subtle) }
+            }
+        },
     )
 }
 

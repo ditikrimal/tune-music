@@ -165,7 +165,17 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
     }
 
     [RelayCommand]
-    private async Task LoadAsync()
+    private Task LoadAsync() => BuildAsync(fresh: false);
+
+    /// <summary>The refresh button / F5: a fresh mix (new radios, other favourites, reshuffled Quick picks).</summary>
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        await BuildAsync(fresh: true);
+        if (!Offline) _shell.ShowToast("Home updated");
+    }
+
+    private async Task BuildAsync(bool fresh)
     {
         if (_shell.IsOffline && !await _shell.Services.Network.CheckNowAsync())
         {
@@ -175,7 +185,7 @@ public sealed partial class HomeViewModel : ObservableObject, IPage
         IsLoading = true;
         try
         {
-            var feed = await _shell.Services.Feed.BuildAsync();
+            var feed = await _shell.Services.Feed.BuildAsync(fresh);
             Shelves.Clear();
             // a calm Home: at most 6 rows of 12 — the rest is noise
             foreach (var s in feed.Shelves.Take(7)) Shelves.Add(s with { Items = s.Items.Take(s.IsList ? 20 : 12).ToList() });
@@ -289,7 +299,7 @@ public sealed partial class SearchViewModel : ObservableObject, IPage
 
 // ============================== Album / playlist / liked ==============================
 
-public enum CollectionKind { Album, YtPlaylist, LocalPlaylist, Liked, Downloads }
+public enum CollectionKind { Album, YtPlaylist, LocalPlaylist, Liked, Downloads, History }
 
 public sealed partial class CollectionViewModel : ObservableObject, IPage
 {
@@ -344,6 +354,14 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
     private static string FormatSize(long bytes) =>
         bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.0} GB" : $"{bytes / (double)(1L << 20):0} MB";
 
+    /// <summary>Songs you've played, most recent first.</summary>
+    public static CollectionViewModel History(ShellViewModel s) =>
+        new(s, CollectionKind.History, "History", "history", _ =>
+        {
+            var recent = s.Services.Library.GetRecent(300);
+            return Task.FromResult(new Collection("History", ShellViewModel.Songs(recent.Count) + " you played recently", null, recent));
+        });
+
     public static CollectionViewModel LocalPlaylist(ShellViewModel s, long id) =>
         new(s, CollectionKind.LocalPlaylist, "Playlist", $"playlist:{id}", _ =>
         {
@@ -357,6 +375,7 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
     public long? PlaylistId { get; }
     public bool IsLiked => Kind == CollectionKind.Liked;
     public bool IsDownloads => Kind == CollectionKind.Downloads;
+    public bool IsHistory => Kind == CollectionKind.History;
     public bool CanDownloadAll => !IsDownloads && Tracks.Count > 0;
 
     /// <summary>Every song here is downloaded (or on its way): the header button shows "on".</summary>
@@ -396,6 +415,7 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
         CollectionKind.Album => "Album",
         CollectionKind.Liked => "Playlist",
         CollectionKind.Downloads => "Offline",
+        CollectionKind.History => "Your listening",
         _ => "Playlist",
     };
 
@@ -636,32 +656,13 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     private async Task Import()
     {
         if (IsImporting) return;
-        if (Tune.Core.YtMusic.PlaylistLinks.Parse(ImportUrl) is not { } id)
-        {
-            ImportStatus = "That doesn\u2019t look like a playlist link. It should contain list=\u2026";
-            return;
-        }
         IsImporting = true;
         ImportStatus = "Importing\u2026";
         try
         {
-            var c = await _shell.Services.Api.GetPlaylistAsync(id);
-            if (c.Tracks.Count == 0)
-            {
-                ImportStatus = "That playlist is empty or private (only public and unlisted playlists can be imported).";
-                return;
-            }
-            var pid = Lib.CreatePlaylist(c.Title);
-            Lib.AddManyToPlaylist(pid, c.Tracks);
-            _shell.ReloadPlaylists();
-            ImportStatus = $"Imported {ShellViewModel.Songs(c.Tracks.Count)} into \u201c{c.Title}\u201d.";
-            ImportUrl = "";
-            _shell.ShowToast($"Imported {c.Title}");
-        }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            Log.Warn("Playlist import failed", e);
-            ImportStatus = "Couldn\u2019t import \u2014 check the link and your connection.";
+            var (message, id) = await _shell.ImportPlaylistAsync(ImportUrl);
+            ImportStatus = message;
+            if (id is not null) ImportUrl = "";
         }
         finally
         {

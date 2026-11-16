@@ -56,6 +56,17 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
         graph.toast(if (tracks.size == 1) "Removed download" else "Removed ${tracks.size} downloads")
     }
 
+    /** Imports a YouTube Music playlist link into the library; returns a message and the new playlist id. */
+    suspend fun importPlaylist(link: String): Pair<String, Long?> {
+        val listId = app.tune.data.PlaylistLinks.parse(link) ?: return "That doesn\u2019t look like a playlist link. It should contain list=\u2026" to null
+        val col = withContext(Dispatchers.IO) { runCatching { graph.yt.playlist(listId) }.getOrNull() }
+            ?: return "Couldn\u2019t import \u2014 check the link and your connection." to null
+        if (col.tracks.isEmpty()) return "That playlist is empty or private (only public and unlisted playlists can be imported)." to null
+        val id = withContext(Dispatchers.IO) { graph.library.createPlaylist(col.title).also { graph.library.addManyToPlaylist(it, col.tracks) } }
+        graph.toast("Imported ${col.title}")
+        return "Imported ${col.tracks.size} songs into \u201c${col.title}\u201d." to id
+    }
+
     /** Offline and not downloaded: the song can't play right now. */
     fun unavailable(t: Track) = !graph.online.value && !graph.isAvailableOffline(t.videoId)
 

@@ -75,6 +75,8 @@
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=liked|&#xEB52;}" Content="Liked songs" />
                     <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="downloads" AutomationProperties.Name="Downloads"
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=downloads|&#xE896;}" Content="Downloads" />
+                    <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="history" AutomationProperties.Name="History"
+                            Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=history|&#xE81C;}" Content="History" />
                     <Button Style="{StaticResource NavItem}" Command="{Binding GoToCommand}" CommandParameter="settings" AutomationProperties.Name="Settings"
                             Tag="{Binding NavKey, Converter={x:Static sh:NavTagConverter.Instance}, ConverterParameter=settings|&#xE713;}" Content="Settings" />
 

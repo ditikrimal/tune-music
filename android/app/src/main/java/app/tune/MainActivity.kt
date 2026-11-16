@@ -56,6 +56,7 @@ import app.tune.ui.ArtistScreen
 import app.tune.ui.CollectionKind
 import app.tune.ui.CollectionScreen
 import app.tune.ui.HomeScreen
+import app.tune.ui.HistoryScreen
 import app.tune.ui.Ico
 import app.tune.ui.LibraryScreen
 import app.tune.ui.LocalApp
@@ -107,6 +108,7 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
             composable("library") { LibraryScreen() }
             composable("liked") { CollectionScreen(CollectionKind.Liked, "liked") }
             composable("downloads") { CollectionScreen(CollectionKind.Downloads, "downloads") }
+            composable("history") { HistoryScreen() }
             composable("local/{id}") { CollectionScreen(CollectionKind.Local, it.arguments?.getString("id")!!) }
             composable("album/{id}") { CollectionScreen(CollectionKind.Album, it.arguments?.getString("id")!!) }
             composable("ytplaylist/{id}") { CollectionScreen(CollectionKind.YtPlaylist, it.arguments?.getString("id")!!) }
@@ -141,7 +143,7 @@ private fun BottomBar() {
     // each tab owns its whole third of the bar (full height), so a tap anywhere in it counts
     Row(Modifier.fillMaxWidth().background(Color(0xFF121212)).navigationBarsPadding().height(68.dp)) {
         tabs.forEach { (key, label, icon) ->
-            val on = route == key || (key == "library" && route in setOf("liked", "downloads", "local/{id}"))
+            val on = route == key || (key == "library" && route in setOf("liked", "downloads", "history", "local/{id}"))
             Column(Modifier.weight(1f).fillMaxHeight().clickable {
                 // a tab always lands on its main screen: Home pops back to itself (e.g. out of Settings),
                 // other tabs start fresh on top of Home — no stale pages restored on top

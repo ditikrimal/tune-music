@@ -14,7 +14,8 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
     private val radioCache = ConcurrentHashMap<String, Pair<Long, List<Track>>>()
     private val pictures = ConcurrentHashMap<String, Pair<Long, String?>>()
 
-    suspend fun build(): Feed = withContext(Dispatchers.IO) {
+    /** [fresh] = pull-to-refresh: radios refetched, seeds picked among more favourites, Quick picks reshuffled. */
+    suspend fun build(fresh: Boolean = false): Feed = withContext(Dispatchers.IO) {
         coroutineScope {
             val now = System.currentTimeMillis()
             val discovery = async { runCatching { api.home() }.getOrNull() }
@@ -22,12 +23,12 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
             val recent = lib.recent(12)
             if (recent.size >= 3) shelves += Shelf("Recently played", recent.map(::songCard), isLocal = true)
 
-            var seeds = lib.topTracks(now - 14 * DAY, 3)
+            var seeds = if (fresh) weightedPick(lib.topTracks(now - 14 * DAY, 8), 3) else lib.topTracks(now - 14 * DAY, 3)
             if (seeds.isEmpty()) seeds = recent.take(3)
             val favourites = lib.topTracks(now - 30 * DAY, 12)
             val extraSeeds = favourites.filter { f -> seeds.none { it.videoId == f.videoId } }.take(3)
-            val radios = seeds.map { s -> async { radio(s.videoId, now) } }
-            val extraRadios = extraSeeds.map { s -> async { radio(s.videoId, now) } }
+            val radios = seeds.map { s -> async { radio(s.videoId, now, fresh) } }
+            val extraRadios = extraSeeds.map { s -> async { radio(s.videoId, now, fresh) } }
             val because = radios.awaitAll()
             val extra = extraRadios.awaitAll()
             val shown = seeds.map { it.videoId }.toMutableSet()
@@ -35,7 +36,7 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
                 val items = because[i]?.filter { shown.add(it.videoId) }?.take(12)?.map(::songCard).orEmpty()
                 if (items.isNotEmpty()) shelves += Shelf("Because you played ${seed.title}", items, isLocal = true)
             }
-            val picks = quickPicks(because, extra, favourites, shown)
+            val picks = quickPicks(because, extra, favourites, shown, shuffle = fresh)
             if (picks.size >= 8)
                 shelves.add(if (recent.size >= 3) 1 else 0, Shelf("Quick picks", picks.map(::songCard), isLocal = true, isList = true))
 
@@ -51,15 +52,18 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
 
     /** Like YouTube Music's Quick picks: new songs close to what you play (several radios, round-robin, deeper than the
      *  "Because you played" rows so nothing repeats) with a familiar favourite every few songs. Same as the Windows app. */
-    private fun quickPicks(because: List<List<Track>?>, extra: List<List<Track>?>, favourites: List<Track>, shown: MutableSet<String>): List<Track> {
+    private fun quickPicks(because: List<List<Track>?>, extra: List<List<Track>?>, favourites: List<Track>, shown: MutableSet<String>,
+                           shuffle: Boolean = false): List<Track> {
         val pools = (because.map { it.orEmpty().drop(13) } + extra.map { it.orEmpty().drop(1) }).filter { it.isNotEmpty() }
+            .map { if (shuffle) it.shuffled() else it }
+        val favs = if (shuffle) favourites.shuffled() else favourites
         val fresh = mutableListOf<Track>()
         var depth = 0
         while (fresh.size < 20 && pools.any { depth < it.size }) {
             for (p in pools) if (depth < p.size && fresh.size < 20 && shown.add(p[depth].videoId)) fresh += p[depth]
             depth++
         }
-        val familiar = ArrayDeque(favourites.filter { shown.add(it.videoId) })
+        val familiar = ArrayDeque(favs.filter { shown.add(it.videoId) })
         val picks = mutableListOf<Track>()
         for (t in fresh) {
             if (picks.size >= 20) break
@@ -69,8 +73,21 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
         return picks
     }
 
-    private fun radio(videoId: String, now: Long): List<Track>? {
-        radioCache[videoId]?.takeIf { now - it.first < 6 * HOUR }?.let { return it.second }
+    /** Picks [count] items, favouring the front of the ranked list. */
+    private fun weightedPick(ranked: List<Track>, count: Int): List<Track> {
+        val pool = ranked.toMutableList()
+        val out = mutableListOf<Track>()
+        while (out.size < count && pool.isNotEmpty()) {
+            val weights = pool.indices.map { pool.size - it }
+            var roll = kotlin.random.Random.nextInt(weights.sum())
+            val i = weights.indexOfFirst { w -> (roll < w).also { roll -= w } }
+            out += pool.removeAt(i)
+        }
+        return out
+    }
+
+    private fun radio(videoId: String, now: Long, bypassCache: Boolean = false): List<Track>? {
+        if (!bypassCache) radioCache[videoId]?.takeIf { now - it.first < 6 * HOUR }?.let { return it.second }
         return runCatching { api.radio(videoId) }.getOrNull()?.also { radioCache[videoId] = now to it }
     }
 

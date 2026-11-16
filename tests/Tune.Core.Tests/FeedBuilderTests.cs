@@ -174,4 +174,21 @@ public class FeedBuilderTests : IDisposable
         _api.Radios[T("a").VideoId] = [T("a"), T("x")];
         Assert.DoesNotContain((await Builder().BuildAsync()).Shelves, s => s.Title == "Quick picks");
     }
+
+    [Fact]
+    public async Task Refresh_refetches_radios_and_changes_quick_picks()
+    {
+        foreach (var id in new[] { "a", "b", "c", "d" })
+        {
+            _lib.RecordPlay(T(id), Now);
+            _api.Radios[T(id).VideoId] = [T(id), .. Enumerable.Range(0, 25).Select(i => T(id + "r" + i))];
+        }
+        var builder = new FeedBuilder(_lib, _api, _clock) { Random = new Random(7) };
+        var first = await builder.BuildAsync();
+        var refreshed = await builder.BuildAsync(fresh: true);
+        Assert.Equal(2, _api.RadioCalls[T("a").VideoId]); // the 6 h radio cache is skipped on refresh
+        var before = first.Shelves.Single(s => s.Title == "Quick picks").Items.Select(c => c.VideoId).ToList();
+        var after = refreshed.Shelves.Single(s => s.Title == "Quick picks").Items.Select(c => c.VideoId).ToList();
+        Assert.NotEqual(before, after);
+    }
 }

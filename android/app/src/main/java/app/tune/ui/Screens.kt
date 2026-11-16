@@ -92,7 +92,7 @@ fun HomeScreen() {
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
         isRefreshing = refreshing,
-        onRefresh = { if (online) vm.refresh { app.graph.feed.build() } },
+        onRefresh = { if (online) vm.refresh { app.graph.feed.build(fresh = true).also { app.graph.toast("Home updated") } } },
         modifier = Modifier.fillMaxSize(),
     ) {
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
@@ -251,28 +251,121 @@ fun LibraryScreen() {
     val dv by app.graph.downloads.version.collectAsState()
     val playlists = remember(version) { app.graph.library.playlists() }
     val likedCount = remember(version) { app.graph.library.liked().size }
+    val historyCount = remember(version) { app.graph.library.history(500).size }
     val downloaded = remember(dv) { app.graph.downloads.downloaded().size }
     var naming by remember { mutableStateOf(false) }
-    if (naming) NameDialog("New playlist", "My playlist #${playlists.size + 1}") { name ->
+    val scope = rememberCoroutineScope()
+    if (naming) NameDialog("New playlist", "My playlist #${playlists.size + 1}",
+        onLink = { link ->
+            naming = false
+            app.graph.toast("Importing\u2026")
+            scope.launch {
+                val (message, id) = app.importPlaylist(link)
+                if (id != null) app.nav.navigate("local/$id") else app.graph.toast(message)
+            }
+        }) { name ->
         naming = false
         if (name != null) app.nav.navigate("local/${app.graph.library.createPlaylist(name)}")
     }
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
         item {
-            Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Your library", style = Type.title1, color = c.text, modifier = Modifier.weight(1f))
-                IconBtn(Ico.Add, "New playlist", tint = c.text) { naming = true }
+                IconBtn(Ico.Add, "New playlist", tint = c.text, size = 26.dp) { naming = true }
             }
         }
-        item { LibraryEntry(Ico.Heart, "Liked songs", "$likedCount songs", accentTile = true) { app.nav.navigate("liked") } }
-        item { LibraryEntry(Ico.Download, "Downloads", "$downloaded songs · play without internet", accentTile = true) { app.nav.navigate("downloads") } }
+        // three bright tiles for the built-in collections
+        item {
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LibraryTile(Ico.Heart, "Liked", "$likedCount songs", listOf(c.accent, Color(0xFFE0457B)), Modifier.weight(1f)) { app.nav.navigate("liked") }
+                LibraryTile(Ico.Download, "Downloads", "$downloaded songs", listOf(Color(0xFF14B8A6), Color(0xFF0E7490)), Modifier.weight(1f)) { app.nav.navigate("downloads") }
+                LibraryTile(Ico.History, "History", "$historyCount songs", listOf(Color(0xFFF59E0B), Color(0xFFDC5A1E)), Modifier.weight(1f)) { app.nav.navigate("history") }
+            }
+        }
+        item {
+            Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Playlists", style = Type.section, color = c.text, modifier = Modifier.weight(1f))
+                if (playlists.isNotEmpty()) Text("${playlists.size}", style = Type.caption, color = c.subtle)
+            }
+        }
+        if (playlists.isEmpty()) item {
+            Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).clickable { naming = true }.padding(18.dp)) {
+                Text("No playlists yet", style = Type.bodyStrong, color = c.text)
+                Text("Tap + to make one, or use the link icon in that box to import one from YouTube Music.", style = Type.caption, color = c.subtle)
+            }
+        }
         items(playlists, key = { it.id }) { p ->
-            Row(Modifier.fillMaxWidth().clickable { app.nav.navigate("local/${p.id}") }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Art(p.thumbnail, 60.dp, corner = 8.dp)
-                Column(Modifier.padding(start = 14.dp)) {
-                    Text(p.name, style = Type.bodyStrong, color = c.text)
-                    Text("Playlist · ${p.count} songs", style = Type.caption, color = c.subtle)
+            Row(Modifier.fillMaxWidth().clickable { app.nav.navigate("local/${p.id}") }.padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Art(p.thumbnail, 58.dp, corner = 12.dp)
+                Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                    Text(p.name, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Playlist \u2022 ${p.count} songs", style = Type.caption, color = c.subtle)
                 }
+                Icon(Ico.ChevronRight, null, tint = c.subtle, modifier = Modifier.size(22.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryTile(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, colors: List<Color>,
+                        modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(modifier.height(118.dp).clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(colors)).clickable(onClick = onClick).padding(14.dp)) {
+        Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.weight(1f))
+        Text(title, style = Type.bodyStrong, color = Color.White, maxLines = 1)
+        Text(subtitle, style = Type.caption, color = Color(0xD9FFFFFF), maxLines = 1)
+    }
+}
+
+/** History: songs you played, newest first, grouped Today / Yesterday / This week / Earlier. */
+@Composable
+fun HistoryScreen() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val version by app.graph.library.version.collectAsState()
+    val ui by app.player.ui.collectAsState()
+    val items = remember(version) { app.graph.library.history(300) }
+    val tracks = remember(items) { items.map { it.first } }
+    val zone = java.time.ZoneId.systemDefault()
+    val today = java.time.LocalDate.now(zone)
+    fun group(at: Long): String {
+        val d = java.time.Instant.ofEpochMilli(at).atZone(zone).toLocalDate()
+        return when {
+            d == today -> "Today"
+            d == today.minusDays(1) -> "Yesterday"
+            d.isAfter(today.minusDays(7)) -> "This week"
+            else -> "Earlier"
+        }
+    }
+    LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
+        item { BackRow() }
+        item {
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFDC5A1E)))),
+                    contentAlignment = Alignment.Center) { Icon(Ico.History, null, tint = Color.White, modifier = Modifier.size(32.dp)) }
+                Column(Modifier.padding(start = 16.dp)) {
+                    Text("History", style = Type.title1.copy(fontSize = 26.sp), color = c.text)
+                    Text("${items.size} songs you played", style = Type.caption, color = c.subtle)
+                }
+            }
+        }
+        if (items.isNotEmpty()) item {
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                PlayButtons(onPlay = { app.playList(tracks, 0) }, onShuffle = { app.playList(tracks, 0, shuffle = true) })
+            }
+        } else item { Message("Songs you play show up here.") }
+        var last: String? = null
+        items.forEachIndexed { i, (t, at) ->
+            val g = group(at)
+            if (g != last) {
+                last = g
+                item(key = "g$g") { Text(g, style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp)) }
+            }
+            item(key = "h$i${t.videoId}") {
+                Box(Modifier.padding(horizontal = 8.dp)) { TrackRow(t, isCurrent = ui.track?.videoId == t.videoId) { app.playList(tracks, i) } }
             }
         }
     }
