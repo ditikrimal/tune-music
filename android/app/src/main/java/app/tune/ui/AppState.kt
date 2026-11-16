@@ -25,7 +25,17 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
     var menuFor by mutableStateOf<Track?>(null)
     var menuPlaylistId by mutableStateOf<Long?>(null)
     var menuPlaylistIndex by mutableStateOf(-1)
-    var addToPlaylist by mutableStateOf<Track?>(null)
+    /** Songs waiting for "Add to playlist" (one from a menu, or many chosen). */
+    var addToPlaylist by mutableStateOf<List<Track>?>(null)
+
+    /** Set from an options sheet's "Select songs": the page opens in selection mode. */
+    var startSelecting by mutableStateOf<String?>(null)
+
+    fun notInterested(t: Track) {
+        graph.library.setNotInterested(t.videoId)
+        graph.toast("Got it — you won't get this song in recommendations")
+        homeChanged++
+    }
     var nowPlayingOpen by mutableStateOf(false)
     var queueOpen by mutableStateOf(false)
 

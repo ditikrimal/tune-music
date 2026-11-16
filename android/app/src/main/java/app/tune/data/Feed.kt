@@ -17,7 +17,9 @@ data class Feed(val shelves: List<Shelf>, val offline: Boolean)
  * What you like, from your own listening (port of Tune.Core Taste): every play counts, recent ones more
  * (half-life 30 days "lately", 120 days "all-time"); a like is worth a few plays; early skips count against.
  */
-class Taste(plays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<Pair<String, Long>>, private val now: Long) {
+class Taste(allPlays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<Pair<String, Long>>, private val now: Long,
+            notInterested: Set<String> = emptySet()) {
+    private val plays = allPlays.filter { it.first.videoId !in notInterested }
     data class Entry(val track: Track, val lately: Double, val allTime: Double, val plays: Int, val lastPlayed: Long?, val skips: Int, val liked: Boolean)
 
     private class Acc(val t: Track) { var l = 0.0; var a = 0.0; var p = 0; var last: Long? = null; var s = 0; var like = false }
@@ -42,7 +44,7 @@ class Taste(plays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<Pair
             e.l -= 0.6 * decay(days, 30.0); e.a -= 0.6 * decay(days, 120.0); e.s++
         }
         skippedIds = skips.filter { now - it.second < 60 * DAY }.groupBy { it.first }
-            .filter { (id, g) -> g.size >= 2 && acc[id].let { it == null || (it.p <= 1 && !it.like) } }.keys
+            .filter { (id, g) -> g.size >= 2 && acc[id].let { it == null || (it.p <= 1 && !it.like) } }.keys + notInterested
         for ((id, e) in acc) {
             songs[id] = Entry(e.t, e.l, e.a, e.p, e.last, e.s, e.like)
             for (a in e.t.artists) artists[artistKey(a)] = (artists[artistKey(a)] ?: 0.0) + max(0.0, e.l + e.a * 0.3)
@@ -180,7 +182,7 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
     private val radioCache = ConcurrentHashMap<String, Pair<Long, List<Track>>>()
     private val pictures = ConcurrentHashMap<String, Pair<Long, String?>>()
 
-    fun taste(now: Long = System.currentTimeMillis()) = Taste(lib.plays(now - 365 * DAY), lib.liked(), lib.skips(now - 90 * DAY), now)
+    fun taste(now: Long = System.currentTimeMillis()) = Taste(lib.plays(now - 365 * DAY), lib.liked(), lib.skips(now - 90 * DAY), now, lib.notInterested())
 
     /** [fresh] = pull-to-refresh: radios refetched, other seeds, quick picks reshuffled. */
     suspend fun build(fresh: Boolean = false): Feed = withContext(Dispatchers.IO) {
@@ -247,10 +249,10 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
             if (p != null && p.startsWith("tune:")) {
                 val id = lib.playlistIdByUid(p.removePrefix("tune:")) ?: continue
                 val info = playlists.firstOrNull { it.id == id } ?: continue
-                cards += pin.copy(title = info.name, thumbnail = info.thumbnail ?: pin.thumbnail)
-            } else cards += pin
+                cards += pin.copy(title = info.name, thumbnail = info.thumbnail ?: pin.thumbnail, pinned = true)
+            } else cards += pin.copy(pinned = true)
         }
-        val pinnedSongs = cards.filter { it.kind == CardKind.Song }.mapNotNull { it.videoId }.toSet()
+        val pinnedSongs = cards.filter { it.kind == CardKind.Song }.mapNotNull { it.videoId }.toSet() + taste.skippedIds
         val songs = taste.speedDial(27).toMutableList()
         // little history yet: fill a full page with what you played lately and your likes
         if (songs.size < 9) songs += (lib.recent(20) + lib.liked()).filter { t -> songs.none { it.videoId == t.videoId } }.distinctBy { it.videoId }.take(9 - songs.size)

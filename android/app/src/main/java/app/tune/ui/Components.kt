@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -136,7 +137,8 @@ fun rememberDownloadState(videoId: String): DownloadState {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, playlistId: Long? = null, playlistIndex: Int = -1, onClick: () -> Unit) {
+fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, playlistId: Long? = null, playlistIndex: Int = -1,
+             selecting: Boolean = false, selected: Boolean = false, onToggle: (() -> Unit)? = null, onClick: () -> Unit) {
     val app = LocalApp.current
     val c = LocalTune.current
     val dl = rememberDownloadState(track.videoId)
@@ -145,15 +147,23 @@ fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, play
     val openMenu = { app.menuFor = track; app.menuPlaylistId = playlistId; app.menuPlaylistIndex = playlistIndex }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-            .background(if (isCurrent) c.accentSoft else Color.Transparent)
+            .background(if (isCurrent || selected) c.accentSoft else Color.Transparent)
             .combinedClickable(onClick = {
-                if (dim) app.graph.toast("${track.title} isn't downloaded — it plays when you're back online") else onClick()
-            }, onLongClick = openMenu)
+                if (selecting) onToggle?.invoke()
+                else if (dim) app.graph.toast("${track.title} isn't downloaded — it plays when you're back online") else onClick()
+            }, onLongClick = { if (selecting) onToggle?.invoke() else openMenu() })
             .alpha(if (dim) 0.4f else 1f)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (number != null) {
+        if (selecting) {
+            Box(Modifier.padding(end = 10.dp).size(24.dp).clip(CircleShape)
+                .background(if (selected) c.accent else Color.Transparent)
+                .border(2.dp, if (selected) c.accent else c.subtle, CircleShape), contentAlignment = Alignment.Center) {
+                if (selected) Icon(Ico.Check, "Selected", tint = c.onAccent, modifier = Modifier.size(16.dp))
+            }
+        }
+        if (number != null && !selecting) {
             Text(if (isCurrent) "♪" else number.toString(), style = Type.caption, color = if (isCurrent) c.accentText else c.subtle,
                 modifier = Modifier.width(28.dp))
         }
@@ -168,7 +178,7 @@ fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, play
                     style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        IconBtn(Ico.More, "More options", onClick = openMenu)
+        if (!selecting) IconBtn(Ico.More, "More options", onClick = openMenu)
     }
 }
 
@@ -252,7 +262,7 @@ fun TrackMenuSheet() {
         MenuRow(Ico.Radio, "Start radio") { app.player.playRadio(t); close() }
         MenuRow(Ico.Next, "Play next") { app.player.playNext(t); app.graph.toast("Will play next"); close() }
         MenuRow(Ico.Queue, "Add to queue") { app.player.addToQueue(t); app.graph.toast("Added to queue"); close() }
-        MenuRow(Ico.PlaylistAdd, "Add to playlist") { app.addToPlaylist = t; close() }
+        MenuRow(Ico.PlaylistAdd, "Add to playlist") { app.addToPlaylist = listOf(t); close() }
         MenuRow(if (liked) Ico.Heart else Ico.HeartOutline, if (liked) "Remove from Liked songs" else "Save to Liked songs", accent = liked) { app.toggleLike(t); close() }
         when (dl) {
             DownloadState.None -> MenuRow(Ico.Download, "Download") { app.download(listOf(t)); close() }
@@ -265,6 +275,7 @@ fun TrackMenuSheet() {
         app.menuPlaylistId?.let { pid ->
             MenuRow(Ico.Delete, "Remove from this playlist") { app.graph.library.removeFromPlaylist(pid, app.menuPlaylistIndex); close() }
         }
+        MenuRow(Ico.Block, "Not interested") { app.notInterested(t); close() }
         t.artists.filter { it.browseId != null }.take(2).forEach { a -> MenuRow(Ico.Person, "Go to ${a.name}") { close(); app.openArtist(a.browseId) } }
         t.album?.browseId?.let { id -> MenuRow(Ico.Album, "Go to album") { close(); app.nowPlayingOpen = false; app.nav.navigate("album/$id") } }
         Spacer(Modifier.height(24.dp))
@@ -329,16 +340,17 @@ fun NameDialog(title: String, suggested: String, ok: String = "Create", onLink: 
 @Composable
 fun AddToPlaylistDialog() {
     val app = LocalApp.current
-    val t = app.addToPlaylist ?: return
+    val songs = app.addToPlaylist ?: return
     val c = LocalTune.current
+    fun addTo(id: Long) { if (songs.size == 1) app.graph.library.addToPlaylist(id, songs[0]) else app.graph.library.addManyToPlaylist(id, songs) }
+    val what = if (songs.size == 1) "" else "${songs.size} songs "
     var naming by remember { mutableStateOf(false) }
     val lists = remember { app.graph.library.playlists() }
     if (naming) {
         NameDialog("New playlist", "My playlist #${lists.size + 1}") { name ->
             if (name != null) {
-                val id = app.graph.library.createPlaylist(name)
-                app.graph.library.addToPlaylist(id, t)
-                app.graph.toast("Added to $name")
+                addTo(app.graph.library.createPlaylist(name))
+                app.graph.toast("Added ${what}to $name")
             }
             app.addToPlaylist = null
         }
@@ -353,7 +365,7 @@ fun AddToPlaylistDialog() {
                 MenuRow(Ico.Add, "New playlist", accent = true) { naming = true }
                 lists.forEach { p ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
-                        app.graph.library.addToPlaylist(p.id, t); app.graph.toast("Added to ${p.name}"); app.addToPlaylist = null
+                        addTo(p.id); app.graph.toast("Added ${what}to ${p.name}"); app.addToPlaylist = null
                     }.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Art(p.thumbnail, 44.dp)
                         Column(Modifier.padding(start = 12.dp)) {

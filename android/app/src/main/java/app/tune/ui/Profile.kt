@@ -142,8 +142,20 @@ private fun ProfileCard(onDismiss: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                if (state?.signedIn == true)
-                    MenuRow(Ico.Sync, "Sync now") { scope.launch { account?.syncNow() } }
+                if (state?.signedIn == true && account != null) {
+                    var auto by remember { mutableStateOf(account.autoSync) }
+                    Row(Modifier.fillMaxWidth().clickable { auto = !auto; account.autoSync = auto }.padding(start = 26.dp, end = 18.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Ico.Sync, null, tint = c.text, modifier = Modifier.size(22.dp))
+                        Column(Modifier.weight(1f).padding(start = 18.dp)) {
+                            Text("Auto sync", style = Type.body, color = c.text)
+                            Text(if (auto) "Syncs by itself" else "Only when you tap Sync now", style = Type.caption, color = c.subtle)
+                        }
+                        androidx.compose.material3.Switch(auto, { auto = it; account.autoSync = it },
+                            colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
+                    }
+                    MenuRow(Ico.Sync, "Sync now") { scope.launch { account.syncNow() } }
+                }
                 MenuRow(Ico.Settings, "Settings") { onDismiss(); app.nav.navigate("settings") }
                 MenuRow(Ico.Download, "Downloads") { onDismiss(); app.nav.navigate("downloads") }
                 if (state?.signedIn == true)
@@ -197,6 +209,10 @@ fun SpeedDialRow(shelf: app.tune.data.Shelf) {
                             Box(Modifier.fillMaxWidth().fillMaxHeight(0.5f).align(Alignment.BottomCenter)
                                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color.Transparent,
                                     androidx.compose.ui.graphics.Color(0xD0000000)))))
+                            if (card.pinned) Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(24.dp).clip(CircleShape)
+                                .background(androidx.compose.ui.graphics.Color(0xB0000000)), contentAlignment = Alignment.Center) {
+                                Icon(Ico.Pin, "Pinned", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(14.dp))
+                            }
                             Text(card.title, style = Type.bodyStrong.copy(fontSize = 13.sp), color = androidx.compose.ui.graphics.Color.White,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 9.dp, vertical = 8.dp))

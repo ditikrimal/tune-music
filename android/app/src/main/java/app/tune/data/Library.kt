@@ -54,6 +54,16 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) 
 
     // ---------- listening signals (recommendations) ----------
 
+    fun notInterested(): Set<String> = setting(NOT_INTERESTED_KEY).orEmpty().split(',').filter { it.isNotBlank() }.toSet()
+
+    /** "Not interested": the song stays out of Home, quick picks and radios. */
+    fun setNotInterested(videoId: String, on: Boolean = true) {
+        val ids = setting(NOT_INTERESTED_KEY).orEmpty().split(',').filter { it.isNotBlank() }.toMutableList()
+        val had = ids.remove(videoId)
+        if (on) ids.add(0, videoId)
+        if (had != on) setSetting(NOT_INTERESTED_KEY, ids.take(1000).joinToString(","))
+    }
+
     fun recordSkip(videoId: String, at: Long = System.currentTimeMillis()) {
         writableDatabase.insert("skips", null, ContentValues().apply { put("video_id", videoId); put("at", at) })
     }
@@ -361,7 +371,7 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) 
                 execSQL("UPDATE sync_items SET pushed = 0")
                 execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'like', video_id, 1 FROM likes")
                 execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'playlist', uid, 1 FROM playlists")
-                execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'setting', key, 1 FROM settings WHERE key IN ('home.layout', 'speeddial.pins')")
+                execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'setting', key, 1 FROM settings WHERE key IN ('home.layout', 'speeddial.pins', 'taste.notInterested')")
                 execSQL("INSERT OR IGNORE INTO sync_items (kind, key, updated_at) SELECT 'plays', strftime('%Y%m%d', at / 1000, 'unixepoch'), 1 FROM plays WHERE remote = 0 GROUP BY 2")
                 setTransactionSuccessful()
             } finally { endTransaction() }
@@ -483,7 +493,10 @@ object SyncKinds {
 }
 
 /** Settings that follow the account to every device. */
-val SYNCED_SETTINGS = setOf("home.layout", "speeddial.pins")
+val SYNCED_SETTINGS = setOf("home.layout", "speeddial.pins", NOT_INTERESTED_KEY)
+
+/** Songs you said you're not interested in (comma-separated ids, newest first; synced). */
+const val NOT_INTERESTED_KEY = "taste.notInterested"
 
 data class SyncItem(val kind: String, val key: String, val updatedAt: Long)
 

@@ -306,6 +306,11 @@ class AccountSync(private val lib: Library, private val http: OkHttpClient, val 
     val deviceId: String = lib.setting("sync.device")?.ifBlank { null }
         ?: java.util.UUID.randomUUID().toString().replace("-", "").take(12).also { lib.setSetting("sync.device", it) }
 
+    /** Sync by itself; off = only "Sync now". */
+    var autoSync: Boolean
+        get() = lib.setting("sync.auto") != "0"
+        set(v) { lib.setSetting("sync.auto", if (v) "1" else "0"); if (v) scope.launch { syncNow(skipIfBusy = true) } }
+
     data class State(val signedIn: Boolean = false, val email: String? = null, val name: String? = null, val photo: String? = null,
                      val syncing: Boolean = false, val lastSynced: Long = 0, val error: String? = null)
 
@@ -317,7 +322,7 @@ class AccountSync(private val lib: Library, private val http: OkHttpClient, val 
         if (uid != null && refresh != null) session = AuthSession(uid, get("account.email"), get("account.name"), get("account.photo"), "", refresh, 0)
         publish()
         lib.onLocalChange = {
-            if (session != null) {
+            if (session != null && autoSync) {
                 debounce?.cancel()
                 debounce = scope.launch { delay(4_000); syncNow(skipIfBusy = true) }
             }
@@ -329,13 +334,13 @@ class AccountSync(private val lib: Library, private val http: OkHttpClient, val 
         loop?.cancel()
         loop = scope.launch {
             delay(2_000)
-            while (isActive) { if (session != null) syncNow(skipIfBusy = true); delay(5 * 60_000L) }
+            while (isActive) { if (session != null && autoSync) syncNow(skipIfBusy = true); delay(5 * 60_000L) }
         }
     }
 
     /** Tune came to the front: sync unless it just did (other devices' changes show up without waiting). */
     fun syncSoon() {
-        if (session == null) return
+        if (session == null || !autoSync) return
         if (System.currentTimeMillis() - (get("sync.last")?.toLongOrNull() ?: 0) < 20_000) return
         scope.launch { syncNow(skipIfBusy = true) }
     }

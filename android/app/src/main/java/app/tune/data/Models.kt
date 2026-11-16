@@ -56,6 +56,8 @@ data class Card(
     val browseId: String? = null,
     val playlistId: String? = null,
     val track: Track? = null,
+    /** On the speed dial because you pinned it (shows a pin). */
+    val pinned: Boolean = false,
 )
 
 /** A Home row; [isList] = a grid of song rows (Quick picks) instead of big cards; [isSpeedDial] = pages of 3×3 tiles. */

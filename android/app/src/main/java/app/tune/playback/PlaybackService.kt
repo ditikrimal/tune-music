@@ -268,7 +268,8 @@ class PlaybackService : MediaSessionService() {
             val tracks = withContext(Dispatchers.IO) { runCatching { app.graph.yt.radio(seed) }.getOrNull() } ?: run { radioFor = null; return@launch }
             radioIds[seed] = tracks.map { it.videoId }
             val present = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.toSet()
-            player.addMediaItems(tracks.filter { it.videoId !in present }.map { it.toMediaItem() })
+            val notInterested = app.graph.library.notInterested() // radios leave out songs you said no to
+            player.addMediaItems(tracks.filter { it.videoId !in present && it.videoId !in notInterested }.map { it.toMediaItem() })
         }
     }
 

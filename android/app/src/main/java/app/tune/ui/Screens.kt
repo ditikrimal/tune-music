@@ -322,12 +322,15 @@ fun LibraryScreen() {
         }
         // the built-in collections as calm rows
         item { Spacer(Modifier.height(10.dp)) }
-        item { LibraryRow(Ico.Heart, "Liked songs", "$likedCount songs") { app.nav.navigate("liked") } }
+        item { LibraryRow(Ico.Heart, "Liked songs", "$likedCount songs",
+            onLongClick = { app.collectionMenuFor = CollectionTarget(CollectionKind.Liked, "liked", "Liked songs", "$likedCount songs", null) }) { app.nav.navigate("liked") } }
         item {
             val pending = remember(dv) { app.graph.downloads.pendingCount }
-            LibraryRow(Ico.Download, "Downloads", if (pending > 0) "$downloaded songs \u2022 downloading $pending\u2026" else "$downloaded songs \u2022 play without internet") { app.nav.navigate("downloads") }
+            LibraryRow(Ico.Download, "Downloads", if (pending > 0) "$downloaded songs \u2022 downloading $pending\u2026" else "$downloaded songs \u2022 play without internet",
+                onLongClick = { app.collectionMenuFor = CollectionTarget(CollectionKind.Downloads, "downloads", "Downloads", "$downloaded songs", null) }) { app.nav.navigate("downloads") }
         }
-        item { LibraryRow(Ico.History, "History", "Everything you played, by day") { app.nav.navigate("history") } }
+        item { LibraryRow(Ico.History, "History", "Everything you played, by day",
+            onLongClick = { app.collectionMenuFor = CollectionTarget(CollectionKind.History, "history", "History", "Songs you played", null) }) { app.nav.navigate("history") } }
         item {
             Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Playlists", style = Type.section, color = c.text, modifier = Modifier.weight(1f))
@@ -359,9 +362,10 @@ fun LibraryScreen() {
 
 /** A quiet library row: icon in a soft tile, title, subtitle, chevron (same rhythm as the playlist rows). */
 @Composable
-private fun LibraryRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun LibraryRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val c = LocalTune.current
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(horizontal = 16.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(58.dp).clip(RoundedCornerShape(12.dp)).background(c.card), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = c.accentText, modifier = Modifier.size(26.dp))
         }
@@ -382,6 +386,9 @@ fun HistoryScreen() {
     val ui by app.player.ui.collectAsState()
     val items = remember(version) { app.graph.library.history(300) }
     val tracks = remember(items) { items.map { it.first } }
+    val selection = remember { SongSelection() }
+    LaunchedEffect(app.startSelecting) { if (app.startSelecting == "History/history") { selection.active = true; app.startSelecting = null } }
+    androidx.activity.compose.BackHandler(enabled = selection.active) { selection.close() }
     val zone = java.time.ZoneId.systemDefault()
     val today = java.time.LocalDate.now(zone)
     fun group(at: Long): String {
@@ -407,9 +414,17 @@ fun HistoryScreen() {
         }
         if (items.isNotEmpty()) item {
             Box(Modifier.padding(horizontal = 16.dp)) {
-                PlayButtons(onPlay = { app.playList(tracks, 0) }, onShuffle = { app.playList(tracks, 0, shuffle = true) })
+                PlayButtons(onPlay = { app.playList(tracks, 0) }, onShuffle = { app.playList(tracks, 0, shuffle = true) }) {
+                    IconBtn(Ico.SelectAll, "Select songs", size = 24.dp, box = 52.dp) { selection.active = true }
+                }
             }
         } else item { Message("Songs you play show up here.") }
+        if (selection.active) {
+            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+            stickyHeader(key = "selection") {
+                SelectionBar(selection, tracks.size, selectionActions(app, { selection.tracks(tracks) }, { selection.close() }))
+            }
+        }
         var last: String? = null
         items.forEachIndexed { i, (t, at) ->
             val g = group(at)
@@ -418,7 +433,10 @@ fun HistoryScreen() {
                 item(key = "g$g") { Text(g, style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 6.dp)) }
             }
             item(key = "h$i${t.videoId}") {
-                Box(Modifier.padding(horizontal = 8.dp)) { TrackRow(t, isCurrent = ui.track?.videoId == t.videoId) { app.playList(tracks, i) } }
+                Box(Modifier.padding(horizontal = 8.dp)) {
+                    TrackRow(t, isCurrent = ui.track?.videoId == t.videoId, selecting = selection.active, selected = i in selection.chosen,
+                        onToggle = { selection.toggle(i) }) { app.playList(tracks, i) }
+                }
             }
         }
     }
@@ -439,7 +457,7 @@ private fun LibraryEntry(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 
 // ============================== Album / playlist / liked / downloads ==============================
 
-enum class CollectionKind { Album, YtPlaylist, Liked, Local, Downloads }
+enum class CollectionKind { Album, YtPlaylist, Liked, Local, Downloads, History }
 
 @Composable
 fun CollectionScreen(kind: CollectionKind, id: String) {
@@ -469,6 +487,9 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
     }
     val col = local ?: remoteState?.getOrNull()
     var menu by remember { mutableStateOf(false) }
+    val selection = remember(kind, id) { SongSelection() }
+    LaunchedEffect(app.startSelecting) { if (app.startSelecting == "$kind/$id") { selection.active = true; app.startSelecting = null } }
+    androidx.activity.compose.BackHandler(enabled = selection.active) { selection.close() }
     var renaming by remember { mutableStateOf(false) }
 
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
@@ -505,6 +526,7 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                                 app.collectionMenuFor = CollectionTarget(kind, id, col.title, col.subtitle, col.thumbnail ?: col.tracks.firstOrNull()?.thumbnail)
                             }
                         }
+                        if (col.tracks.isNotEmpty()) IconBtn(Ico.SelectAll, "Select songs", size = 24.dp, box = 52.dp) { selection.active = true }
                     }
                 }
             }
@@ -535,10 +557,25 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                 else -> "Nothing here."
             })
         }
+        if (selection.active) {
+            @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+            stickyHeader(key = "selection") {
+                val removeLabel = when (kind) { CollectionKind.Local -> "Remove from playlist"; CollectionKind.Liked -> "Remove from Liked songs"; else -> null }
+                SelectionBar(selection, col.tracks.size, selectionActions(app, { selection.tracks(col.tracks) }, { selection.close() }, removeLabel,
+                    remove = when (kind) {
+                        CollectionKind.Local -> { -> selection.chosen.sortedDescending().forEach { app.graph.library.removeFromPlaylist(id.toLong(), it) }
+                            app.graph.toast("Removed ${selection.chosen.size} songs") }
+                        CollectionKind.Liked -> { -> selection.tracks(col.tracks).forEach { app.graph.library.setLiked(it, false) }
+                            app.graph.toast("Removed ${selection.chosen.size} songs from Liked songs") }
+                        else -> null
+                    }))
+            }
+        }
         itemsIndexed(col.tracks, key = { i, t -> "$i${t.videoId}" }) { i, t ->
             Box(Modifier.padding(horizontal = 8.dp)) {
                 TrackRow(t, number = if (kind == CollectionKind.Album) i + 1 else null, isCurrent = ui.track?.videoId == t.videoId,
-                    playlistId = if (kind == CollectionKind.Local) id.toLong() else null, playlistIndex = i) { app.playList(col.tracks, i) }
+                    playlistId = if (kind == CollectionKind.Local) id.toLong() else null, playlistIndex = i,
+                    selecting = selection.active, selected = i in selection.chosen, onToggle = { selection.toggle(i) }) { app.playList(col.tracks, i) }
             }
         }
     }

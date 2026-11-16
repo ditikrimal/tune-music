@@ -1,5 +1,8 @@
 package app.tune.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,7 +64,19 @@ fun CollectionMenuSheet() {
     val dv by app.graph.downloads.version.collectAsState()
     val close = { app.collectionMenuFor = null }
     val local = target.kind == CollectionKind.Local
-    val localTracks = remember(target, version) { if (local) lib.playlistTracks(target.id.toLong()) else null }
+    val localTracks = remember(target, version, dv) {
+        when (target.kind) {
+            CollectionKind.Local -> lib.playlistTracks(target.id.toLong())
+            CollectionKind.Liked -> lib.liked()
+            CollectionKind.Downloads -> app.graph.downloads.downloaded()
+            CollectionKind.History -> lib.recent(300)
+            else -> null
+        }
+    }
+    val route = when (target.kind) {
+        CollectionKind.Local -> "local/${target.id}"; CollectionKind.Album -> "album/${target.id}"; CollectionKind.YtPlaylist -> "ytplaylist/${target.id}"
+        CollectionKind.Liked -> "liked"; CollectionKind.Downloads -> "downloads"; CollectionKind.History -> "history"
+    }
     val states = remember(localTracks, dv) { localTracks?.map { app.graph.downloads.stateOf(it.videoId) } }
     val pinCard = remember(target) {
         when (target.kind) {
@@ -72,9 +87,8 @@ fun CollectionMenuSheet() {
         }
     }
     val pinned = remember(pinCard, version) { pinCard?.let { app.isPinned(it) } == true }
-    val onItsPage = app.nav.currentBackStackEntry?.destination?.route?.let {
-        it == "local/{id}" || it == "album/{id}" || it == "ytplaylist/{id}"
-    } == true && app.nav.currentBackStackEntry?.arguments?.getString("id") == target.id
+    val current = app.nav.currentBackStackEntry
+    val onItsPage = current?.destination?.route?.let { r -> r.replace("{id}", current.arguments?.getString("id") ?: "") } == route
 
     /** The songs, loading an album / YouTube playlist first if needed. */
     fun withTracks(action: (List<Track>) -> Unit) {
@@ -89,10 +103,13 @@ fun CollectionMenuSheet() {
 
     ModalBottomSheet(onDismissRequest = close, containerColor = c.card) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Art(target.thumbnail ?: localTracks?.firstOrNull()?.thumbnail, 52.dp)
+            val tileIcon = when (target.kind) { CollectionKind.Liked -> Ico.Heart; CollectionKind.Downloads -> Ico.Download; CollectionKind.History -> Ico.History; else -> null }
+            if (tileIcon != null) androidx.compose.foundation.layout.Box(Modifier.size(52.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .background(c.cardHover), contentAlignment = Alignment.Center) { androidx.compose.material3.Icon(tileIcon, null, tint = c.accentText, modifier = Modifier.size(24.dp)) }
+            else Art(target.thumbnail ?: localTracks?.firstOrNull()?.thumbnail, 52.dp)
             Column(Modifier.padding(start = 14.dp)) {
                 Text(target.title, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                (localTracks?.let { "Playlist · ${it.size} songs" } ?: target.subtitle)?.let {
+                (localTracks?.let { if (local) "Playlist · ${it.size} songs" else "${it.size} songs" } ?: target.subtitle)?.let {
                     Text(it, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -100,14 +117,18 @@ fun CollectionMenuSheet() {
         Spacer(Modifier.height(8.dp))
         MenuRow(Ico.Play, "Play") { close(); withTracks { app.playList(it, 0) } }
         MenuRow(Ico.Shuffle, "Shuffle") { close(); withTracks { app.playList(it, 0, shuffle = true) } }
-        if (!onItsPage) MenuRow(if (target.kind == CollectionKind.Album) Ico.Album else Ico.PlaylistAdd, "Open") {
-            close()
-            app.nav.navigate(when (target.kind) { CollectionKind.Local -> "local/${target.id}"; CollectionKind.Album -> "album/${target.id}"; else -> "ytplaylist/${target.id}" })
-        }
+        if (!onItsPage) MenuRow(if (target.kind == CollectionKind.Album) Ico.Album else Ico.PlaylistAdd, "Open") { close(); app.nav.navigate(route) }
+        if (localTracks?.isNotEmpty() == true || target.kind == CollectionKind.Album || target.kind == CollectionKind.YtPlaylist)
+            MenuRow(Ico.SelectAll, "Select songs") {
+                close()
+                app.startSelecting = "${target.kind}/${target.id}"
+                if (!onItsPage) app.nav.navigate(route)
+            }
         val anyDownloaded = states?.any { it != DownloadState.None } == true
         val allDownloaded = states?.isNotEmpty() == true && states.all { it != DownloadState.None }
-        if (!allDownloaded) MenuRow(Ico.Download, if (anyDownloaded) "Download the new songs" else "Download") { close(); withTracks { app.download(it) } }
-        if (anyDownloaded) MenuRow(Ico.DownloadDone, "Remove downloads", accent = true) {
+        if (!allDownloaded && target.kind != CollectionKind.History) MenuRow(Ico.Download, if (anyDownloaded) "Download the new songs" else "Download") { close(); withTracks { app.download(it) } }
+        // Downloads itself: removing all of them is never one tap away (open it and select instead)
+        if (anyDownloaded && target.kind != CollectionKind.Downloads && target.kind != CollectionKind.History) MenuRow(Ico.DownloadDone, "Remove downloads", accent = true) {
             close(); localTracks?.let { t -> app.removeDownloads(t.filter { app.graph.downloads.stateOf(it.videoId) != DownloadState.None }) }
         }
         pinCard?.let { MenuRow(Ico.Pin, if (pinned) "Unpin from speed dial" else "Pin to speed dial", accent = pinned) { app.togglePin(it); close() } }
