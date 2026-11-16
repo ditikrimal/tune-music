@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tune logo: six-bar waveform, white, inside the adaptive-icon safe zone -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M33,48h4a2,2 0,0 1,2 2v8a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-8a2,2 0,0 1,2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M41,40h4a2,2 0,0 1,2 2v24a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-24a2,2 0,0 1,2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M49,32h4a2,2 0,0 1,2 2v40a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-40a2,2 0,0 1,2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M57,38h4a2,2 0,0 1,2 2v28a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-28a2,2 0,0 1,2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M65,44h4a2,2 0,0 1,2 2v16a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-16a2,2 0,0 1,2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M73,49h4a2,2 0,0 1,2 2v6a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-6a2,2 0,0 1,2 -2z" />
+</vector>
