@@ -124,8 +124,9 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
             // pages slide in from the right and back out to the right; switching tabs is instant
             enterTransition = { if (isTab(targetState)) androidx.compose.animation.EnterTransition.None else slideInHorizontally(slide) { it } },
             exitTransition = { if (isTab(targetState)) androidx.compose.animation.ExitTransition.None else slideOutHorizontally(slide) { -it / 4 } },
-            popEnterTransition = { if (isTab(initialState) && isTab(targetState)) androidx.compose.animation.EnterTransition.None else slideInHorizontally(slide) { -it / 4 } },
-            popExitTransition = { if (isTab(initialState)) androidx.compose.animation.ExitTransition.None else slideOutHorizontally(slide) { it } },
+            // back is always a slide (it follows the finger during Android's back gesture): this page goes right, the one below comes in
+            popEnterTransition = { slideInHorizontally(slide) { -it / 4 } },
+            popExitTransition = { slideOutHorizontally(slide) { it } },
         ) {
             composable("home") { page { HomeScreen() } }
             composable("search") { page { SearchScreen() } }

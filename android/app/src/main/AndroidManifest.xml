@@ -16,7 +16,8 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.Tune"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="${cleartext}">
+        android:usesCleartextTraffic="${cleartext}"
+        android:enableOnBackInvokedCallback="false">
 
         <activity
             android:name=".MainActivity"
