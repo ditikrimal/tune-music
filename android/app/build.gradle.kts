@@ -19,8 +19,8 @@ android {
         applicationId = "app.tune.music"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -69,6 +69,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.11.1")
+    implementation("androidx.media3:media3-database:1.11.1")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
 
     implementation("com.squareup.okhttp3:okhttp:5.5.1")
     implementation("io.coil-kt.coil3:coil-compose:3.6.3")

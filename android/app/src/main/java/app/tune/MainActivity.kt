@@ -67,7 +67,7 @@ import app.tune.ui.TuneTheme
 import app.tune.ui.Type
 import kotlinx.coroutines.delay
 
-object BuildConfigLite { const val VERSION = "1.0.0" }
+object BuildConfigLite { const val VERSION = "1.1.0" }
 
 class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) // media controls in the shade
         val graph = (application as TuneApp).graph
         val player = PlayerConnection(this)
+        if (graph.smart.enabled && System.currentTimeMillis() - graph.smart.lastRunMs > 12 * 3_600_000L) SmartRefreshWorker.runNow(this)
         setContent {
             var accent by remember { mutableStateOf(Accents.parse(graph.library.setting("theme.accent"))) }
             TuneTheme(accent) {

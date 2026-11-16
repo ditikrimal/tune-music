@@ -54,6 +54,7 @@ import app.tune.data.Card
 import app.tune.data.PlaylistLinks
 import app.tune.data.CardKind
 import app.tune.BuildConfigLite
+import app.tune.SmartRefreshWorker
 import app.tune.data.Collection
 import app.tune.data.ArtistPage
 import app.tune.data.DownloadState
@@ -119,19 +120,20 @@ fun OfflineHome() {
     val app = LocalApp.current
     val c = LocalTune.current
     val v by app.graph.downloads.version.collectAsState()
-    val tracks = remember(v) { app.graph.downloads.downloaded() }
+    val tracks = remember(v) { app.graph.offlineTracks() }
     val ui by app.player.ui.collectAsState()
     Column(Modifier.padding(16.dp)) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(c.track), contentAlignment = Alignment.Center) { Icon(Ico.Offline, null, tint = c.text) }
             Column(Modifier.padding(start = 14.dp)) {
                 Text("You're offline", style = Type.bodyStrong, color = c.text)
-                Text(if (tracks.isEmpty()) "Nothing is downloaded yet. When you're back online, download playlists or songs to play them without internet."
-                     else "${tracks.size} songs you can play without internet.", style = Type.caption, color = c.subtle)
+                Text(if (tracks.isEmpty()) "Nothing is saved yet. On Wi-Fi, Smart downloads saves the songs you play most; you can also download playlists."
+                     else "${tracks.size} songs ready without internet: your downloads, smart downloads and songs you played recently.",
+                     style = Type.caption, color = c.subtle)
             }
         }
         if (tracks.isNotEmpty()) {
-            PlayButtons(onPlay = { app.playList(tracks, 0) }, onShuffle = { app.playList(tracks, 0, shuffle = true) }, title = "Your downloads")
+            PlayButtons(onPlay = { app.playList(tracks, 0) }, onShuffle = { app.playList(tracks, 0, shuffle = true) }, title = "Ready offline")
             tracks.forEachIndexed { i, t -> TrackRow(t, isCurrent = ui.track?.videoId == t.videoId) { app.playList(tracks, i) } }
         }
     }
@@ -294,7 +296,9 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
         when (kind) {
             CollectionKind.Liked -> app.graph.library.liked().let { Collection("Liked songs", "${it.size} songs", null, it) }
             CollectionKind.Downloads -> app.graph.downloads.downloaded().let {
-                Collection("Downloads", "${it.size} songs · ${app.graph.downloads.downloadedBytes() / (1 shl 20)} MB", null, it)
+                val smart = app.graph.downloads.smartIds().count { id -> app.graph.downloads.localFile(id) != null }
+                Collection("Downloads", "${it.size} songs · ${app.graph.downloads.downloadedBytes() / (1 shl 20)} MB" +
+                    (if (smart > 0) " · $smart picked by Smart downloads" else ""), null, it)
             }
             else -> {
                 val p = app.graph.library.playlists().firstOrNull { it.id.toString() == id }
@@ -450,12 +454,23 @@ fun SettingsScreen(accent: Color, onAccent: (Color) -> Unit) {
                     colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
             }
         }
+        item { SmartSection() }
         item { ImportSection() }
         item {
             val dv by app.graph.downloads.version.collectAsState()
             val bytes = remember(dv) { app.graph.downloads.downloadedBytes() }
+            var cacheBytes by remember { mutableStateOf(app.graph.streamCache.usedBytes()) }
             Text("STORAGE", style = Type.label, color = c.subtle, modifier = Modifier.padding(start = 20.dp, top = 28.dp, bottom = 8.dp))
             Text("Downloads use ${bytes / (1 shl 20)} MB.", style = Type.body, color = c.text, modifier = Modifier.padding(horizontal = 20.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Recently played songs: ${cacheBytes / (1 shl 20)} MB of 1 GB", style = Type.body, color = c.text)
+                    Text("Songs you stream are kept so they play again without internet. The oldest go first.", style = Type.caption, color = c.subtle)
+                }
+                Text("Clear", style = Type.bodyStrong, color = c.accentText, modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable {
+                    app.graph.streamCache.clear(); cacheBytes = app.graph.streamCache.usedBytes(); app.graph.toast("Cleared recently played songs")
+                }.padding(12.dp))
+            }
             Text("Tune ${BuildConfigLite.VERSION}", style = Type.caption, color = c.subtle, modifier = Modifier.padding(20.dp))
         }
     }
@@ -510,5 +525,61 @@ private fun ImportSection() {
             }
         }
         status?.let { Text(it, style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 10.dp)) }
+    }
+}
+
+/** Settings > Smart downloads: Tune keeps your most-played songs ready offline (like YouTube Music). */
+@Composable
+private fun SmartSection() {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val version by app.graph.library.version.collectAsState()
+    val dv by app.graph.downloads.version.collectAsState()
+    val enabled = remember(version) { app.graph.smart.enabled }
+    val target = remember(version) { app.graph.smart.target }
+    val lookahead = remember(version) { app.graph.library.setting("lookahead.enabled") != "0" }
+    val ready = remember(dv) { app.graph.downloads.smartIds().count { app.graph.downloads.localFile(it) != null } }
+    val waiting = remember(dv) { app.graph.downloads.smartIds().count { app.graph.downloads.localFile(it) == null } }
+    val last = remember(version) { app.graph.smart.lastRunMs }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.padding(horizontal = 20.dp)) {
+        Text("SMART DOWNLOADS", style = Type.label, color = c.subtle, modifier = Modifier.padding(top = 28.dp, bottom = 8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Keep my favourites offline", style = Type.bodyStrong, color = c.text)
+                Text("Tune downloads the songs you play most and like, plus a few similar ones, on Wi-Fi. They're swapped as your taste changes; your own downloads are never touched.",
+                    style = Type.caption, color = c.subtle)
+            }
+            Switch(enabled, {
+                app.graph.library.setSetting("smart.enabled", if (it) "1" else "0")
+                SmartRefreshWorker.runNow(context)
+            }, colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
+        }
+        if (enabled) {
+            Text("How many songs", style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(25, 50, 100, 250, 500).forEach { n ->
+                    val on = n == target
+                    Text("$n", style = Type.bodyStrong, color = if (on) c.onAccent else c.text,
+                        modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) c.accent else c.card).clickable {
+                            app.graph.library.setSetting("smart.count", n.toString()); SmartRefreshWorker.runNow(context)
+                        }.padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+            }
+            val ago = if (last == 0L) "not yet" else android.text.format.DateUtils.getRelativeTimeSpanString(last).toString().lowercase()
+            Text("$ready ready offline" + (if (waiting > 0) " · $waiting waiting for Wi-Fi" else "") + " · updated $ago",
+                style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 10.dp))
+            Text("Update now", style = Type.bodyStrong, color = c.accentText, modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(16.dp))
+                .clickable { SmartRefreshWorker.runNow(context); app.graph.toast("Updating smart downloads") }.padding(vertical = 8.dp))
+        }
+        Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Get ahead of dead zones", style = Type.bodyStrong, color = c.text)
+                Text("While you listen, the next 3 songs in your queue are saved too (a few MB), so music keeps going when the signal drops.",
+                    style = Type.caption, color = c.subtle)
+            }
+            Switch(lookahead, { app.graph.library.setSetting("lookahead.enabled", if (it) "1" else "0") },
+                colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent))
+        }
     }
 }

@@ -28,11 +28,13 @@ import app.tune.R
 import app.tune.TuneApp
 import app.tune.data.Thumbs
 import app.tune.data.Track
+import app.tune.data.OfflineMix
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +72,11 @@ class PlaybackService : MediaSessionService() {
     private var recordJob: Job? = null
     private var radioFor: String? = null
     private var retriedFor: String? = null
+    private lateinit var cacheFactory: androidx.media3.datasource.cache.CacheDataSource.Factory
+    private var lookahead: Job? = null
+    private var offlineNoticeShown = false
+    /** Radio lists fetched this session, by seed: the offline mix prefers songs from the playing song's radio. */
+    private val radioIds = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
 
     private val app get() = application as TuneApp
 
@@ -77,10 +84,23 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         val graph = app.graph
         val http = OkHttpDataSource.Factory(graph.http).setUserAgent(app.graph.streamUserAgent)
-        val resolving = ResolvingDataSource.Factory(DefaultDataSource.Factory(this, http)) { spec -> resolve(spec) }
+        // network path for a song: find a fresh link, then stream it; the cache above keeps what was read
+        val resolving = ResolvingDataSource.Factory(http) { spec -> resolve(spec) }
+        cacheFactory = androidx.media3.datasource.cache.CacheDataSource.Factory()
+            .setCache(graph.streamCache.cache)
+            .setUpstreamDataSourceFactory(resolving)
+            .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        val sources = TuneDataSource.Factory({ graph.downloads.localFile(it) }, androidx.media3.datasource.FileDataSource.Factory(),
+            cacheFactory, DefaultDataSource.Factory(this, http))
+
+        // buffer the whole song (audio is small): riding through a dead zone doesn't cut the current song
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(30_000, 600_000, 1_500, 3_000)
+            .build()
 
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(resolving))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(sources))
+            .setLoadControl(loadControl)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true) // pause when headphones are unplugged
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -92,13 +112,18 @@ class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player).setSessionActivity(open).build()
         restoreSession()
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) })
+        scope.launch {
+            graph.online.collect { online ->
+                if (online) offlineNoticeShown = false
+                else if (player.mediaItemCount > 0) keepPlayingOffline(onlyIfStuck = true)
+            }
+        }
     }
 
-    /** Runs on ExoPlayer's loader thread: turn tune://id into a downloaded file or a fresh stream link. */
+    /** Runs on a loader thread, only when the song isn't downloaded or cached: turn tune://id into a fresh stream link. */
     private fun resolve(spec: DataSpec): DataSpec {
         if (spec.uri.scheme != TuneUri.SCHEME) return spec
         val id = spec.uri.host ?: return spec
-        app.graph.downloads.localFile(id)?.let { return spec.withUri(Uri.fromFile(it)) }
         val s = app.graph.streams.resolve(id)
         var out = spec.withUri(s.url.toUri()).withAdditionalHeaders(mapOf("User-Agent" to s.userAgent))
         if (s.webClient) {
@@ -141,6 +166,10 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             saveSession()
+            if (!app.graph.online.value && mediaItem != null && !app.graph.isAvailableOffline(mediaItem.mediaId)) {
+                keepPlayingOffline(onlyIfStuck = false) // don't even try a song that can't play offline
+                return
+            }
             recordJob?.cancel()
             val track = mediaItem?.track() ?: return
             retriedFor = null
@@ -155,6 +184,11 @@ class PlaybackService : MediaSessionService() {
         override fun onPlayerError(error: PlaybackException) {
             val item = player.currentMediaItem ?: return
             Log.w("Tune", "Playback error for ${item.mediaId}: ${error.errorCodeName}", error)
+            if (!app.graph.online.value) {
+                // the connection went: carry on with what's on the phone instead of retrying
+                keepPlayingOffline(onlyIfStuck = false)
+                return
+            }
             if (retriedFor != item.mediaId) {
                 // most failures are an expired/blocked link: get a fresh one and carry on where we were
                 retriedFor = item.mediaId
@@ -170,25 +204,91 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    /** When fewer than 3 songs are left, append YouTube Music radio for the last one (like the Windows app). */
+    /** When fewer than 3 songs are left, append YouTube Music radio for the last one (offline: the offline mix). */
     private fun topUpRadio() {
         if (player.repeatMode == Player.REPEAT_MODE_ALL) return
         val left = player.mediaItemCount - player.currentMediaItemIndex - 1
         if (left >= 3 || player.mediaItemCount == 0) return
+        if (!app.graph.online.value) { if (left == 0) appendOfflineMix(); return }
         val seed = player.getMediaItemAt(player.mediaItemCount - 1).mediaId
         if (radioFor == seed) return
         radioFor = seed
         scope.launch {
             val tracks = withContext(Dispatchers.IO) { runCatching { app.graph.yt.radio(seed) }.getOrNull() } ?: run { radioFor = null; return@launch }
+            radioIds[seed] = tracks.map { it.videoId }
             val present = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.toSet()
             player.addMediaItems(tracks.filter { it.videoId !in present }.map { it.toMediaItem() })
         }
     }
 
-    /** Look the next two songs up now, so skipping starts instantly. */
+    /**
+     * Save the next 3 songs into the streaming cache now (a few MB), so the queue keeps going through a dead zone,
+     * and skipping starts instantly. Restarts whenever the song changes.
+     */
     private fun prepareUpcoming() {
-        val ids = (1..2).mapNotNull { k -> (player.currentMediaItemIndex + k).takeIf { it < player.mediaItemCount }?.let { player.getMediaItemAt(it).mediaId } }
-        scope.launch(Dispatchers.IO) { ids.forEach { id -> if (app.graph.downloads.localFile(id) == null) runCatching { app.graph.streams.resolve(id) } } }
+        lookahead?.cancel()
+        if (!app.graph.online.value || app.graph.library.setting("lookahead.enabled") == "0") return
+        val ids = (1..3).mapNotNull { k -> (player.currentMediaItemIndex + k).takeIf { it < player.mediaItemCount }?.let { player.getMediaItemAt(it).mediaId } }
+        lookahead = scope.launch(Dispatchers.IO) {
+            for (id in ids) {
+                if (!kotlinx.coroutines.currentCoroutineContext().isActive) break
+                if (app.graph.isAvailableOffline(id)) continue
+                val spec = DataSpec.Builder().setUri(TuneUri.of(id)).setKey(id).build()
+                val writer = androidx.media3.datasource.cache.CacheWriter(cacheFactory.createDataSource(), spec, null, null)
+                val cancel = kotlinx.coroutines.currentCoroutineContext()[Job]!!.invokeOnCompletion { writer.cancel() }
+                runCatching { writer.cache() }.onFailure { if (it !is java.io.InterruptedIOException) Log.w("Tune", "Lookahead failed for $id: $it") }
+                cancel.dispose()
+            }
+        }
+    }
+
+    // ---------- offline: keep the music going with what's on the phone ----------
+
+    /**
+     * The internet is gone. If the current song can't play (or [onlyIfStuck] is false), move to the next song in the
+     * queue that can; if none is left, continue with an offline mix close to what was playing. Never replaces the queue.
+     */
+    private fun keepPlayingOffline(onlyIfStuck: Boolean) {
+        val graph = app.graph
+        val cur = player.currentMediaItemIndex
+        val current = player.currentMediaItem
+        if (onlyIfStuck && current != null && (graph.isAvailableOffline(current.mediaId) || player.playbackState == Player.STATE_READY)) {
+            return // it's playing from the buffer/file: let it finish; the next transition handles the rest
+        }
+        val next = (cur + 1 until player.mediaItemCount).firstOrNull { graph.isAvailableOffline(player.getMediaItemAt(it).mediaId) }
+        if (next != null) {
+            notifyOffline("You're offline — skipping songs that aren't saved")
+            player.seekTo(next, 0); player.prepare(); player.play()
+            return
+        }
+        if (appendOfflineMix()) {
+            notifyOffline("You're offline — continuing with songs saved on your phone")
+            player.seekTo(cur + 1, 0); player.prepare(); player.play()
+        } else {
+            notifyOffline("You're offline and nothing is saved yet — Smart downloads will fix that on Wi-Fi")
+            player.pause()
+        }
+    }
+
+    /** Appends an offline mix seeded by the current song; false when nothing playable offline is known. */
+    private fun appendOfflineMix(): Boolean {
+        val graph = app.graph
+        val seed = player.currentMediaItem?.track()
+        val queued = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.toSet()
+        val counts = graph.library.playStats(System.currentTimeMillis() - 90L * 86_400_000).associate { it.first.videoId to it.second }
+        val mix = OfflineMix.build(seed, graph.offlineTracks(), seed?.let { radioIds[it.videoId] }, counts, queued)
+        if (mix.isEmpty()) return false
+        // drop the unplayable rest of the queue after the current song, then add the mix
+        val cur = player.currentMediaItemIndex
+        if (cur + 1 < player.mediaItemCount) player.removeMediaItems(cur + 1, player.mediaItemCount)
+        player.addMediaItems(mix.map { it.toMediaItem() })
+        return true
+    }
+
+    private fun notifyOffline(message: String) {
+        if (offlineNoticeShown) return
+        offlineNoticeShown = true
+        app.graph.toast(message)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session

@@ -8,8 +8,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -20,17 +23,25 @@ enum class DownloadState { None, Queued, Downloading, Done }
 
 /**
  * Saves songs for offline play, one at a time in 4 MB ranged chunks, into app storage. The list lives in the
- * library database, so unfinished downloads resume after a restart; while offline it waits.
+ * library database, so unfinished downloads resume after a restart. Songs you download go on any connection;
+ * smart downloads (picked by Tune) wait for Wi-Fi. A song already in the streaming cache is copied, not fetched.
  */
 class Downloads(context: Context, private val lib: Library, private val streams: StreamResolver, private val http: OkHttpClient,
-                private val online: StateFlow<Boolean>) {
+                private val online: StateFlow<Boolean>, private val unmetered: StateFlow<Boolean>,
+                private val fromCache: (videoId: String, target: File) -> Boolean = { _, _ -> false }) {
+    private data class Pending(val track: Track, val smart: Boolean)
+
     private val dir = File(context.filesDir, "downloads").apply { mkdirs() }
     private val files = ConcurrentHashMap<String, File>()
-    private val queue = java.util.Collections.synchronizedList(mutableListOf<Track>())
+    private val queue = java.util.Collections.synchronizedList(mutableListOf<Pending>())
     private val wake = Channel<Unit>(Channel.CONFLATED)
+    private val failures = ConcurrentHashMap<String, Int>()
+
+    /** A message for the user (e.g. a song that can't be downloaded). */
+    var onNotice: (String) -> Unit = {}
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** videoId → progress 0..1 of the song downloading now; bumps whenever any state changes. */
+    /** videoId → progress 0..1 of the song downloading now. */
     private val _progress = MutableStateFlow<Pair<String?, Float>>(null to 0f)
     val progress: StateFlow<Pair<String?, Float>> = _progress
     private val _version = MutableStateFlow(0)
@@ -40,9 +51,11 @@ class Downloads(context: Context, private val lib: Library, private val streams:
         dir.listFiles { f -> f.name.endsWith(".part") }?.forEach { it.delete() }
         for (d in lib.downloads().reversed()) {
             val f = d.path?.let(::File)
-            if (f != null && f.exists()) files[d.track.videoId] = f else queue += d.track
+            if (f != null && f.exists()) files[d.track.videoId] = f else queue += Pending(d.track, d.smart)
         }
         _version.value++
+        // a change of network may make smart downloads eligible
+        launch { combine(online, unmetered) { a, b -> a to b }.drop(1).collect { wake.trySend(Unit) } }
         work()
     }
 
@@ -51,7 +64,7 @@ class Downloads(context: Context, private val lib: Library, private val streams:
     fun stateOf(videoId: String): DownloadState = when {
         files.containsKey(videoId) -> DownloadState.Done
         _progress.value.first == videoId -> DownloadState.Downloading
-        synchronized(queue) { queue.any { it.videoId == videoId } } -> DownloadState.Queued
+        synchronized(queue) { queue.any { it.track.videoId == videoId } } -> DownloadState.Queued
         else -> DownloadState.None
     }
 
@@ -61,42 +74,60 @@ class Downloads(context: Context, private val lib: Library, private val streams:
 
     fun downloadedBytes(): Long = lib.downloads().filter { files.containsKey(it.track.videoId) }.sumOf { it.bytes }
 
-    fun enqueue(tracks: List<Track>): Int {
+    /** Video ids Tune picked itself (done or waiting). */
+    fun smartIds(): Set<String> = lib.downloads().filter { it.smart }.map { it.track.videoId }.toSet()
+
+    /** Queues songs. Asking for a song Tune already picked makes it yours (it won't be swapped out). */
+    fun enqueue(tracks: List<Track>, smart: Boolean = false): Int {
         val fresh = synchronized(queue) {
-            tracks.distinctBy { it.videoId }.filter { t -> !files.containsKey(t.videoId) && queue.none { it.videoId == t.videoId } }
-                .also { queue += it }
+            if (!smart) {
+                val ids = tracks.map { it.videoId }.toSet()
+                queue.replaceAll { if (it.track.videoId in ids) it.copy(smart = false) else it }
+            }
+            tracks.distinctBy { it.videoId }
+                .filter { t -> !files.containsKey(t.videoId) && queue.none { it.track.videoId == t.videoId } }
+                .also { list -> list.forEach { queue += Pending(it, smart) } }
         }
-        if (fresh.isNotEmpty()) {
-            lib.addDownloads(fresh)
-            _version.value++
-            wake.trySend(Unit)
-        }
+        lib.addDownloads(if (smart) fresh else tracks.distinctBy { it.videoId }, smart)
+        _version.value++
+        if (fresh.isNotEmpty()) wake.trySend(Unit)
         return fresh.size
     }
 
-    fun remove(ids: List<String>) {
+    fun remove(ids: kotlin.collections.Collection<String>) {
         for (id in ids) {
-            synchronized(queue) { queue.removeAll { it.videoId == id } }
+            synchronized(queue) { queue.removeAll { it.track.videoId == id } }
             files.remove(id)?.delete()
             lib.removeDownload(id)
         }
         _version.value++
     }
 
+    private fun nextEligible(): Pending? = synchronized(queue) {
+        queue.firstOrNull { !it.smart } ?: if (unmetered.value) queue.firstOrNull() else null
+    }
+
     private suspend fun work() {
         while (true) {
-            val next = synchronized(queue) { queue.firstOrNull() }
+            val next = if (online.value) nextEligible() else null
             if (next == null) { wake.receive(); continue }
-            if (!online.value) { online.first { it }; continue }
-            _progress.value = next.videoId to 0f
+            _progress.value = next.track.videoId to 0f
             _version.value++
             try {
-                download(next)
+                download(next.track)
             } catch (e: Exception) {
-                Log.w("Tune", "Download failed for ${next.videoId}: $e")
-                synchronized(queue) { queue.remove(next); queue.add(next) } // try the others first
-                streams.invalidate(next.videoId)
-                kotlinx.coroutines.delay(5_000)
+                Log.w("Tune", "Download failed for ${next.track.videoId}: $e")
+                streams.invalidate(next.track.videoId)
+                val n = failures.merge(next.track.videoId, 1, Int::plus)!!
+                if (e is org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException || n >= 5) {
+                    // removed, private or blocked here: no point retrying
+                    remove(listOf(next.track.videoId))
+                    if (!next.smart) onNotice("Couldn't download ${next.track.title} — it isn't available")
+                } else {
+                    synchronized(queue) { if (queue.remove(next)) queue.add(next) } // try the others first
+                    // back off: 5 s, 20 s, 80 s, ... unless something else wakes us
+                    select<Unit> { wake.onReceive { }; onTimeout(5_000L shl (2 * (n - 1))) { } }
+                }
             } finally {
                 _progress.value = null to 0f
                 _version.value++
@@ -105,8 +136,12 @@ class Downloads(context: Context, private val lib: Library, private val streams:
     }
 
     private fun download(t: Track) {
-        val s = streams.resolve(t.videoId)
         val part = File(dir, "${t.videoId}.part")
+        if (fromCache(t.videoId, part)) {
+            finish(t, part, sniffExtension(part))
+            return
+        }
+        val s = streams.resolve(t.videoId)
         val total = Regex("[?&]clen=(\\d+)").find(s.url)?.groupValues?.get(1)?.toLong()
         var done = 0L
         part.outputStream().use { out ->
@@ -127,13 +162,20 @@ class Downloads(context: Context, private val lib: Library, private val streams:
                 _progress.value = t.videoId to (done.toFloat() / total)
             }
         }
-        val ext = if (s.url.contains("mime=audio%2Fwebm")) ".webm" else ".m4a"
+        finish(t, part, if (s.url.contains("mime=audio%2Fwebm")) ".webm" else ".m4a")
+    }
+
+    private fun finish(t: Track, part: File, ext: String) {
         val file = File(dir, t.videoId + ext)
         part.renameTo(file)
-        synchronized(queue) { queue.removeAll { it.videoId == t.videoId } }
+        synchronized(queue) { queue.removeAll { it.track.videoId == t.videoId } }
         files[t.videoId] = file
         lib.setDownloaded(t.videoId, file.absolutePath, file.length())
     }
+
+    /** WebM files start with the EBML magic number; everything else we get is MP4 audio. */
+    private fun sniffExtension(f: File): String =
+        f.inputStream().use { val b = ByteArray(4); it.read(b); if (b.contentEquals(byteArrayOf(0x1A, 0x45, 0xDF.toByte(), 0xA3.toByte()))) ".webm" else ".m4a" }
 
     private companion object { const val CHUNK = 4L * 1024 * 1024 }
 }

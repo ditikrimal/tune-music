@@ -129,7 +129,7 @@ fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, play
     val c = LocalTune.current
     val dl = rememberDownloadState(track.videoId)
     val online by app.graph.online.collectAsState()
-    val dim = !online && dl != DownloadState.Done
+    val dim = !online && remember(track.videoId, dl) { !app.graph.isAvailableOffline(track.videoId) }
     val openMenu = { app.menuFor = track; app.menuPlaylistId = playlistId; app.menuPlaylistIndex = playlistIndex }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))

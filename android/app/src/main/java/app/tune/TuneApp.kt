@@ -10,6 +10,8 @@ import app.tune.data.FeedBuilder
 import app.tune.data.InnerTube
 import app.tune.data.Library
 import app.tune.data.LyricsService
+import app.tune.data.SmartDownloads
+import app.tune.data.StreamCache
 import app.tune.data.NewPipeDownloader
 import app.tune.data.StreamResolver
 import app.tune.data.YtMusic
@@ -36,7 +38,27 @@ class Graph(context: Context) {
 
     private val _online = MutableStateFlow(true)
     val online: StateFlow<Boolean> = _online
-    val downloads = Downloads(context, library, streams, http, online)
+    /** Test hook: pretend there's no internet (set by [TestOfflineReceiver] from a root shell only). */
+    @Volatile var forceOffline = false
+        set(v) { field = v; _online.value = !v && networkValidated }
+    @Volatile private var networkValidated = true
+    /** On Wi-Fi (or another unmetered network): smart downloads only run then. */
+    private val _unmetered = MutableStateFlow(false)
+    val unmetered: StateFlow<Boolean> = _unmetered
+    val streamCache = StreamCache(context)
+    val downloads = Downloads(context, library, streams, http, online, unmetered) { id, target -> streamCache.copyTo(id, target) }
+    val smart = SmartDownloads(library, yt, downloads)
+    init { downloads.onNotice = { toast(it) } }
+
+    /** Playable without internet: downloaded, or fully in the streaming cache. */
+    fun isAvailableOffline(videoId: String) = downloads.localFile(videoId) != null || streamCache.isFullyCached(videoId)
+
+    /** Songs Tune knows about that can play offline (downloads + cached songs from history and likes). */
+    fun offlineTracks(): List<app.tune.data.Track> {
+        val cached = streamCache.cachedIds()
+        val known = (downloads.downloaded() + library.liked() + library.recent(400)).distinctBy { it.videoId }
+        return known.filter { downloads.localFile(it.videoId) != null || it.videoId in cached }
+    }
 
     /** Short messages for the toast at the bottom of the screen. */
     val toasts = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -45,12 +67,18 @@ class Graph(context: Context) {
     init {
         NewPipe.init(NewPipeDownloader(http), Localization("en", "US"), ContentCountry("NP"))
         val cm = context.getSystemService(ConnectivityManager::class.java)
-        _online.value = cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        cm.getNetworkCapabilities(cm.activeNetwork).let {
+            networkValidated = it?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+            _online.value = networkValidated && !forceOffline
+            _unmetered.value = it?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true
+        }
         cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                _online.value = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                networkValidated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                _online.value = networkValidated && !forceOffline
+                _unmetered.value = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
             }
-            override fun onLost(network: Network) { _online.value = false }
+            override fun onLost(network: Network) { networkValidated = false; _online.value = false; _unmetered.value = false }
         })
         downloads.start()
     }
@@ -63,5 +91,47 @@ class TuneApp : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = Graph(this)
+        SmartRefreshWorker.schedule(this)
+    }
+}
+
+/**
+ * Refreshes smart downloads in the background, like YouTube Music: about twice a day, only on Wi-Fi and when the
+ * battery isn't low, even if Tune isn't open. The downloads themselves then run (also on Wi-Fi only).
+ */
+class SmartRefreshWorker(context: Context, params: androidx.work.WorkerParameters) : androidx.work.CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val graph = (applicationContext as TuneApp).graph
+        return runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { graph.smart.refresh() }; Result.success() }
+            .getOrElse { Result.retry() }
+    }
+
+    companion object {
+        fun schedule(context: Context) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(androidx.work.NetworkType.UNMETERED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+            val req = androidx.work.PeriodicWorkRequestBuilder<SmartRefreshWorker>(12, java.util.concurrent.TimeUnit.HOURS)
+                .setConstraints(constraints).build()
+            androidx.work.WorkManager.getInstance(context)
+                .enqueueUniquePeriodicWork("smart-downloads", androidx.work.ExistingPeriodicWorkPolicy.KEEP, req)
+        }
+
+        /** "Update now" in Settings, or right after turning smart downloads on. */
+        fun runNow(context: Context) {
+            val req = androidx.work.OneTimeWorkRequestBuilder<SmartRefreshWorker>().build()
+            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork("smart-downloads-now", androidx.work.ExistingWorkPolicy.REPLACE, req)
+        }
+    }
+}
+
+/**
+ * Testing offline mode without cutting the phone's internet: `su -c am broadcast -n app.tune.music/app.tune.TestOfflineReceiver --ez offline true`.
+ * Not exported, so only the system/root can send it.
+ */
+class TestOfflineReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: android.content.Intent) {
+        (context.applicationContext as TuneApp).graph.forceOffline = intent.getBooleanExtra("offline", false)
     }
 }

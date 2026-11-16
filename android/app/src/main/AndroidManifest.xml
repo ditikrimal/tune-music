@@ -27,6 +27,8 @@
             </intent-filter>
         </activity>
 
+        <receiver android:name=".TestOfflineReceiver" android:exported="false" />
+
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"

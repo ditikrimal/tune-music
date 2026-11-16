@@ -57,13 +57,13 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
     }
 
     /** Offline and not downloaded: the song can't play right now. */
-    fun unavailable(t: Track) = !graph.online.value && graph.downloads.localFile(t.videoId) == null
+    fun unavailable(t: Track) = !graph.online.value && !graph.isAvailableOffline(t.videoId)
 
     /** Plays a list, but offline it skips to the downloaded songs (same rules as the Windows app). */
     fun playList(tracks: List<Track>, index: Int, shuffle: Boolean = false) {
         if (tracks.isEmpty()) return
         if (!graph.online.value) {
-            val local = tracks.filter { graph.downloads.localFile(it.videoId) != null }
+            val local = tracks.filter { graph.isAvailableOffline(it.videoId) }
             if (local.isEmpty()) { graph.toast("You're offline and none of these songs are downloaded"); return }
             val start = tracks.getOrNull(index)?.let { local.indexOf(it) }?.takeIf { it >= 0 } ?: 0
             player.playList(local, if (shuffle) local.indices.random() else start, shuffle)

@@ -13,7 +13,7 @@ data class PlaylistInfo(val id: Long, val name: String, val count: Int, val thum
  * Everything Tune remembers on the phone: play history, likes, playlists, settings, downloads.
  * Same tables as the Windows app's LibraryStore. [version] ticks on every change so screens refresh.
  */
-class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 1) {
+class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 2) {
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
@@ -27,10 +27,13 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 1) 
         db.execSQL("CREATE TABLE playlists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)")
         db.execSQL("CREATE TABLE playlist_items (playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE, position INTEGER NOT NULL, video_id TEXT NOT NULL, PRIMARY KEY (playlist_id, position))")
         db.execSQL("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.execSQL("CREATE TABLE downloads (video_id TEXT PRIMARY KEY, path TEXT, bytes INTEGER NOT NULL DEFAULT 0, added_at INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE downloads (video_id TEXT PRIMARY KEY, path TEXT, bytes INTEGER NOT NULL DEFAULT 0, added_at INTEGER NOT NULL, smart INTEGER NOT NULL DEFAULT 0)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // v2: smart downloads are picked (and swapped out) by Tune; smart = 0 means the user asked for it
+        if (oldVersion < 2) db.execSQL("ALTER TABLE downloads ADD COLUMN smart INTEGER NOT NULL DEFAULT 0")
+    }
 
     override fun onConfigure(db: SQLiteDatabase) {
         db.setForeignKeyConstraintsEnabled(true)
@@ -187,21 +190,32 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 1) 
 
     // ---------- downloads ----------
 
-    data class Download(val track: Track, val path: String?, val bytes: Long)
+    data class Download(val track: Track, val path: String?, val bytes: Long, val smart: Boolean = false)
 
-    fun addDownloads(list: List<Track>) {
+    /** Adds songs to the download list. A song the user asks for stops being "smart" (Tune won't remove it). */
+    fun addDownloads(list: List<Track>, smart: Boolean = false) {
         writableDatabase.run {
             beginTransaction()
             try {
                 var at = System.currentTimeMillis()
                 for (t in list) {
                     saveTrack(this, t)
-                    insertWithOnConflict("downloads", null, ContentValues().apply { put("video_id", t.videoId); put("added_at", at--) }, SQLiteDatabase.CONFLICT_IGNORE)
+                    insertWithOnConflict("downloads", null, ContentValues().apply {
+                        put("video_id", t.videoId); put("added_at", at--); put("smart", if (smart) 1 else 0)
+                    }, SQLiteDatabase.CONFLICT_IGNORE)
+                    if (!smart) update("downloads", ContentValues().apply { put("smart", 0) }, "video_id = ?", arrayOf(t.videoId))
                 }
                 setTransactionSuccessful()
             } finally { endTransaction() }
         }
         changed()
+    }
+
+    /** Play count and last play per song since [sinceMs] (smart downloads, offline mix). */
+    fun playStats(sinceMs: Long): List<Triple<Track, Int, Long>> = readableDatabase.rawQuery("""
+        SELECT t.json, COUNT(*), MAX(p.at) FROM plays p JOIN tracks t ON t.video_id = p.video_id
+        WHERE p.at >= ? GROUP BY p.video_id""", arrayOf(sinceMs.toString())).use { c ->
+        buildList { while (c.moveToNext()) Track.fromJson(c.getString(0))?.let { add(Triple(it, c.getInt(1), c.getLong(2))) } }
     }
 
     fun setDownloaded(videoId: String, path: String, bytes: Long) {
@@ -211,7 +225,7 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 1) 
     fun removeDownload(videoId: String) { writableDatabase.delete("downloads", "video_id = ?", arrayOf(videoId)); changed() }
 
     fun downloads(): List<Download> = readableDatabase.rawQuery(
-        "SELECT t.json, d.path, d.bytes FROM downloads d JOIN tracks t ON t.video_id = d.video_id ORDER BY d.added_at DESC", null).use { c ->
-        buildList { while (c.moveToNext()) Track.fromJson(c.getString(0))?.let { add(Download(it, c.getString(1), c.getLong(2))) } }
+        "SELECT t.json, d.path, d.bytes, d.smart FROM downloads d JOIN tracks t ON t.video_id = d.video_id ORDER BY d.added_at DESC", null).use { c ->
+        buildList { while (c.moveToNext()) Track.fromJson(c.getString(0))?.let { add(Download(it, c.getString(1), c.getLong(2), c.getInt(3) == 1)) } }
     }
 }
