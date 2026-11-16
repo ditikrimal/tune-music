@@ -14,7 +14,7 @@ public partial class MainWindow : Window
         StateChanged += (_, _) => OnWindowStateChanged();
         // the page header fades to the playing song's colour (or the theme's)
         Tune.App.Platform.ThemeManager.HeaderChanged += c => Dispatcher.BeginInvoke(() =>
-            HeaderStop.BeginAnimation(System.Windows.Media.GradientStop.ColorProperty,
+            HeaderFill.BeginAnimation(System.Windows.Media.SolidColorBrush.ColorProperty,
                 new System.Windows.Media.Animation.ColorAnimation(c, TimeSpan.FromMilliseconds(700))
                 {
                     EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },

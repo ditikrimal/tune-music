@@ -5,3 +5,5 @@ obj/
 .vs/
 TestResults/
 src/Tune.App/native/libmpv-2.dll
+
+dist/

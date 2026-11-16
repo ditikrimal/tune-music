@@ -1100,6 +1100,31 @@
                     </StackPanel>
                 </Border>
 
+                <TextBlock Text="IMPORT" Style="{StaticResource SettingsSection}" />
+                <Border Style="{StaticResource SettingGroup}">
+                    <StackPanel>
+                    <DockPanel Style="{StaticResource SettingRow}">
+                        <Border Style="{StaticResource SettingIconTile}"><p:Icon Data="{StaticResource IcoPlaylistAdd}" Foreground="{DynamicResource AccentBrush}" Size="20" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <StackPanel>
+                            <TextBlock Text="Import a YouTube Music playlist" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock Text="Paste a playlist link (music.youtube.com or youtube.com). Its songs become a playlist in your library. Public and unlisted playlists work." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,12" />
+                            <DockPanel Margin="0,0,24,0">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderPill}" Content="Import" Command="{Binding ImportCommand}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                        IsEnabled="{Binding IsImporting, Converter={x:Static sh:InverseBoolConverter.Instance}}" AutomationProperties.Name="Import playlist" />
+                                <TextBox Style="{StaticResource SearchBox}" Padding="18,0,16,0" Tag="https://music.youtube.com/playlist?list=..."
+                                         Text="{Binding ImportUrl, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Playlist link">
+                                    <TextBox.InputBindings>
+                                        <KeyBinding Key="Enter" Command="{Binding ImportCommand}" />
+                                    </TextBox.InputBindings>
+                                </TextBox>
+                            </DockPanel>
+                            <TextBlock Text="{Binding ImportStatus}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="2,10,24,0"
+                                       Visibility="{Binding ImportStatus, Converter={StaticResource NullToVis}}" />
+                        </StackPanel>
+                    </DockPanel>
+                    </StackPanel>
+                </Border>
+
                 <TextBlock Text="WINDOW &amp; STARTUP" Style="{StaticResource SettingsSection}" />
                 <Border Style="{StaticResource SettingGroup}">
                     <StackPanel>

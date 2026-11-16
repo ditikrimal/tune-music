@@ -51,6 +51,7 @@
     <Geometry x:Key="IcoDrag">M20 9H4v2h16V9zM4 15h16v-2H4v2z</Geometry>
     <Geometry x:Key="IcoMore">M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z</Geometry>
     <Geometry x:Key="IcoClear">M5 13h14v-2H5v2zm-2 4h14v-2H3v2zM7 7v2h14V7H7z</Geometry>
+    <Geometry x:Key="IcoPlaylistAdd">M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z</Geometry>
 
     <!-- ===== text ===== -->
     <Style x:Key="TextBase" TargetType="TextBlock">
@@ -504,14 +505,16 @@
         <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
         <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Padding" Value="40,0,16,0" />
+        <Setter Property="Tag" Value="What do you want to play?" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
-                    <Border x:Name="b" Background="#242424" CornerRadius="22" BorderBrush="Transparent" BorderThickness="2" Padding="{TemplateBinding Padding}" Height="44">
+                    <!-- the TextBox applies its own Padding to the text, so the hint gets the same margin (+2 for the caret) -->
+                    <Border x:Name="b" Background="#242424" CornerRadius="22" BorderBrush="Transparent" BorderThickness="2" Height="44">
                         <Grid>
                             <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
-                            <TextBlock x:Name="hint" Text="What do you want to play?" Style="{StaticResource Subtle}" FontSize="14"
-                                       VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" Margin="2,0,0,0" />
+                            <TextBlock x:Name="hint" Text="{TemplateBinding Tag}" Style="{StaticResource Subtle}" FontSize="14"
+                                       VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed" Margin="{TemplateBinding Padding}" />
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>

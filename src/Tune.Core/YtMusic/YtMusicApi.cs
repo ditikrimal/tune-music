@@ -9,7 +9,7 @@ namespace Tune.Core.YtMusic;
 public sealed class YtMusicApi(InnerTubeClient client) : IYtMusic
 {
     private const int HomeContinuations = 2;
-    private const int PlaylistContinuations = 4;
+    private const int PlaylistContinuations = 12; // ~1300 songs: enough to import big playlists
 
     public async Task<SearchResults> SearchAsync(string query, CancellationToken ct = default) =>
         SearchParser.Parse(await client.PostAsync("search", new JsonObject { ["query"] = query }, ct).ConfigureAwait(false));

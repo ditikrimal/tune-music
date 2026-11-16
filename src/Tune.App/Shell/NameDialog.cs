@@ -25,6 +25,7 @@ public sealed class NameDialog : Window
         {
             Text = suggested,
             Style = (Style)Application.Current.FindResource("SearchBox"),
+            Tag = "", // no hint
             Width = 360,
             Padding = new Thickness(16, 0, 16, 0),
         };

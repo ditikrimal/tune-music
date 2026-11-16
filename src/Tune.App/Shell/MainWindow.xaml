@@ -38,13 +38,23 @@
         </Grid.ColumnDefinitions>
 
         <!-- optional top tint: spans sidebar and pages so the window stays one surface -->
+        <!-- solid colour faded by an eased mask: blends smoothly into the page (no grey band or hard edge) -->
         <Border Grid.ColumnSpan="2" IsHitTestVisible="False">
             <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop x:Name="HeaderStop" Color="Transparent" Offset="0" />
-                    <GradientStop Color="Transparent" Offset="0.45" />
-                </LinearGradientBrush>
+                <SolidColorBrush x:Name="HeaderFill" Color="Transparent" />
             </Border.Background>
+            <Border.OpacityMask>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#FF000000" Offset="0" />
+                    <GradientStop Color="#DB000000" Offset="0.1" />
+                    <GradientStop Color="#A3000000" Offset="0.2" />
+                    <GradientStop Color="#6B000000" Offset="0.3" />
+                    <GradientStop Color="#3D000000" Offset="0.4" />
+                    <GradientStop Color="#1C000000" Offset="0.5" />
+                    <GradientStop Color="#08000000" Offset="0.6" />
+                    <GradientStop Color="#00000000" Offset="0.72" />
+                </LinearGradientBrush>
+            </Border.OpacityMask>
         </Border>
 
         <!-- ===================== sidebar ===================== -->

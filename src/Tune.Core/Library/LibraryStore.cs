@@ -196,6 +196,23 @@ public sealed class LibraryStore : IDisposable, Tune.Core.Streams.IStreamCacheSt
         }
     }
 
+    /// <summary>Appends many songs in one transaction (playlist import).</summary>
+    public void AddManyToPlaylist(long id, IEnumerable<Track> tracks)
+    {
+        lock (_gate)
+        {
+            using var tx = _db.BeginTransaction();
+            var next = Convert.ToInt32(Scalar("SELECT COALESCE(MAX(position) + 1, 0) FROM playlist_items WHERE playlist_id = $id", ("$id", id)),
+                System.Globalization.CultureInfo.InvariantCulture);
+            foreach (var t in tracks.DistinctBy(t => t.VideoId))
+            {
+                SaveTrack(t);
+                Exec("INSERT INTO playlist_items (playlist_id, position, video_id) VALUES ($id, $p, $v)", ("$id", id), ("$p", next++), ("$v", t.VideoId));
+            }
+            tx.Commit();
+        }
+    }
+
     public void AddToPlaylist(long id, Track t)
     {
         lock (_gate)

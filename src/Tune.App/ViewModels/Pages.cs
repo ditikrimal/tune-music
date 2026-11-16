@@ -627,6 +627,48 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         _shell.Services.Playback.Player.Normalize = value;
     }
 
+    // ---- import a YouTube Music playlist into the local library ----
+    [ObservableProperty] private string _importUrl = "";
+    [ObservableProperty] private string? _importStatus;
+    [ObservableProperty] private bool _isImporting;
+
+    [RelayCommand]
+    private async Task Import()
+    {
+        if (IsImporting) return;
+        if (Tune.Core.YtMusic.PlaylistLinks.Parse(ImportUrl) is not { } id)
+        {
+            ImportStatus = "That doesn\u2019t look like a playlist link. It should contain list=\u2026";
+            return;
+        }
+        IsImporting = true;
+        ImportStatus = "Importing\u2026";
+        try
+        {
+            var c = await _shell.Services.Api.GetPlaylistAsync(id);
+            if (c.Tracks.Count == 0)
+            {
+                ImportStatus = "That playlist is empty or private (only public and unlisted playlists can be imported).";
+                return;
+            }
+            var pid = Lib.CreatePlaylist(c.Title);
+            Lib.AddManyToPlaylist(pid, c.Tracks);
+            _shell.ReloadPlaylists();
+            ImportStatus = $"Imported {ShellViewModel.Songs(c.Tracks.Count)} into \u201c{c.Title}\u201d.";
+            ImportUrl = "";
+            _shell.ShowToast($"Imported {c.Title}");
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Log.Warn("Playlist import failed", e);
+            ImportStatus = "Couldn\u2019t import \u2014 check the link and your connection.";
+        }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
+
     partial void OnSyncedLyricsChanged(bool value) => Lib.SetSetting("lyrics.synced", value ? "1" : "0");
 
     partial void OnCloseToTrayChanged(bool value) => Lib.SetSetting("window.closeToTray", value ? "1" : "0");
