@@ -46,10 +46,6 @@ public partial class App : Application
     public static Tune.App.Mini.WidgetStyle MiniStyle =>
         Enum.TryParse<Tune.App.Mini.WidgetStyle>(Services.Library.GetSetting("mini.style"), out var s) ? s : Tune.App.Mini.WidgetStyle.Compact;
 
-    public static void ApplyMiniTopmost()
-    {
-        if (_mini is not null) _mini.Topmost = Services.Library.GetSetting("mini.topmost") != "0";
-    }
     private static string? _python;
 
     /// <summary>
@@ -213,7 +209,7 @@ public partial class App : Application
         Shell = new ShellViewModel(Services, Dispatcher);
         Shell.InitPages();
         MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Window };
-        MainWin.MiniPlayerRequested += ToggleMini;
+        MainWin.MiniPlayerRequested += ShrinkToMini;
         Shell.AskPlaylistName = suggested => NameDialog.Ask(MainWin, "New playlist", suggested);
         Shell.AskName = (title, current) => NameDialog.Ask(MainWin, title, current, "Save");
         Shell.Confirm = (title, message, ok) => ConfirmDialog.Ask(MainWin, title, message, ok);
@@ -317,24 +313,62 @@ public partial class App : Application
         else ShowMini();
     }
 
-    private static void ShowMini()
+    /// <summary>Tune's window shrinks into the mini-player (which takes over; the window hides).</summary>
+    public static void ShrinkToMini()
+    {
+        var main = MainWin;
+        if (main is not { IsVisible: true } || main.WindowState == WindowState.Minimized || Shell.NowPlaying.IsFullScreen
+            || WindowMorph.Busy || WindowMorph.Snapshot(main) is not { } picture)
+        {
+            ShowMini();
+            main?.Hide();
+            SyncUpdates();
+            return;
+        }
+        var from = WindowMorph.ScreenRect(main);
+        ShowMini(invisible: true);
+        _mini!.UpdateLayout();
+        var to = WindowMorph.ScreenRect(_mini);
+        WindowMorph.Run(from, picture, 8, to, WindowMorph.Snapshot(_mini), 16,
+            swap: () => { main.Hide(); SyncUpdates(); },
+            done: () => _mini.Opacity = 1);
+    }
+
+    /// <summary>The mini-player grows back into Tune's window (and hides).</summary>
+    public static void GrowToMain()
+    {
+        var main = MainWin;
+        if (main is null) return;
+        if (_mini is not { IsVisible: true } mini || main.IsVisible || WindowMorph.Busy
+            || WindowMorph.Snapshot(mini) is not { } picture || WindowMorph.Snapshot(main) is not { } target)
+        {
+            ShowMain();
+            HideMini();
+            return;
+        }
+        if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
+        var to = WindowMorph.ScreenRect(main);
+        if (to.Width < 50 || to.Left < -10000) { ShowMain(); HideMini(); return; }
+        WindowMorph.Run(WindowMorph.ScreenRect(mini), picture, 16, to, target, 8,
+            swap: HideMini,
+            done: ShowMain);
+    }
+
+    private static void ShowMini() => ShowMini(invisible: false);
+
+    private static void ShowMini(bool invisible)
     {
         if (_mini is null)
         {
             _mini = new MiniPlayerWindow(Services.Library) { DataContext = Shell.Player, Queue = Shell.Queue };
-            _mini.ExpandRequested += ShowMain;
-            _mini.LyricsRequested += () => { ShowMain(); Shell.NowPlaying.IsOpen = true; };
+            _mini.ExpandRequested += GrowToMain;
+            _mini.LyricsRequested += () => { GrowToMain(); Shell.NowPlaying.IsOpen = true; };
             _mini.HideRequested += HideMini;
-            _mini.PinToggled += () =>
-            {
-                var lib = Services.Library;
-                lib.SetSetting("mini.topmost", lib.GetSetting("mini.topmost") == "0" ? "1" : "0");
-                ApplyMiniTopmost();
-            };
         }
-        ApplyMiniTopmost();
+        _mini.Topmost = true; // the mini-player's whole point is to float above everything
         Shell.Queue.Watching = true; // the wide style lists what's up next
         Shell.Queue.Refresh();
+        _mini.Opacity = invisible ? 0 : 1; // a morph fades it in itself
         _mini.Show();
         Services.Library.SetSetting("mini.visible", "1");
         SyncUpdates();

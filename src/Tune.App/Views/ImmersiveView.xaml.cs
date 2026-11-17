@@ -67,10 +67,16 @@ public partial class ImmersiveView : UserControl
     {
         if (_hidden == hidden) return;
         _hidden = hidden;
-        var to = hidden ? 0.0 : 1.0;
-        var fade = new DoubleAnimation(to, TimeSpan.FromMilliseconds(hidden ? 600 : 180)) { EasingFunction = new CubicEase() };
-        Controls.BeginAnimation(OpacityProperty, fade);
-        TopBar.BeginAnimation(OpacityProperty, fade);
+        // the controls sink below the screen edge (the top bar rises above it) and a progress line takes over
+        var time = TimeSpan.FromMilliseconds(hidden ? 520 : 240);
+        var ease = new CubicEase { EasingMode = hidden ? EasingMode.EaseIn : EasingMode.EaseOut };
+        DoubleAnimation To(double v) => new(v, time) { EasingFunction = ease };
+        Controls.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, To(hidden ? Controls.ActualHeight + 40 : 0));
+        TopBar.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, To(hidden ? -(TopBar.ActualHeight + 40) : 0));
+        Controls.BeginAnimation(OpacityProperty, To(hidden ? 0 : 1));
+        TopBar.BeginAnimation(OpacityProperty, To(hidden ? 0 : 1));
+        EdgeProgress.BeginAnimation(OpacityProperty, new DoubleAnimation(hidden ? 1 : 0, TimeSpan.FromMilliseconds(hidden ? 400 : 150))
+            { BeginTime = hidden ? TimeSpan.FromMilliseconds(250) : TimeSpan.Zero });
         Cursor = hidden ? Cursors.None : null;
     }
 

@@ -51,9 +51,6 @@ public partial class MiniPlayerWindow : Window
     /// <summary>Raised when the user hides the widget (✕), so the app can remember it.</summary>
     public event Action? HideRequested;
 
-    /// <summary>Raised when "always on top" is toggled from the widget's pin.</summary>
-    public event Action? PinToggled;
-
     public void ApplyStyle(WidgetStyle style, bool save = true)
     {
         Current = style;
@@ -116,9 +113,6 @@ public partial class MiniPlayerWindow : Window
             menu.Items.Add(item);
         }
         menu.Items.Add(new Separator { Margin = new Thickness(8, 4, 8, 4) });
-        var pin = new MenuItem { Header = "Always on top", IsCheckable = true, IsChecked = Topmost };
-        pin.Click += (_, _) => PinToggled?.Invoke();
-        menu.Items.Add(pin);
         var open = new MenuItem { Header = "Open Tune" };
         open.Click += (_, _) => ExpandRequested?.Invoke();
         menu.Items.Add(open);
@@ -136,7 +130,6 @@ public partial class MiniPlayerWindow : Window
         _lib.SetSetting(PlacementKey, WindowPlacement.Format(new Rect(Left, Top, Width, Height)));
     }
 
-    private void Pin_Click(object sender, RoutedEventArgs e) => PinToggled?.Invoke();
 
     private void Expand_Click(object sender, RoutedEventArgs e) => ExpandRequested?.Invoke();
 

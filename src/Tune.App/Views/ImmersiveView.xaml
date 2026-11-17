@@ -85,6 +85,9 @@
 
             <!-- top: label, exit -->
             <DockPanel x:Name="TopBar">
+                <DockPanel.RenderTransform>
+                    <TranslateTransform />
+                </DockPanel.RenderTransform>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button Style="{StaticResource IconButton}" Command="{Binding ToggleFullScreenCommand}" ToolTip="Exit full screen (Esc)" Width="44" Height="44">
                         <p:Icon Data="{StaticResource IcoFullscreenExit}" Size="24" />
@@ -135,6 +138,9 @@
 
             <!-- controls (fade out when the mouse rests) -->
             <StackPanel x:Name="Controls" Grid.Row="2" DataContext="{Binding Player}">
+                <StackPanel.RenderTransform>
+                    <TranslateTransform />
+                </StackPanel.RenderTransform>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="56" />
@@ -194,5 +200,19 @@
                 </Grid>
             </StackPanel>
         </Grid>
+
+        <!-- while the controls are away: a thin progress line along the very bottom of the screen -->
+        <ProgressBar x:Name="EdgeProgress" VerticalAlignment="Bottom" Height="4" Opacity="0" IsHitTestVisible="False"
+                     DataContext="{Binding Player}" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position, Mode=OneWay}">
+            <ProgressBar.Template>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid>
+                        <Border Background="#26FFFFFF" />
+                        <Border x:Name="PART_Track" />
+                        <Border x:Name="PART_Indicator" HorizontalAlignment="Left" Background="{DynamicResource AccentBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </ProgressBar.Template>
+        </ProgressBar>
     </Grid>
 </UserControl>

@@ -1643,6 +1643,8 @@
                                         <TextBlock Text="Mini-player style" Style="{StaticResource Body}" FontWeight="SemiBold" />
                                         <TextBlock Text="The floating player you can keep anywhere on screen. Right-click it to switch too." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                                         <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                            <Button Style="{StaticResource SegmentPill}" Tag="Wide" Content="Wide with queue" AutomationProperties.Name="Wide with queue"
+                                                    Command="{Binding PickWidgetStyleCommand}" CommandParameter="Wide" />
                                             <Button Style="{StaticResource SegmentPill}" Tag="Compact" Content="Compact bar" AutomationProperties.Name="Compact bar"
                                                     Command="{Binding PickWidgetStyleCommand}" CommandParameter="Compact" />
                                             <Button Style="{StaticResource SegmentPill}" Tag="Card" Content="Card with controls" AutomationProperties.Name="Card with controls"
@@ -1650,15 +1652,6 @@
                                             <Button Style="{StaticResource SegmentPill}" Tag="Square" Content="Album art tile" AutomationProperties.Name="Album art tile"
                                                     Command="{Binding PickWidgetStyleCommand}" CommandParameter="Square" />
                                         </StackPanel>
-                                    </StackPanel>
-                                </DockPanel>
-                                <Border Style="{StaticResource SettingDivider}" />
-                                <DockPanel Style="{StaticResource SettingRow}">
-                                    <Border Style="{StaticResource SettingIconTile}"><TextBlock Style="{StaticResource SettingGlyph}" Text="&#xE718;" /></Border>
-                                    <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding MiniOnTop}" VerticalAlignment="Center" AutomationProperties.Name="Mini-player on top" />
-                                    <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="Always on top" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                                        <TextBlock Text="The floating player stays above other windows." Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,24,0" />
                                     </StackPanel>
                                 </DockPanel>
                                 </StackPanel>

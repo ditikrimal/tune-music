@@ -650,7 +650,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
     [ObservableProperty] private bool _syncedLyrics;
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private bool _closeToTray;
-    [ObservableProperty] private bool _miniOnTop;
     [ObservableProperty] private Tune.App.Platform.HeaderTint _header = Tune.App.Platform.ThemeManager.Header;
 
     public string HeaderName => Header.ToString();
@@ -682,7 +681,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
         _normalize = Lib.GetSetting("audio.normalize") == "1";
         _syncedLyrics = Lib.GetSetting("lyrics.synced") != "0";
         _closeToTray = Lib.GetSetting("window.closeToTray") != "0";
-        _miniOnTop = Lib.GetSetting("mini.topmost") != "0";
 
         _accent = Tune.App.Platform.ThemeManager.Accent;
         SyncPicker(_accent.Color);
@@ -825,11 +823,6 @@ public sealed partial class SettingsViewModel : ObservableObject, IPage
 
     partial void OnCloseToTrayChanged(bool value) => Lib.SetSetting("window.closeToTray", value ? "1" : "0");
 
-    partial void OnMiniOnTopChanged(bool value)
-    {
-        Lib.SetSetting("mini.topmost", value ? "1" : "0");
-        App.ApplyMiniTopmost();
-    }
 
 
     // ---- accent: presets + a free HSV/hex picker; applied live, saved once the user stops dragging ----
