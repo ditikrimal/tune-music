@@ -210,6 +210,8 @@ public partial class App : Application
         Shell.InitPages();
         MainWin = new MainWindow { DataContext = Shell, Icon = AppIcon.Window };
         MainWin.MiniPlayerRequested += ShrinkToMini;
+        // the window-morph overlay is made ahead of time so the first morph doesn't stall
+        Dispatcher.BeginInvoke(WindowMorph.Warm, DispatcherPriority.ApplicationIdle);
         Shell.AskPlaylistName = suggested => NameDialog.Ask(MainWin, "New playlist", suggested);
         Shell.AskName = (title, current) => NameDialog.Ask(MainWin, title, current, "Save");
         Shell.Confirm = (title, message, ok) => ConfirmDialog.Ask(MainWin, title, message, ok);
@@ -326,12 +328,18 @@ public partial class App : Application
             return;
         }
         var from = WindowMorph.ScreenRect(main);
-        ShowMini(invisible: true);
-        _mini!.UpdateLayout();
-        var to = WindowMorph.ScreenRect(_mini);
-        WindowMorph.Run(from, picture, 8, to, WindowMorph.Snapshot(_mini), 16,
-            swap: () => { main.Hide(); SyncUpdates(); },
-            done: () => _mini.Opacity = 1);
+        var area = WindowMorph.MonitorRect(main);
+        if (_mini is not null) area.Union(WindowMorph.ScreenRect(_mini));
+        WindowMorph.Run(area, from, picture, 8,
+            swap: () =>
+            {
+                // the window is leaving for good: hide it now (before the motion starts) so it stops drawing
+                main.Hide();
+                ShowMini(invisible: true);
+                _mini!.UpdateLayout();
+                return new(WindowMorph.ScreenRect(_mini), WindowMorph.Snapshot(_mini), 16, Reveal: () => _mini.Opacity = 1);
+            },
+            done: SyncUpdates);
     }
 
     /// <summary>The mini-player grows back into Tune's window (and hides).</summary>
@@ -340,18 +348,29 @@ public partial class App : Application
         var main = MainWin;
         if (main is null) return;
         if (_mini is not { IsVisible: true } mini || main.IsVisible || WindowMorph.Busy
-            || WindowMorph.Snapshot(mini) is not { } picture || WindowMorph.Snapshot(main) is not { } target)
+            || WindowMorph.Snapshot(mini) is not { } picture)
         {
             ShowMain();
             HideMini();
             return;
         }
         if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
-        var to = WindowMorph.ScreenRect(main);
-        if (to.Width < 50 || to.Left < -10000) { ShowMain(); HideMini(); return; }
-        WindowMorph.Run(WindowMorph.ScreenRect(mini), picture, 16, to, target, 8,
-            swap: HideMini,
-            done: ShowMain);
+        var area = WindowMorph.MonitorRect(mini);
+        area.Union(WindowMorph.ScreenRect(main));
+        WindowMorph.Run(area, WindowMorph.ScreenRect(mini), picture, 16,
+            swap: () =>
+            {
+                HideMini();
+                WindowMorph.Cloak(main, true);
+                main.Show();
+                main.UpdateLayout();
+                return new(WindowMorph.ScreenRect(main), WindowMorph.Snapshot(main), 8, Reveal: () => WindowMorph.Cloak(main, false));
+            },
+            done: () =>
+            {
+                main.Activate();
+                SyncUpdates();
+            });
     }
 
     private static void ShowMini() => ShowMini(invisible: false);

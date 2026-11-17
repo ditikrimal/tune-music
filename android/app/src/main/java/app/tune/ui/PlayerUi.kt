@@ -264,12 +264,13 @@ fun NowPlaying() {
                 .background(Color(0xFF17171A).copy(alpha = 0.97f * (sheet * 3f).coerceAtMost(1f)))
                 .nestedScroll(nested)) {
                 Column(Modifier.fillMaxWidth().height(handleH).then(sheetDrag), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.padding(top = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(c.subtle.copy(alpha = 0.6f)))
-                    Row(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         PaneButton(Ico.Lyrics, "Lyrics", lyrics) { lyrics = !lyrics; if (sheet > 0f) settle(false) }
                         PaneButton(Ico.Queue, "Queue", sheet > 0.5f) { settle(sheet < 0.5f) }
                         SleepButton()
                     }
+                    // a small arrow under Queue: the drawer slides up from here (flips once it's open)
+                    Icon(Ico.ChevronDown, null, tint = c.subtle, modifier = Modifier.size(22.dp).graphicsLayer { rotationZ = 180f * (1f - sheet) })
                 }
                 if (sheet > 0.01f) QueueList(Modifier.weight(1f).graphicsLayer { alpha = (sheet * 2f).coerceAtMost(1f) })
             }

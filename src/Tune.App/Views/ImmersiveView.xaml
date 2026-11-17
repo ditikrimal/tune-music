@@ -20,11 +20,8 @@
                             <Grid.RenderTransform>
                                 <ScaleTransform />
                             </Grid.RenderTransform>
-                            <Ellipse Fill="{DynamicResource AccentBrush}">
-                                <Ellipse.Effect>
-                                    <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="24" ShadowDepth="0" Opacity="0.55" />
-                                </Ellipse.Effect>
-                            </Ellipse>
+                            <p:ShadowBox Blur="24" CornerRadius="34" Margin="-24" Opacity="0.55" Color="{DynamicResource AccentColor}" />
+                            <Ellipse Fill="{DynamicResource AccentBrush}" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -51,13 +48,7 @@
 
     <Grid ClipToBounds="True">
         <!-- the cover, blurred into a glow (rendered small and cached: it's blurry anyway, so this costs almost nothing) -->
-        <Grid Margin="-240" CacheMode="{x:Static p:Caches.Quarter}">
-            <Image Stretch="UniformToFill" p:Art.Url="{Binding Player.ArtUrl}" Opacity="1" RenderOptions.BitmapScalingMode="LowQuality">
-                <Image.Effect>
-                    <BlurEffect Radius="140" RenderingBias="Performance" />
-                </Image.Effect>
-            </Image>
-        </Grid>
+        <Image Margin="-120" Stretch="UniformToFill" p:Art.BlurredUrl="{Binding Player.ArtUrl}" RenderOptions.BitmapScalingMode="Linear" />
         <Border>
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -116,11 +107,8 @@
                     </Grid.RowDefinitions>
                     <Viewbox MaxWidth="560" MaxHeight="560" Stretch="Uniform" HorizontalAlignment="Left">
                         <Grid Width="560" Height="560">
-                            <Border CornerRadius="20" Background="#202020" Margin="4">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="60" ShadowDepth="12" Opacity="0.65" />
-                                </Border.Effect>
-                            </Border>
+                            <p:ShadowBox Blur="60" CornerRadius="20" Margin="-56,-48,-56,-68" Opacity="0.65" />
+                            <Border CornerRadius="20" Background="#202020" Margin="4" />
                             <Image Width="560" Height="560" Stretch="UniformToFill" p:Art.Url="{Binding Player.ArtUrl}">
                                 <Image.Clip>
                                     <RectangleGeometry Rect="0,0,560,560" RadiusX="20" RadiusY="20" />

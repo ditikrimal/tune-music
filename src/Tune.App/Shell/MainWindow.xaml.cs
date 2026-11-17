@@ -28,13 +28,15 @@ public partial class MainWindow : Window
             {
                 if (e.PropertyName == nameof(PlayerBarViewModel.IsPlaying)) UpdateSpin(vm.Player.IsPlaying);
             };
-            Loaded += (_, _) => UpdateSpin(vm.Player.IsPlaying);
+            Loaded += (_, _) =>
+            {
+                UpdateSpin(vm.Player.IsPlaying);
+                Dispatcher.BeginInvoke(WarmFullScreen, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            };
             // full-screen Now Playing: the window covers the whole monitor while it's open
             vm.NowPlaying.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName != nameof(NowPlayingViewModel.IsFullScreen)) return;
-                _full ??= new Tune.App.Platform.FullScreen(this);
-                if (vm.NowPlaying.IsFullScreen) _full.Enter(); else _full.Exit();
+                if (e.PropertyName == nameof(NowPlayingViewModel.IsFullScreen)) SetFullScreen(vm.NowPlaying.IsFullScreen);
             };
         };
                 SourceInitialized += (_, _) =>
@@ -48,6 +50,55 @@ public partial class MainWindow : Window
     }
 
     private Tune.App.Platform.FullScreen? _full;
+    private bool _fullShownOnce;
+
+    /// <summary>Lays the full-screen view out once while idle, so its first appearance doesn't stall the transition.</summary>
+    private void WarmFullScreen()
+    {
+        if (Immersive.Visibility != Visibility.Collapsed) return;
+        Immersive.Visibility = Visibility.Hidden;
+        Immersive.Measure(new Size(ActualWidth, ActualHeight));
+        Immersive.Arrange(new Rect(0, 0, ActualWidth, ActualHeight));
+        Immersive.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Into / out of full screen as one smooth motion: a picture of the window grows to fill the monitor (or shrinks
+    /// back) and crossfades into the result, while the real window switches underneath, cloaked.
+    /// </summary>
+    private void SetFullScreen(bool on)
+    {
+        _full ??= new Tune.App.Platform.FullScreen(this);
+        void Switch()
+        {
+            if (on) _full.Enter(); else _full.Exit();
+            Immersive.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            UpdateLayout();
+            if (on) { Immersive.Lyrics.JumpToCurrent(); UpdateLayout(); }
+        }
+        if (_full.IsOn == on) { Immersive.Visibility = on ? Visibility.Visible : Visibility.Collapsed; return; }
+        if (!IsVisible || WindowState == WindowState.Minimized || Tune.App.Platform.WindowMorph.Busy
+            || Tune.App.Platform.WindowMorph.Snapshot(this) is not { } picture)
+        {
+            Switch();
+            return;
+        }
+        var from = Tune.App.Platform.WindowMorph.ScreenRect(this);
+        Tune.App.Platform.WindowMorph.Run(Tune.App.Platform.WindowMorph.MonitorRect(this), from, picture, on ? 8 : 0,
+            swap: () =>
+            {
+                Tune.App.Platform.WindowMorph.Cloak(this, true);
+                Switch();
+                var rect = Tune.App.Platform.WindowMorph.ScreenRect(this);
+                // full screen is big and only seen mid-motion (the real window takes over at the end): half size is plenty
+                var shot = Tune.App.Platform.WindowMorph.Snapshot(this, on ? 0.5 : 1);
+                // the very first full-screen frame of a session is slow (~100 ms, a few frames in): hold still through it
+                var settle = on && !_fullShownOnce ? 10 : 0;
+                if (on) _fullShownOnce = true;
+                return new(rect, shot, on ? 0 : 8, Reveal: () => Tune.App.Platform.WindowMorph.Cloak(this, false), SettleFrames: settle);
+            },
+            done: () => { if (on) Activate(); });
+    }
 
     private const string PlacementKey = "window.main";
 

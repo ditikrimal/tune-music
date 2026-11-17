@@ -350,8 +350,7 @@
         </Border>
 
         <!-- ===================== full-screen Now Playing (F11): over everything ===================== -->
-        <views:ImmersiveView Grid.ColumnSpan="2" DataContext="{Binding NowPlaying}"
-                             Visibility="{Binding IsFullScreen, Converter={StaticResource BoolToVis}}" />
+        <views:ImmersiveView x:Name="Immersive" Grid.ColumnSpan="2" DataContext="{Binding NowPlaying}" Visibility="Collapsed" />
 
         <!-- ===================== first-run setup overlay ===================== -->
         <Grid Grid.RowSpan="2" Grid.ColumnSpan="2" Background="#F2121212"

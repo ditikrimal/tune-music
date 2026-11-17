@@ -30,11 +30,8 @@ public sealed class FullScreen(Window window)
         }
         var monitor = MonitorRect();
         window.WindowState = WindowState.Normal;
-        window.Left = monitor.Left;
-        window.Top = monitor.Top;
-        window.Width = monitor.Width;
-        window.Height = monitor.Height;
         window.Topmost = true;  // above the taskbar
+        Place(monitor);
         window.Activate();
     }
 
@@ -48,12 +45,23 @@ public sealed class FullScreen(Window window)
             chrome.CaptionHeight = _caption;
             chrome.ResizeBorderThickness = _resize;
         }
-        window.Left = _bounds.Left;
-        window.Top = _bounds.Top;
-        window.Width = _bounds.Width;
-        window.Height = _bounds.Height;
+        Place(_bounds);
         if (_state == WindowState.Maximized) window.WindowState = WindowState.Maximized;
     }
+
+    /// <summary>
+    /// Moves and sizes the window in one step. Setting Left/Top/Width/Height one by one resizes the window (and its
+    /// Direct3D surface) several times, each ~100 ms of rendering for a full-screen window.
+    /// </summary>
+    private void Place(Rect r)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        var dpi = VisualTreeHelperDpi();
+        SetWindowPos(hwnd, 0, (int)Math.Round(r.Left * dpi), (int)Math.Round(r.Top * dpi), (int)Math.Round(r.Width * dpi), (int)Math.Round(r.Height * dpi),
+            0x0004 /* NOZORDER */ | 0x0010 /* NOACTIVATE */);
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
 
     /// <summary>The monitor the window is on, in WPF units.</summary>
     private Rect MonitorRect()

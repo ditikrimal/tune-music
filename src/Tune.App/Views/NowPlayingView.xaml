@@ -11,12 +11,8 @@
 
     <Grid x:Name="Panel" ClipToBounds="True" Background="{DynamicResource BaseBrush}" SizeChanged="Panel_SizeChanged">
         <!-- blurred album art backdrop -->
-        <Image Stretch="UniformToFill" p:Art.Url="{Binding Player.ArtUrl}" Opacity="0.6" Margin="-120"
-               RenderOptions.BitmapScalingMode="LowQuality">
-            <Image.Effect>
-                <BlurEffect Radius="100" RenderingBias="Performance" />
-            </Image.Effect>
-        </Image>
+        <Image Stretch="UniformToFill" p:Art.BlurredUrl="{Binding Player.ArtUrl}" Opacity="0.6" Margin="-120"
+               RenderOptions.BitmapScalingMode="Linear" />
         <Border>
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">

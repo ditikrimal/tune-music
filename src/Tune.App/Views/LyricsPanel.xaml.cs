@@ -30,23 +30,30 @@ public partial class LyricsPanel : UserControl
             if (_vm is not null) _vm.PropertyChanged += OnVmChanged;
         };
         // shown again (e.g. full screen opened): jump to the line being sung
-        IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Dispatcher.BeginInvoke(ScrollToCurrent, System.Windows.Threading.DispatcherPriority.Loaded); };
+        // appearing: jump straight to the line (a glide from the top would run during the window's own transition)
+        IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Dispatcher.BeginInvoke(() => ScrollToCurrent(instant: true), System.Windows.Threading.DispatcherPriority.Loaded); };
     }
 
     private void OnVmChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NowPlayingViewModel.CurrentIndex))
-            Dispatcher.BeginInvoke(ScrollToCurrent, System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(() => ScrollToCurrent(), System.Windows.Threading.DispatcherPriority.Loaded);
         else if (e.PropertyName == nameof(NowPlayingViewModel.HasSynced))
             LyricsScroll.ScrollToTop();
     }
 
-    private void ScrollToCurrent()
+    private void ScrollToCurrent() => ScrollToCurrent(instant: false);
+
+    /// <summary>Puts the current line in place right now (used before a transition, so nothing moves during it).</summary>
+    public void JumpToCurrent() => ScrollToCurrent(instant: true);
+
+    private void ScrollToCurrent(bool instant)
     {
         if (_vm is null || _vm.CurrentIndex < 0 || !IsVisible) return;
         if (LyricsList.ItemContainerGenerator.ContainerFromIndex(_vm.CurrentIndex) is not FrameworkElement line) return;
         var y = line.TransformToAncestor(LyricsScroll).Transform(new Point(0, 0)).Y + LyricsScroll.VerticalOffset;
         var target = Math.Max(0, y - LyricsScroll.ViewportHeight / 3);
-        Platform.SmoothScroll.ScrollBy(LyricsScroll, target - LyricsScroll.VerticalOffset);
+        if (instant) LyricsScroll.ScrollToVerticalOffset(target);
+        else Platform.SmoothScroll.ScrollBy(LyricsScroll, target - LyricsScroll.VerticalOffset);
     }
 }
