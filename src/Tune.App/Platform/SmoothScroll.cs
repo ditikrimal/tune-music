@@ -9,7 +9,8 @@ namespace Tune.App.Platform;
 
 /// <summary>
 /// Browser-style smooth wheel scrolling for every ScrollViewer in the app: each wheel notch moves a target,
-/// and the view eases towards it once per displayed frame. The innermost viewer that can scroll that way gets
+/// and the view follows it like a critically damped spring, once per displayed frame. The spring keeps its speed
+/// from one notch to the next, so a fast spin glides instead of moving in a burst per notch. The innermost viewer that can scroll that way gets
 /// the wheel, so horizontal shelves pass vertical wheel movement to the page.
 /// While a viewer moves, its content ignores the mouse (no hover highlights, card lifts or tooltips flickering
 /// past the pointer — each of those costs a redraw mid-scroll); hover comes back a moment after it stops.
@@ -17,12 +18,13 @@ namespace Tune.App.Platform;
 public static class SmoothScroll
 {
     private const double PixelsPerNotch = 120;     // one wheel notch
-    private const double SmoothingSeconds = 0.09;  // time constant of the ease-out
+    private const double Stiffness = 24;           // spring frequency (1/s): a single notch settles in ~0.2 s
     private static readonly TimeSpan HoverBackAfter = TimeSpan.FromMilliseconds(140);
 
     private sealed class State
     {
         public double Target;
+        public double Velocity;
         public bool Animating;
         public bool Horizontal;
         public TimeSpan Last;
@@ -59,6 +61,7 @@ public static class SmoothScroll
         MuteHover(sv, state);
         if (state.Animating) return;
         state.Animating = true;
+        state.Velocity = 0;
         state.Last = TimeSpan.Zero;
         if (Active.Count == 0) CompositionTarget.Rendering += OnFrame;
         Active.Add(sv);
@@ -77,8 +80,17 @@ public static class SmoothScroll
             s.Last = now;
             var horizontal = s.Horizontal;
             var current = horizontal ? sv.HorizontalOffset : sv.VerticalOffset;
-            var diff = s.Target - current;
-            if (Math.Abs(diff) < 0.5 || !sv.IsLoaded)
+            // the viewer clamps offsets: keep the target inside what it can show now (content may have shrunk)
+            var max = horizontal ? sv.ScrollableWidth : sv.ScrollableHeight;
+            s.Target = Math.Clamp(s.Target, 0, max);
+            var x = current;
+            for (var left = dt; left > 0; left -= 0.004)
+            {
+                var h = Math.Min(0.004, left);
+                s.Velocity += (Stiffness * Stiffness * (s.Target - x) - 2 * Stiffness * s.Velocity) * h;
+                x += s.Velocity * h;
+            }
+            if ((Math.Abs(s.Target - x) < 0.5 && Math.Abs(s.Velocity) < 20) || !sv.IsLoaded)
             {
                 Set(sv, s.Target, horizontal);
                 s.Animating = false;
@@ -86,7 +98,7 @@ public static class SmoothScroll
                 RestoreHoverSoon(s);
                 continue;
             }
-            Set(sv, current + diff * (1 - Math.Exp(-dt / SmoothingSeconds)), horizontal);
+            Set(sv, x, horizontal);
         }
         if (Active.Count == 0) CompositionTarget.Rendering -= OnFrame;
     }

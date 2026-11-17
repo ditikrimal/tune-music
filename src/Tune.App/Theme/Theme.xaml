@@ -156,12 +156,12 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bg" Background="{DynamicResource AccentBrush}" CornerRadius="19" RenderTransformOrigin="0.5,0.5">
-                        <Border.Effect>
-                            <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="14" ShadowDepth="0" Opacity="0.45" />
-                        </Border.Effect>
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <Grid>
+                        <p2:ShadowBox Blur="14" CornerRadius="19" Margin="-14" Opacity="0.45" Color="{DynamicResource AccentColor}" />
+                        <Border x:Name="bg" Background="{DynamicResource AccentBrush}" CornerRadius="19" RenderTransformOrigin="0.5,0.5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bg" Property="RenderTransform">
@@ -184,12 +184,13 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bg" Background="{DynamicResource AccentBrush}" CornerRadius="24" RenderTransformOrigin="0.5,0.5">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.45" />
-                        </Border.Effect>
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <Grid>
+                        <!-- a pre-drawn shadow: this button sits on every card, where a live shadow effect slows scrolling -->
+                        <p2:ShadowBox Blur="12" CornerRadius="24" Margin="-12,-9,-12,-15" Opacity="0.45" />
+                        <Border x:Name="bg" Background="{DynamicResource AccentBrush}" CornerRadius="24" RenderTransformOrigin="0.5,0.5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bg" Property="RenderTransform">
@@ -397,11 +398,8 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid Width="14" Height="14" Background="Transparent">
-                        <Ellipse x:Name="dot" Width="12" Height="12" Fill="{DynamicResource AccentBrush}" RenderTransformOrigin="0.5,0.5">
-                            <Ellipse.Effect>
-                                <DropShadowEffect BlurRadius="6" ShadowDepth="0" Opacity="0.55" />
-                            </Ellipse.Effect>
-                        </Ellipse>
+                        <p2:ShadowBox Blur="6" CornerRadius="6" Margin="-5" Opacity="0.55" />
+                        <Ellipse x:Name="dot" Width="12" Height="12" Fill="{DynamicResource AccentBrush}" RenderTransformOrigin="0.5,0.5" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Slider}}" Value="True">

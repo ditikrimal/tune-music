@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Platform.ScrollBench.StartIfAsked(this);
         StateChanged += (_, _) => OnWindowStateChanged();
         // the page header fades to the playing song's colour (or the theme's)
         Tune.App.Platform.ThemeManager.HeaderChanged += c => Dispatcher.BeginInvoke(() =>
