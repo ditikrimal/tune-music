@@ -204,7 +204,7 @@ public partial class App : Application
             ? new Tune.Core.Sync.AccountSync(_library, new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, syncConfig)
             : null;
         Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics,
-            _downloads, _network, _cache, offline, smart, updater, _account);
+            _downloads, _network, _cache, offline, smart, updater, _account, new MoodsCatalog(api, _library, clock));
         _downloads.Start();
         _cache.Start();
         _network.Start();

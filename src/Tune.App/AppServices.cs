@@ -24,4 +24,5 @@ public sealed record AppServices(
     Tune.Core.Offline.OfflineLibrary Offline,
     Tune.Core.Offline.SmartDownloads Smart,
     AppUpdater Updater,
-    Tune.Core.Sync.AccountSync? Account);
+    Tune.Core.Sync.AccountSync? Account,
+    MoodsCatalog Moods);

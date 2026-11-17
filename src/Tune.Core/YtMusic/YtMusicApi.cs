@@ -70,6 +70,16 @@ public sealed class YtMusicApi(InnerTubeClient client) : IYtMusic
         return page.Collection with { Tracks = tracks };
     }
 
+    public async Task<IReadOnlyList<MoodSection>> GetMoodsAsync(CancellationToken ct = default) =>
+        BrowseParser.ParseMoods(await client.PostAsync("browse", new JsonObject { ["browseId"] = "FEmusic_moods_and_genres" }, ct).ConfigureAwait(false));
+
+    public async Task<IReadOnlyList<Shelf>> GetMoodAsync(string moodParams, CancellationToken ct = default) =>
+        BrowseParser.ParseHome(await client.PostAsync("browse", new JsonObject
+        {
+            ["browseId"] = "FEmusic_moods_and_genres_category",
+            ["params"] = moodParams,
+        }, ct).ConfigureAwait(false)).Shelves;
+
     public async Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default) =>
         BrowseParser.ParseArtist(await client.PostAsync("browse", new JsonObject { ["browseId"] = browseId }, ct).ConfigureAwait(false), browseId);
 }

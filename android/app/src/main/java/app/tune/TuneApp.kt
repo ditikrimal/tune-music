@@ -37,6 +37,7 @@ class Graph(context: Context) {
     val streams = StreamResolver()
     val lyrics = LyricsService(http, yt) { library.setting("lyrics.synced") != "0" }
     val feed = FeedBuilder(library, yt)
+    val moods = app.tune.data.MoodsCatalog(library, yt)
 
     private val _online = MutableStateFlow(true)
     val online: StateFlow<Boolean> = _online

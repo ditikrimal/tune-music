@@ -27,6 +27,25 @@ public static class BrowseParser
         return new HomePage(shelves!, list.Str("continuations", 0, "nextContinuationData", "continuation"));
     }
 
+    // ---------- moods & genres ----------
+
+    public static IReadOnlyList<MoodSection> ParseMoods(JsonNode root) =>
+        root.At("contents", "singleColumnBrowseResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer")
+            .Items("contents")
+            .Select(s => s.At("gridRenderer"))
+            .Where(g => g is not null)
+            .Select(g => new MoodSection(
+                g.At("header", "gridHeaderRenderer", "title").RunsText() ?? "",
+                g.Items("items").Select(i => i.At("musicNavigationButtonRenderer")).Where(b => b is not null).Select(b =>
+                {
+                    var title = b.At("buttonText").RunsText();
+                    var p = b.Str("clickCommand", "browseEndpoint", "params");
+                    var color = b.At("solid", "leftStripeColor") is JsonValue v && v.TryGetValue<long>(out var c) ? (uint)c : 0xFF808080u;
+                    return title is null || p is null ? null : new MoodCategory(title, p, color);
+                }).OfType<MoodCategory>().ToList()))
+            .Where(s => s.Title.Length > 0 && s.Items.Count > 0)
+            .ToList();
+
     private static Shelf? CarouselShelf(JsonNode shelf)
     {
         var title = shelf.At("header", "musicCarouselShelfBasicHeaderRenderer", "title").RunsText();

@@ -266,10 +266,11 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) 
     fun setting(key: String): String? =
         readableDatabase.rawQuery("SELECT value FROM settings WHERE key = ?", arrayOf(key)).use { if (it.moveToFirst()) it.getString(0) else null }
 
-    fun setSetting(key: String, value: String) {
+    /** [notify] false: a cache only Tune itself reads (screens don't need to refresh). */
+    fun setSetting(key: String, value: String, notify: Boolean = true) {
         writableDatabase.insertWithOnConflict("settings", null, ContentValues().apply { put("key", key); put("value", value) }, SQLiteDatabase.CONFLICT_REPLACE)
         if (key in SYNCED_SETTINGS) touch(writableDatabase, SyncKinds.SETTING, key) // Home layout + pins follow the account
-        changed()
+        if (notify) changed()
     }
 
     /** A Home-layout / pins change from another device. Newer wins. */

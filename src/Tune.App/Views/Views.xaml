@@ -18,7 +18,7 @@
             <StackPanel Margin="14,2,6,0" MaxWidth="260" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" FontWeight="Bold" FontSize="15" TextWrapping="Wrap" TextTrimming="None" />
                 <TextBlock Text="{Binding ArtistLine}" Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding Album.Title, StringFormat=Album · {0}}" Style="{StaticResource Caption}" Margin="0,8,0,0"
+                <TextBlock Text="{Binding Album.Title, StringFormat=Album Â· {0}}" Style="{StaticResource Caption}" Margin="0,8,0,0"
                            Visibility="{Binding Album, Converter={StaticResource NullToVis}}" />
                 <TextBlock Text="{Binding Duration, Converter={x:Static sh:DurationConverter.Instance}}" Style="{StaticResource Caption}" Margin="0,2,0,0" />
             </StackPanel>
@@ -148,7 +148,7 @@
         </DataTemplate.Triggers>
     </DataTemplate>
 
-    <!-- ================= horizontal shelf with ‹ › scroll buttons ================= -->
+    <!-- ================= horizontal shelf with â€¹ â€º scroll buttons ================= -->
     <DataTemplate x:Key="ShelfTemplate" DataType="{x:Type m:Shelf}">
         <StackPanel x:Name="shelf" Background="Transparent">
             <DockPanel>
@@ -259,7 +259,7 @@
                 <StackPanel VerticalAlignment="Center" Margin="12,0,4,0">
                     <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock Style="{StaticResource Subtle}" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,3,0,0">
-                        <Run Text="{Binding Subtitle, Mode=OneWay}" /><Run x:Name="albumSep" Text=" • " /><Run Text="{Binding Track.Album.Title, Mode=OneWay}" />
+                        <Run Text="{Binding Subtitle, Mode=OneWay}" /><Run x:Name="albumSep" Text=" â€¢ " /><Run Text="{Binding Track.Album.Title, Mode=OneWay}" />
                     </TextBlock>
                 </StackPanel>
             </DockPanel>
@@ -564,7 +564,7 @@
                         <ItemsControl ItemsSource="{Binding OfflineTracks}" ItemTemplate="{StaticResource TrackRowTemplate}" Margin="-12,0,0,0" />
                     </StackPanel>
                 </StackPanel>
-                <p:TuneLoader Width="44" Height="34" HorizontalAlignment="Left" Margin="4,32,0,0" ToolTip="Loading your music…"
+                <p:TuneLoader Width="44" Height="34" HorizontalAlignment="Left" Margin="4,32,0,0" ToolTip="Loading your musicâ€¦"
                               Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
                 <ItemsControl ItemsSource="{Binding Shelves}" Visibility="{Binding Offline, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}">
                     <ItemsControl.ItemTemplateSelector>
@@ -592,6 +592,111 @@
         </DataTemplate.Triggers>
     </DataTemplate>
 
+    <!-- ================= Moods & genres tile: colour-washed card, the mood's playlist cover tilted in the corner ================= -->
+    <DataTemplate x:Key="MoodTileTemplate" DataType="{x:Type vm:MoodTileViewModel}">
+        <Button x:Name="tile" Command="{Binding OpenCommand}" Cursor="Hand" Focusable="False" Margin="0,0,14,14" Height="112"
+                RenderTransformOrigin="0.5,0.5" ToolTip="{Binding Title}">
+            <Button.RenderTransform>
+                <TranslateTransform />
+            </Button.RenderTransform>
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter />
+                </ControlTemplate>
+            </Button.Template>
+            <Grid p:RoundClip.Radius="14" Background="{Binding Tint}">
+                <Border x:Name="hover" Background="#14FFFFFF" Opacity="0" />
+                <!-- the cover, tilted and running off the corner -->
+                <Border x:Name="coverBox" Width="86" Height="86" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-12,-14"
+                        CornerRadius="8" Background="#30FFFFFF" RenderTransformOrigin="0.5,0.5"
+                        Visibility="{Binding Cover, Converter={StaticResource NullToVis}}">
+                    <Border.RenderTransform>
+                        <TransformGroup>
+                            <RotateTransform Angle="20" />
+                            <ScaleTransform />
+                        </TransformGroup>
+                    </Border.RenderTransform>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.5" />
+                    </Border.Effect>
+                    <Image Stretch="UniformToFill" p:Art.Url="{Binding Cover}" p:RoundClip.Radius="8" />
+                </Border>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" FontWeight="Bold" FontSize="16" Foreground="White"
+                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="44" Margin="16,14,84,0" VerticalAlignment="Top" />
+                <Border Width="26" Height="4" CornerRadius="2" Background="{Binding Stripe}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16,0,0,16" />
+            </Grid>
+        </Button>
+        <DataTemplate.Triggers>
+            <Trigger SourceName="tile" Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="tile" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" To="-3" Duration="0:0:0.16">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetName="coverBox" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(RotateTransform.Angle)" To="10" Duration="0:0:0.22">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetName="coverBox" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleX)" To="1.08" Duration="0:0:0.22" />
+                            <DoubleAnimation Storyboard.TargetName="coverBox" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleY)" To="1.08" Duration="0:0:0.22" />
+                            <DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.16" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="tile" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" To="0" Duration="0:0:0.2" />
+                            <DoubleAnimation Storyboard.TargetName="coverBox" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[0].(RotateTransform.Angle)" To="20" Duration="0:0:0.25" />
+                            <DoubleAnimation Storyboard.TargetName="coverBox" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.25" />
+                            <DoubleAnimation Storyboard.TargetName="coverBox" Storyboard.TargetProperty="(UIElement.RenderTransform).(TransformGroup.Children)[1].(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.25" />
+                            <DoubleAnimation Storyboard.TargetName="hover" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.ExitActions>
+            </Trigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- a titled grid of mood tiles; as many columns as fit -->
+    <DataTemplate x:Key="MoodSectionTemplate" DataType="{x:Type vm:MoodSectionViewModel}">
+        <StackPanel Margin="0,8,0,10">
+            <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
+            <ItemsControl x:Name="grid" ItemsSource="{Binding Tiles}" ItemTemplate="{StaticResource MoodTileTemplate}" Margin="0,4,-14,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={x:Static p:ColumnsConverter.Instance}, ConverterParameter=230}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- ================= One mood / genre ================= -->
+    <DataTemplate DataType="{x:Type vm:MoodViewModel}">
+        <Grid>
+            <!-- the mood's colour glows behind the title -->
+            <Border Height="300" VerticalAlignment="Top" IsHitTestVisible="False" Opacity="0.28" Margin="0,-48,0,0" Background="{Binding Accent}">
+                <Border.OpacityMask>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FF000000" Offset="0" />
+                        <GradientStop Color="#00000000" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.OpacityMask>
+            </Border>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,24,120">
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource Title1}" Margin="0,0,0,16" />
+                    <p:TuneLoader Width="44" Height="34" HorizontalAlignment="Left" Margin="4,16,0,0"
+                                  Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" FontSize="15"
+                               Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
+                    <ItemsControl ItemsSource="{Binding Shelves}" ItemTemplate="{StaticResource ShelfTemplate}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DataTemplate>
+
     <!-- ================= Search ================= -->
     <DataTemplate DataType="{x:Type vm:SearchViewModel}">
         <DockPanel Margin="32,0,24,0">
@@ -608,6 +713,9 @@
             </Grid>
             <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
                 <StackPanel Margin="0,0,0,120">
+                    <!-- nothing typed yet: browse moods & genres -->
+                    <ItemsControl ItemsSource="{Binding Browse}" ItemTemplate="{StaticResource MoodSectionTemplate}" Margin="0,6,0,0"
+                                  Visibility="{Binding ShowBrowse, Converter={StaticResource BoolToVis}}" />
                     <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" FontSize="15" Margin="0,24,0,0"
                                Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
                     <StackPanel Visibility="{Binding HasResults, Converter={StaticResource BoolToVis}}">
@@ -1627,7 +1735,7 @@
                             <StackPanel Orientation="Horizontal" Margin="4,22,0,0">
                                 <Image Source="{x:Static p:AppIcon.Logo}" Width="28" Height="28" VerticalAlignment="Center" />
                                 <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="10,0,0,0">
-                                    <Run Text="Tune" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /><Run Text="{Binding Version, Mode=OneWay, StringFormat=' {0}'}" /><Run Text=" · no ads, no tracking; your library syncs only if you sign in" />
+                                    <Run Text="Tune" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" /><Run Text="{Binding Version, Mode=OneWay, StringFormat=' {0}'}" /><Run Text=" Â· no ads, no tracking; your library syncs only if you sign in" />
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>

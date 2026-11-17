@@ -243,6 +243,17 @@ object Parsers {
         return HomePage(shelves, list.str("continuations", 0, "nextContinuationData", "continuation"))
     }
 
+    fun moods(root: JSONObject): List<MoodSection> =
+        root.obj("contents", "singleColumnBrowseResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer")
+            .items("contents").mapNotNull { it.obj("gridRenderer") }.map { g ->
+                MoodSection(g.at("header", "gridHeaderRenderer", "title").runsText() ?: "",
+                    g.items("items").mapNotNull { it.obj("musicNavigationButtonRenderer") }.mapNotNull { b ->
+                        val title = b.at("buttonText").runsText() ?: return@mapNotNull null
+                        val params = b.str("clickCommand", "browseEndpoint", "params") ?: return@mapNotNull null
+                        MoodCategory(title, params, (b.at("solid", "leftStripeColor") as? Number)?.toLong() ?: 0xFF808080)
+                    })
+            }.filter { it.title.isNotEmpty() && it.items.isNotEmpty() }
+
     private fun carousel(shelf: JSONObject): Shelf? {
         val title = shelf.at("header", "musicCarouselShelfBasicHeaderRenderer", "title").runsText()?.takeIf { it.isNotBlank() } ?: return null
         val contents = shelf.items("contents")
@@ -361,6 +372,12 @@ class YtMusic(private val client: InnerTube) {
         }
         return shelves
     }
+
+    fun moods() = Parsers.moods(client.post("browse", JSONObject().put("browseId", "FEmusic_moods_and_genres")))
+
+    /** One mood or genre: rows of playlists. */
+    fun mood(params: String) = Parsers.home(client.post("browse", JSONObject()
+        .put("browseId", "FEmusic_moods_and_genres_category").put("params", params))).shelves
 
     fun radio(videoId: String) = Parsers.radio(client.post("next", JSONObject()
         .put("videoId", videoId).put("playlistId", "RDAMVM$videoId").put("isAudioOnly", true)))

@@ -65,6 +65,12 @@ data class Shelf(val title: String, val items: List<Card>, val isLocal: Boolean 
 
 data class Collection(val title: String, val subtitle: String?, val thumbnail: String?, val tracks: List<Track>)
 
+/** A Moods & genres tile ("Chill", "Hip-hop"…): [params] opens its page; [color] is YouTube Music's ARGB stripe colour. */
+data class MoodCategory(val title: String, val params: String, val color: Long, val thumbnail: String? = null)
+
+/** "Moods & moments" or "Genres". */
+data class MoodSection(val title: String, val items: List<MoodCategory>)
+
 data class ArtistPage(val name: String, val thumbnail: String?, val topSongs: List<Track>, val shelves: List<Shelf>)
 
 data class SearchResults(

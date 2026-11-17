@@ -253,12 +253,14 @@ public sealed partial class SearchViewModel : ObservableObject, IPage
             _debounce.Stop();
             _ = RunAsync();
         };
+        _ = LoadBrowseAsync();
     }
 
     public string? NavKey => "search";
 
     partial void OnQueryChanged(string value)
     {
+        OnPropertyChanged(nameof(ShowBrowse));
         _debounce.Stop();
         _debounce.Start();
     }

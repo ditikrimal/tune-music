@@ -52,6 +52,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.tune.playback.PlayerConnection
 import app.tune.ui.Accents
+import app.tune.ui.MoodScreen
 import app.tune.ui.AddToPlaylistDialog
 import app.tune.ui.AppState
 import app.tune.ui.ArtistScreen
@@ -142,6 +143,10 @@ private fun TuneRoot(accent: Color, onAccent: (Color) -> Unit) {
             composable("album/{id}") { page { CollectionScreen(CollectionKind.Album, it.arguments?.getString("id")!!) } }
             composable("ytplaylist/{id}") { page { CollectionScreen(CollectionKind.YtPlaylist, it.arguments?.getString("id")!!) } }
             composable("artist/{id}") { page { ArtistScreen(it.arguments?.getString("id")!!) } }
+            composable("mood/{params}/{color}/{title}") {
+                val a = it.arguments!!
+                page { MoodScreen(a.getString("params")!!, a.getString("title")!!, a.getString("color")!!.toLong()) }
+            }
             composable("settings") { page { SettingsScreen(accent, onAccent) } }
             composable("settings/{cat}") { page { SettingsCategoryScreen(it.arguments?.getString("cat")!!, accent, onAccent) } }
         }

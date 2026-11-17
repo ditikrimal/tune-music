@@ -208,6 +208,7 @@ fun SearchScreen() {
         }
     }
     LaunchedEffect(Unit) { if (query.isNotBlank() && results == null) search(true) }
+    val moods = rememberMoods()
 
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
         item {
@@ -225,6 +226,8 @@ fun SearchScreen() {
                         unfocusedContainerColor = c.card, focusedContainerColor = c.card, cursorColor = c.accent))
             }
         }
+        // nothing typed: browse moods & genres
+        if (query.isBlank()) { moodsBrowse(moods); return@LazyColumn }
         if (loading && results == null) item { Loading() }
         val r = results ?: return@LazyColumn
         r.top?.takeIf { it.track == null }?.let { top -> item { TopResult(top) } }

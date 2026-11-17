@@ -105,4 +105,25 @@ public class BrowseParserTests
         Assert.Contains(a.Shelves, s => s.Title == "Albums" && s.Items.All(c => c.Kind == CardKind.Album));
         Assert.Contains(a.Shelves, s => s.Title == "Fans might also like" && s.Items.All(c => c.Kind == CardKind.Artist));
     }
+
+    [Fact]
+    public void ParsesMoodsAndGenres()
+    {
+        var sections = BrowseParser.ParseMoods(Fixture.Load("moods.json"));
+        Assert.Equal(["Moods & moments", "Genres"], sections.Select(s => s.Title));
+        var chill = sections[0].Items[0];
+        Assert.Equal("Chill", chill.Title);
+        Assert.False(string.IsNullOrEmpty(chill.Params));
+        Assert.Equal(0xFFu, chill.Color >> 24); // opaque ARGB
+        Assert.True(sections[1].Items.Count > 20);
+    }
+
+    [Fact]
+    public void ParsesMoodCategoryAsPlaylistRows()
+    {
+        var shelves = BrowseParser.ParseHome(Fixture.Load("mood_category.json")).Shelves;
+        Assert.Equal("Coffee shop blends", shelves[0].Title);
+        Assert.All(shelves, s => Assert.All(s.Items, c => Assert.False(string.IsNullOrEmpty(c.ThumbnailUrl))));
+        Assert.Contains(shelves[0].Items, c => c.Kind == CardKind.Playlist && c.PlaylistId is not null);
+    }
 }

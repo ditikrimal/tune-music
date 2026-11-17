@@ -45,4 +45,10 @@ public interface IYtMusic
     Task<Collection> GetAlbumAsync(string browseId, CancellationToken ct = default);
     Task<Collection> GetPlaylistAsync(string playlistId, CancellationToken ct = default);
     Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default);
+
+    /// <summary>YouTube Music's Moods &amp; genres tiles.</summary>
+    Task<IReadOnlyList<MoodSection>> GetMoodsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MoodSection>>([]);
+
+    /// <summary>One mood or genre: rows of playlists.</summary>
+    Task<IReadOnlyList<Shelf>> GetMoodAsync(string moodParams, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Shelf>>([]);
 }
