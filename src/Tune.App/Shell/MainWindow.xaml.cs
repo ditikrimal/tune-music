@@ -28,6 +28,13 @@ public partial class MainWindow : Window
                 if (e.PropertyName == nameof(PlayerBarViewModel.IsPlaying)) UpdateSpin(vm.Player.IsPlaying);
             };
             Loaded += (_, _) => UpdateSpin(vm.Player.IsPlaying);
+            // full-screen Now Playing: the window covers the whole monitor while it's open
+            vm.NowPlaying.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(NowPlayingViewModel.IsFullScreen)) return;
+                _full ??= new Tune.App.Platform.FullScreen(this);
+                if (vm.NowPlaying.IsFullScreen) _full.Enter(); else _full.Exit();
+            };
         };
                 SourceInitialized += (_, _) =>
         {
@@ -38,6 +45,8 @@ public partial class MainWindow : Window
             RestorePlacement();
         };
     }
+
+    private Tune.App.Platform.FullScreen? _full;
 
     private const string PlacementKey = "window.main";
 
@@ -60,6 +69,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        Vm.NowPlaying.IsFullScreen = false; // save the normal window size, not the full-screen one
         SavePlacement();
         if (!App.IsQuitting && Vm.Services.Library.GetSetting("window.closeToTray") == "0")
         {
@@ -122,6 +132,12 @@ public partial class MainWindow : Window
                 break;
             case Key.F when !ctrl && !alt && !typing:
                 Vm.NowPlaying.ToggleCommand.Execute(null);
+                break;
+            case Key.F11:
+                Vm.NowPlaying.ToggleFullScreenCommand.Execute(null);
+                break;
+            case Key.Escape when !typing && Vm.NowPlaying.IsFullScreen:
+                Vm.NowPlaying.IsFullScreen = false;
                 break;
             case Key.Escape when !typing && Vm.NowPlaying.IsOpen:
                 Vm.NowPlaying.IsOpen = false;

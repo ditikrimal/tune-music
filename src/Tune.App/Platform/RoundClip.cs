@@ -31,6 +31,14 @@ public static class RoundClip
     }
 }
 
+/// <summary>Shared render caches for heavy, rarely-changing visuals (a blurred backdrop is drawn small and reused).</summary>
+public static class Caches
+{
+    public static readonly BitmapCache Quarter = Frozen(new BitmapCache { RenderAtScale = 0.25 });
+
+    private static BitmapCache Frozen(BitmapCache c) { c.Freeze(); return c; }
+}
+
 /// <summary>How many columns of at least <c>ConverterParameter</c> pixels fit in the bound width (at least 1).</summary>
 public sealed class ColumnsConverter : System.Windows.Data.IValueConverter
 {

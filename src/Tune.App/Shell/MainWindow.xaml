@@ -333,6 +333,10 @@
                             Tag="{Binding DataContext.NowPlaying.IsOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:BoolToOnConverter.Instance}}">
                         <p:Icon Data="{StaticResource IcoLyrics}" />
                     </Button>
+                    <Button Style="{StaticResource IconButton}" ToolTip="Full screen (F11)" AutomationProperties.Name="Full screen"
+                            Command="{Binding DataContext.NowPlaying.ToggleFullScreenCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <p:Icon Data="{StaticResource IcoFullscreen}" />
+                    </Button>
                     <Button x:Name="MiniButton" Style="{StaticResource IconButton}" ToolTip="Mini-player" Click="Mini_Click">
                         <p:Icon Data="{StaticResource IcoMini}" />
                     </Button>
@@ -345,6 +349,10 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- ===================== full-screen Now Playing (F11): over everything ===================== -->
+        <views:ImmersiveView Grid.ColumnSpan="2" DataContext="{Binding NowPlaying}"
+                             Visibility="{Binding IsFullScreen, Converter={StaticResource BoolToVis}}" />
 
         <!-- ===================== first-run setup overlay ===================== -->
         <Grid Grid.RowSpan="2" Grid.ColumnSpan="2" Background="#F2121212"

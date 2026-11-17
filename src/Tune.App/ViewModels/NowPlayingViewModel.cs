@@ -25,6 +25,10 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     [ObservableProperty] private string? _status;
     [ObservableProperty] private string? _source;
     [ObservableProperty] private int _currentIndex = -1;
+    /// <summary>Full screen: art + lyrics over the whole window, the window covering the screen.</summary>
+    [ObservableProperty] private bool _isFullScreen;
+    /// <summary>Full screen without lyrics: the cover sits in the middle.</summary>
+    [ObservableProperty] private bool _showLyrics = true;
 
     public NowPlayingViewModel(PlayerBarViewModel player, LyricsService lyrics)
     {
@@ -45,7 +49,31 @@ public sealed partial class NowPlayingViewModel : ObservableObject
     partial void OnIsOpenChanged(bool value)
     {
         if (value) _ = LoadAsync();
+        else IsFullScreen = false;
     }
+
+    /// <summary>Full screen was opened straight from the player bar: leaving it goes back to the page, not to Now Playing.</summary>
+    private bool _closeAfterFullScreen;
+
+    partial void OnIsFullScreenChanged(bool value)
+    {
+        if (value)
+        {
+            _closeAfterFullScreen = !IsOpen;
+            IsOpen = true; // loads the lyrics
+        }
+        else if (_closeAfterFullScreen)
+        {
+            _closeAfterFullScreen = false;
+            IsOpen = false;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleFullScreen() => IsFullScreen = !IsFullScreen;
+
+    [RelayCommand]
+    private void ToggleLyrics() => ShowLyrics = !ShowLyrics;
 
     [RelayCommand]
     private void Toggle() => IsOpen = !IsOpen;
