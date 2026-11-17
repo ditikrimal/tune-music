@@ -91,6 +91,18 @@ public sealed partial class ShellViewModel
         }
     }
 
+    /// <summary>"Show all" on a row: a playlist opens as a playlist, anything else (albums, singles) as a grid.</summary>
+    [RelayCommand]
+    private void OpenMore(Shelf? shelf)
+    {
+        if (shelf?.More is not { } link) return;
+        var owner = (Page as ArtistViewModel)?.Name;
+        if (link.BrowseId.StartsWith("VL", StringComparison.Ordinal))
+            OpenCardCommand.Execute(new Card(CardKind.Playlist, owner is null ? shelf.Title : $"{owner} — {shelf.Title}", owner, null, null, null, link.BrowseId[2..], null));
+        else
+            Navigate(new GridViewModel(this, shelf.Title, owner, link));
+    }
+
     [RelayCommand]
     private void OpenPlaylist(PlaylistInfo? playlist)
     {

@@ -139,6 +139,7 @@
                 </StackPanel>
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,0,104">
+                    <StackPanel>
                     <ItemsControl ItemsSource="{Binding Playlists}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -155,6 +156,17 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- followed artists, then saved albums -->
+                    <ItemsControl ItemsSource="{Binding SavedItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource SavedItem}" AutomationProperties.Name="{Binding Title}"
+                                        Command="{Binding DataContext.OpenCardCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </StackPanel>
                 </ScrollViewer>
             </DockPanel>
         </Border>

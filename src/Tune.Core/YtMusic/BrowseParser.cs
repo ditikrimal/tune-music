@@ -21,7 +21,7 @@ public static class BrowseParser
         var shelves = list.Items("contents")
             .Select(s => s.At("musicCarouselShelfRenderer"))
             .Where(s => s is not null)
-            .Select(s => CarouselShelf(s!))
+            .Select(s => CarouselShelf(s!) is { } sh ? sh with { More = null } : null)
             .Where(s => s is { Items.Count: > 0 })
             .ToList();
         return new HomePage(shelves!, list.Str("continuations", 0, "nextContinuationData", "continuation"));
@@ -58,7 +58,31 @@ public static class BrowseParser
         // rows of songs (YouTube Music's "Quick picks", "Trending songs"...) are shown as a song grid
         var listRows = contents.Count(c => c.At("musicResponsiveListItemRenderer") is not null);
         var isList = listRows > contents.Count / 2 && items.Count(i => i.Track is not null) > items.Count / 2;
-        return new Shelf(title, items, IsList: isList);
+        return new Shelf(title, items, IsList: isList, More: MoreLink(shelf));
+    }
+
+    /// <summary>"See all" for a carousel: its More button, else its title's link.</summary>
+    private static BrowseLink? MoreLink(JsonNode shelf)
+    {
+        var header = shelf.At("header", "musicCarouselShelfBasicHeaderRenderer");
+        var endpoint = header.At("moreContentButton", "buttonRenderer", "navigationEndpoint", "browseEndpoint")
+                       ?? header.At("title", "runs", 0, "navigationEndpoint", "browseEndpoint");
+        var id = endpoint.Str("browseId");
+        return id is null ? null : new BrowseLink(id, endpoint.Str("params"));
+    }
+
+    // ---------- "See all" grid (an artist's albums, singles…) ----------
+
+    public static GridPage ParseGrid(JsonNode root)
+    {
+        var title = root.At("header", "musicHeaderRenderer", "title").RunsText() ?? "";
+        var grid = root.At("contents", "singleColumnBrowseResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer", "contents")
+            .Items().Select(s => s.At("gridRenderer")).FirstOrDefault(g => g is not null);
+        var items = ItemParser.SafeMap(grid.Items("items"), i =>
+            i.At("musicTwoRowItemRenderer") is { } two ? ItemParser.TwoRowItem(two)
+            : i.At("musicResponsiveListItemRenderer") is { } list ? ItemParser.ResponsiveItem(list)
+            : null);
+        return new GridPage(title, items);
     }
 
     // ---------- album / playlist ----------
@@ -85,7 +109,11 @@ public static class BrowseParser
             .Where(c => c.Track is not null)
             .Select(c => c.Track! with { Album = albumRef, ThumbnailUrl = thumb ?? c.Track.ThumbnailUrl })
             .ToList();
-        return new Collection(title, header.At("subtitle").RunsText(), thumb, tracks);
+        // "Album • 2023" / "Single • 2021" / "EP • 2019"
+        var parts = (header.At("subtitle").RunsText() ?? "").Split('•', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var year = parts.FirstOrDefault(p => p.Length == 4 && p.All(char.IsDigit));
+        var kind = parts.FirstOrDefault(p => p != year);
+        return new Collection(title, header.At("subtitle").RunsText(), thumb, tracks, albumArtists, kind, year);
     }
 
     public static PlaylistPage ParsePlaylist(JsonNode root)
@@ -160,6 +188,15 @@ public static class BrowseParser
         }
 
         var thumb = header.At("thumbnail", "musicThumbnailRenderer", "thumbnail").BestThumbnail();
-        return new ArtistPage(name, thumb, topSongs, shelves);
+        var subs = header.At("subscriptionButton", "subscribeButtonRenderer", "subscriberCountText").RunsText();
+        var monthly = header.At("monthlyListenerCount").RunsText();
+        var about = header.At("description").RunsText()
+                    ?? sections.Items().Select(s => s.At("musicDescriptionShelfRenderer", "description").RunsText()).FirstOrDefault(d => d is not null);
+        // "Top songs" links to a playlist of all the artist's songs
+        var all = sections.Items().Select(s => s.At("musicShelfRenderer")).Where(s => s is not null)
+            .Select(s => s.Str("title", "runs", 0, "navigationEndpoint", "browseEndpoint", "browseId") ?? s.Str("bottomEndpoint", "browseEndpoint", "browseId"))
+            .FirstOrDefault(id => id is not null);
+        if (all is not null && all.StartsWith("VL", StringComparison.Ordinal)) all = all[2..];
+        return new ArtistPage(name, thumb, topSongs, shelves, browseId, subs, monthly, about, all);
     }
 }

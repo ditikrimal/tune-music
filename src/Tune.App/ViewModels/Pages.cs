@@ -333,6 +333,24 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private string? _message;
     [ObservableProperty] private bool _isRenaming;
+    [ObservableProperty] private IReadOnlyList<ArtistRef> _artists = [];
+    [ObservableProperty] private string? _albumFacts;
+    [ObservableProperty] private bool _isSaved;
+    private string? _year;
+
+    public bool IsAlbum => Kind == CollectionKind.Album;
+    public bool HasArtists => Artists.Count > 0;
+    partial void OnArtistsChanged(IReadOnlyList<ArtistRef> value) => OnPropertyChanged(nameof(HasArtists));
+
+    /// <summary>Save / remove the album from Your Library.</summary>
+    [RelayCommand]
+    private void ToggleSave()
+    {
+        if (SourceCard?.BrowseId is not { } id) return;
+        IsSaved = !IsSaved;
+        _shell.Services.Library.SetAlbumSaved(id, Title, Artists.FirstOrDefault()?.Name, ThumbnailUrl, _year, IsSaved);
+        _shell.ShowToast(IsSaved ? "Saved to Your Library" : "Removed from Your Library");
+    }
 
     private CollectionViewModel(ShellViewModel shell, CollectionKind kind, string title, string? navKey,
         Func<CancellationToken, Task<Collection>> load, long? playlistId = null)
@@ -486,6 +504,15 @@ public sealed partial class CollectionViewModel : ObservableObject, IPage
             var c = await _load(CancellationToken.None);
             Title = c.Title;
             Subtitle = c.Subtitle;
+            if (IsAlbum)
+            {
+                Artists = c.Artists ?? [];
+                _year = c.Year;
+                var minutes = (int)c.Tracks.Sum(t => t.Duration?.TotalMinutes ?? 0);
+                AlbumFacts = string.Join(" • ", new[] { c.Kind, c.Year, ShellViewModel.Songs(c.Tracks.Count), minutes > 0 ? $"{minutes} min" : null }
+                    .Where(s => !string.IsNullOrWhiteSpace(s)));
+                IsSaved = _shell.Services.Library.IsAlbumSaved(SourceCard?.BrowseId);
+            }
             ThumbnailUrl = c.ThumbnailUrl ?? ThumbnailUrl ?? c.Tracks.FirstOrDefault()?.ThumbnailUrl;
             Tracks = Rows.From(_shell, c.Tracks);
             DownloadsChanged();
@@ -596,13 +623,52 @@ public sealed partial class ArtistViewModel : ObservableObject, IPage
     [ObservableProperty] private IReadOnlyList<Shelf> _shelves = [];
     [ObservableProperty] private bool _isLoading = true;
     [ObservableProperty] private string? _message;
+    [ObservableProperty] private string? _stats;
+    [ObservableProperty] private string? _about;
+    [ObservableProperty] private bool _isFollowing;
+    [ObservableProperty] private string? _allSongs;
+    private readonly string _browseId;
 
     public ArtistViewModel(ShellViewModel shell, string browseId, string name)
     {
         _shell = shell;
         _name = name;
+        _browseId = browseId;
+        _isFollowing = shell.Services.Library.IsFollowing(browseId);
         _ = LoadAsync(browseId);
     }
+
+    public string FollowText => IsFollowing ? "Following" : "Follow";
+
+    partial void OnIsFollowingChanged(bool value) => OnPropertyChanged(nameof(FollowText));
+
+    /// <summary>Follow / unfollow: followed artists sit in Your Library (and follow the account to other devices).</summary>
+    [RelayCommand]
+    private void ToggleFollow()
+    {
+        IsFollowing = !IsFollowing;
+        _shell.Services.Library.SetFollowing(_browseId, Name, ThumbnailUrl, IsFollowing);
+        _shell.ShowToast(IsFollowing ? $"Following {Name}" : $"Unfollowed {Name}");
+    }
+
+    /// <summary>"Show all" under Popular: the artist's full song list (a YouTube Music playlist).</summary>
+    [RelayCommand]
+    private void ShowAllSongs()
+    {
+        if (AllSongs is { } id)
+            _shell.OpenCardCommand.Execute(new Card(CardKind.Playlist, $"{Name} — all songs", Name, ThumbnailUrl, null, null, id, null));
+    }
+
+    [RelayCommand]
+    private Task ShufflePlay()
+    {
+        if (TopSongs.Count == 0) return Task.CompletedTask;
+        var shuffled = TopSongs.Select(r => r.Track).OrderBy(_ => Random.Shared.Next()).ToList();
+        return _shell.Services.Playback.PlayListAsync(shuffled, 0);
+    }
+
+    [RelayCommand]
+    private Task Radio() => TopSongs.Count == 0 ? Task.CompletedTask : _shell.Services.Playback.PlayRadioAsync(TopSongs[0].Track);
 
     public string? NavKey => null;
 
@@ -616,6 +682,12 @@ public sealed partial class ArtistViewModel : ObservableObject, IPage
             TopSongs = Rows.From(_shell, a.TopSongs);
             _shell.Prefetch(a.TopSongs.Take(5), Tune.Core.Streams.PrefetchPriority.Page);
             Shelves = a.Shelves;
+            Stats = string.Join("  ·  ", new[] { a.Subscribers is null ? null : $"{a.Subscribers} subscribers", a.MonthlyListeners }
+                .Where(s => !string.IsNullOrWhiteSpace(s)));
+            About = a.About;
+            AllSongs = a.AllSongs;
+            // keep the saved name/photo fresh for Your Library
+            if (IsFollowing) _shell.Services.Library.SetFollowing(_browseId, a.Name, a.ThumbnailUrl, true);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {

@@ -96,6 +96,21 @@ public sealed partial class ShellViewModel : ObservableObject
         services.Downloads.Changed += id => _ui.BeginInvoke(DispatcherPriority.Background, () => OnDownloadChanged(id));
         services.Downloads.Failed += msg => _ui.BeginInvoke(() => ShowToast(msg));
         ReloadPlaylists();
+        ReloadSaved();
+        services.Library.SavedChanged += () => _ui.BeginInvoke(ReloadSaved);
+    }
+
+    /// <summary>Followed artists and saved albums, shown in Your Library under the playlists.</summary>
+    public ObservableCollection<Tune.Core.Models.Card> SavedItems { get; } = [];
+
+    public void ReloadSaved()
+    {
+        SavedItems.Clear();
+        var lib = Services.Library;
+        foreach (var a in lib.GetFollowedArtists())
+            SavedItems.Add(new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Artist, a.Name, "Artist", a.ThumbnailUrl, null, a.BrowseId, null, null));
+        foreach (var a in lib.GetSavedAlbums())
+            SavedItems.Add(new Tune.Core.Models.Card(Tune.Core.Models.CardKind.Album, a.Title, a.Artist is null ? "Album" : $"Album · {a.Artist}", a.ThumbnailUrl, null, a.BrowseId, null, null));
     }
 
     public AppServices Services { get; }

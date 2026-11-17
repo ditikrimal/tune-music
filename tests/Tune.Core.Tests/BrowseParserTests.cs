@@ -126,4 +126,35 @@ public class BrowseParserTests
         Assert.All(shelves, s => Assert.All(s.Items, c => Assert.False(string.IsNullOrEmpty(c.ThumbnailUrl))));
         Assert.Contains(shelves[0].Items, c => c.Kind == CardKind.Playlist && c.PlaylistId is not null);
     }
+
+    [Fact]
+    public void ParsesArtistDetailsAndSeeAllLinks()
+    {
+        var a = BrowseParser.ParseArtist(Fixture.Load("artist.json"), "UCDxKh1gFWeYsqePvgVzmPoQ");
+        Assert.Equal("6.59M", a.Subscribers);
+        Assert.False(string.IsNullOrEmpty(a.About));
+        Assert.StartsWith("OLAK5uy_", a.AllSongs); // the "Top songs" playlist, without the VL prefix
+        var albums = a.Shelves.First(s => s.Title == "Albums");
+        Assert.Equal("MPADUCDxKh1gFWeYsqePvgVzmPoQ", albums.More?.BrowseId);
+        Assert.False(string.IsNullOrEmpty(albums.More?.Params));
+    }
+
+    [Fact]
+    public void ParsesDiscographyGrid()
+    {
+        var page = BrowseParser.ParseGrid(Fixture.Load("discography.json"));
+        Assert.Equal("Arijit Singh", page.Title);
+        Assert.True(page.Items.Count > 20);
+        Assert.All(page.Items, c => Assert.Equal(CardKind.Album, c.Kind));
+        Assert.All(page.Items, c => Assert.StartsWith("MPRE", c.BrowseId));
+    }
+
+    [Fact]
+    public void ParsesAlbumKindYearAndArtists()
+    {
+        var album = BrowseParser.ParseAlbum(Fixture.Load("album.json"), "MPREb_test");
+        Assert.NotNull(album.Kind);
+        Assert.Matches("^[0-9]{4}$", album.Year!);
+        Assert.NotEmpty(album.Artists!);
+    }
 }

@@ -6,7 +6,7 @@ namespace Tune.Core.Library;
 public sealed partial class LibraryStore
 {
     /// <summary>Settings that follow the account to every device (Home layout, speed dial pins).</summary>
-    public static readonly IReadOnlySet<string> SyncedSettings = new HashSet<string> { "home.layout", "speeddial.pins", NotInterestedKey };
+    public static readonly IReadOnlySet<string> SyncedSettings = new HashSet<string> { "home.layout", "speeddial.pins", NotInterestedKey, ArtistsKey, AlbumsKey };
 
     /// <summary>Songs you said you're not interested in (comma-separated ids, newest first; synced).</summary>
     public const string NotInterestedKey = "taste.notInterested";
@@ -83,7 +83,8 @@ public sealed partial class LibraryStore
             Exec("INSERT INTO settings (key, value) VALUES ($k, $v) ON CONFLICT(key) DO UPDATE SET value = excluded.value", ("$k", key), ("$v", value));
             Applied(SyncKinds.Setting, key, updatedAt);
             tx.Commit();
-            return true;
         }
+        if (key is ArtistsKey or AlbumsKey) RaiseSavedChanged();
+        return true;
     }
 }

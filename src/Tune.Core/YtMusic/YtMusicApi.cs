@@ -80,6 +80,13 @@ public sealed class YtMusicApi(InnerTubeClient client) : IYtMusic
             ["params"] = moodParams,
         }, ct).ConfigureAwait(false)).Shelves;
 
+    public async Task<GridPage> GetGridAsync(BrowseLink link, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["browseId"] = link.BrowseId };
+        if (link.Params is not null) body["params"] = Uri.UnescapeDataString(link.Params);
+        return BrowseParser.ParseGrid(await client.PostAsync("browse", body, ct).ConfigureAwait(false));
+    }
+
     public async Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default) =>
         BrowseParser.ParseArtist(await client.PostAsync("browse", new JsonObject { ["browseId"] = browseId }, ct).ConfigureAwait(false), browseId);
 }

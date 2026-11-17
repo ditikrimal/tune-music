@@ -46,6 +46,9 @@ public interface IYtMusic
     Task<Collection> GetPlaylistAsync(string playlistId, CancellationToken ct = default);
     Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default);
 
+    /// <summary>A "See all" grid (an artist's albums, singles…).</summary>
+    Task<GridPage> GetGridAsync(BrowseLink link, CancellationToken ct = default) => Task.FromResult(new GridPage("", []));
+
     /// <summary>YouTube Music's Moods &amp; genres tiles.</summary>
     Task<IReadOnlyList<MoodSection>> GetMoodsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MoodSection>>([]);
 

@@ -155,6 +155,9 @@
                     <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Click="ShelfLeft_Click" />
                     <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="12" Width="30" Height="30" Background="#1F1F1F" Margin="8,0,0,0" Click="ShelfRight_Click" />
                 </StackPanel>
+                <Button DockPanel.Dock="Right" Style="{DynamicResource ShowAllLink}" Content="Show all" VerticalAlignment="Bottom" Margin="0,0,10,12"
+                        Visibility="{Binding More, Converter={StaticResource NullToVis}}" AutomationProperties.Name="Show all"
+                        Command="{Binding DataContext.OpenMoreCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
                 <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitle}" />
             </DockPanel>
             <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" CanContentScroll="False"
@@ -777,7 +780,13 @@
                                      Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVis}}"
                                      IsVisibleChanged="RenameBox_IsVisibleChanged" KeyDown="RenameBox_KeyDown" LostKeyboardFocus="RenameBox_LostFocus" />
                         </Grid>
-                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Subtle}" FontSize="14" />
+                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Subtle}" FontSize="14"
+                                   Visibility="{Binding HasArtists, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" />
+                        <!-- albums: who made it (clickable) • Album • 2023 • 12 songs • 48 min -->
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding HasArtists, Converter={StaticResource BoolToVis}}">
+                            <p:ArtistLinks Artists="{Binding Artists}" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="14" />
+                            <TextBlock Text="{Binding AlbumFacts, StringFormat='  •  {0}'}" Style="{StaticResource Subtle}" FontSize="14" />
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Grid>
@@ -821,6 +830,11 @@
                         Command="{Binding PlayCommand}" ToolTip="Play" />
                 <Button Style="{StaticResource IconButton}" Content="&#xE8B1;" FontSize="24" Width="48" Height="48" Margin="16,0,0,0"
                         Command="{Binding ShufflePlayCommand}" ToolTip="Shuffle play" />
+                <Button Style="{StaticResource ToggleIconButton}" Width="48" Height="48" Margin="8,0,0,0" Command="{Binding ToggleSaveCommand}"
+                        Tag="{Binding IsSaved, Converter={x:Static sh:BoolToOnConverter.Instance}}" AutomationProperties.Name="Save album"
+                        Visibility="{Binding IsAlbum, Converter={StaticResource BoolToVis}}" ToolTip="Save to Your Library">
+                    <p:Icon Size="24" Data="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}, Converter={x:Static sh:OnOffIconConverter.Instance}, ConverterParameter=IcoLibraryAdded|IcoLibraryAdd}" />
+                </Button>
                 <Button Style="{StaticResource ToggleIconButton}" Content="&#xE896;" FontSize="22" Width="48" Height="48" Margin="8,0,0,0"
                         Command="{Binding ToggleDownloadAllCommand}" ToolTip="{Binding DownloadAllTip}"
                         Tag="{Binding AllDownloaded, Converter={x:Static sh:BoolToOnConverter.Instance}}"
@@ -876,14 +890,62 @@
                     <StackPanel VerticalAlignment="Bottom" Margin="24,0,0,0">
                         <TextBlock Text="Artist" Style="{StaticResource Body}" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Name}" Style="{StaticResource Title1}" FontSize="52" FontWeight="Black" Margin="0,6,0,0" />
+                        <TextBlock Text="{Binding Stats}" Style="{StaticResource Subtle}" FontSize="14" Margin="0,8,0,0"
+                                   Visibility="{Binding Stats, Converter={StaticResource NullToVis}}" />
                     </StackPanel>
                 </StackPanel>
-                <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}" Width="56" Height="56" FontSize="20"
-                        HorizontalAlignment="Left" Margin="0,24,0,0" Command="{Binding PlayCommand}" ToolTip="Play top songs" />
+                <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
+                    <Button Style="{StaticResource AccentPlayButton}" Content="&#xE768;" Foreground="{DynamicResource OnAccentBrush}" Width="56" Height="56" FontSize="20"
+                            Command="{Binding PlayCommand}" ToolTip="Play top songs" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE8B1;" FontSize="24" Width="48" Height="48" Margin="16,0,0,0"
+                            Command="{Binding ShufflePlayCommand}" ToolTip="Shuffle" />
+                    <Button Style="{StaticResource IconButton}" Width="48" Height="48" Margin="4,0,0,0" Command="{Binding RadioCommand}" ToolTip="Start radio">
+                        <p:Icon Data="{StaticResource IcoRadio}" Size="24" />
+                    </Button>
+                    <Button Style="{StaticResource OutlinePill}" Content="{Binding FollowText}" Margin="16,0,0,0" VerticalAlignment="Center" MinWidth="104"
+                            Command="{Binding ToggleFollowCommand}" AutomationProperties.Name="Follow"
+                            Tag="{Binding IsFollowing, Converter={x:Static sh:BoolToOnConverter.Instance}}" />
+                </StackPanel>
                 <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" Margin="0,16,0,0" Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
-                <TextBlock Text="Popular" Style="{StaticResource SectionTitle}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource ShowAllLink}" Content="Show all" VerticalAlignment="Bottom" Margin="0,0,10,12"
+                            Command="{Binding ShowAllSongsCommand}" AutomationProperties.Name="Show all songs"
+                            Visibility="{Binding AllSongs, Converter={StaticResource NullToVis}}" />
+                    <TextBlock Text="Popular" Style="{StaticResource SectionTitle}" />
+                </DockPanel>
                 <ItemsControl ItemsSource="{Binding TopSongs}" ItemTemplate="{StaticResource TrackRowTemplate}" Tag="artist" />
                 <ItemsControl ItemsSource="{Binding Shelves}" ItemTemplate="{StaticResource ShelfTemplate}" />
+                <!-- About -->
+                <StackPanel Visibility="{Binding About, Converter={StaticResource NullToVis}}">
+                    <TextBlock Text="About" Style="{StaticResource SectionTitle}" />
+                    <Border CornerRadius="18" Background="{DynamicResource CardBrush}" Padding="24,20" MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding About}" Style="{StaticResource Body}" TextWrapping="Wrap" LineHeight="22" Foreground="{DynamicResource SubtleTextBrush}" />
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DataTemplate>
+
+    <!-- ================= "Show all": an artist's albums / singles as a grid ================= -->
+    <DataTemplate DataType="{x:Type vm:GridViewModel}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="32,0,12,120">
+            <StackPanel>
+                <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Body}" FontWeight="SemiBold" Visibility="{Binding Subtitle, Converter={StaticResource NullToVis}}" />
+                <TextBlock Text="{Binding Title}" Style="{StaticResource Title1}" FontSize="40" FontWeight="Black" Margin="0,4,0,18" />
+                <p:TuneLoader Width="44" Height="34" HorizontalAlignment="Left" Margin="4,16,0,0" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+                <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
+                <ItemsControl ItemsSource="{Binding Items}" ItemTemplate="{StaticResource CardTemplate}" Margin="-12,0,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Margin" Value="0,0,0,18" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                </ItemsControl>
             </StackPanel>
         </ScrollViewer>
     </DataTemplate>
