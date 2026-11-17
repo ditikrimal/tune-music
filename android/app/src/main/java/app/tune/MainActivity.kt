@@ -79,7 +79,7 @@ import app.tune.ui.TuneTheme
 import app.tune.ui.Type
 import kotlinx.coroutines.delay
 
-object BuildConfigLite { const val VERSION = "1.4.0" }
+object BuildConfigLite { const val VERSION = "1.5.0" }
 
 class MainActivity : ComponentActivity() {
     /** Back in Tune: catch up with changes made on other devices. */
