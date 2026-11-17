@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_cover_root" android:layout_width="match_parent" android:layout_height="match_parent">
+    <ImageView android:id="@+id/widget_cover_art" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:scaleType="centerCrop" android:background="@drawable/widget_art_shape" android:clipToOutline="true"
+        android:src="@drawable/widget_art_empty" />
+    <ImageView android:id="@+id/widget_cover_badge" android:layout_width="26dp" android:layout_height="26dp"
+        android:layout_gravity="bottom|end" android:layout_margin="4dp" android:src="@drawable/widget_play_badge"
+        android:importantForAccessibility="no" />
+</FrameLayout>

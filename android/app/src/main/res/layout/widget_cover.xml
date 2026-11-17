@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root" android:layout_width="match_parent" android:layout_height="match_parent">
+    <StackView android:id="@+id/widget_stack" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:loopViews="false" />
+    <ImageView android:id="@+id/widget_stack_empty" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:scaleType="centerCrop" android:background="@drawable/widget_art_shape" android:clipToOutline="true"
+        android:src="@drawable/widget_art_empty" android:contentDescription="Open Tune" />
+</FrameLayout>

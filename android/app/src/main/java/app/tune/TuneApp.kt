@@ -15,6 +15,8 @@ import app.tune.data.StreamCache
 import app.tune.data.NewPipeDownloader
 import app.tune.data.StreamResolver
 import app.tune.data.YtMusic
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,6 +99,9 @@ class TuneApp : Application() {
         graph = Graph(this)
         SmartRefreshWorker.schedule(this)
         graph.account?.start()
+        // likes (from the app, the widget or sync) and the accent colour show on the home-screen widget
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
+        kotlinx.coroutines.MainScope().launch { graph.library.version.debounce(300).collect { app.tune.widget.TuneWidgets.render(this@TuneApp) } }
     }
 }
 

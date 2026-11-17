@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Now playing, with play controls</string>
+    <string name="widget_square_description">Album cover with play controls</string>
+    <string name="widget_tall_description">Big cover, title and controls</string>
+    <string name="widget_cover_description">Swipe through the queue, tap a cover to play it</string>
+</resources>

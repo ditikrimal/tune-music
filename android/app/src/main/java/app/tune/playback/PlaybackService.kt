@@ -26,6 +26,7 @@ import androidx.media3.session.MediaSessionService
 import app.tune.MainActivity
 import app.tune.R
 import app.tune.TuneApp
+import app.tune.widget.TuneWidgets
 import app.tune.data.Thumbs
 import app.tune.data.Track
 import app.tune.data.OfflineMix
@@ -188,6 +189,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private val listener = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) = TuneWidgets.update(this@PlaybackService, player)
         override fun onIsPlayingChanged(isPlaying: Boolean) { if (!isPlaying) saveSession() }
         override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) { saveSession() }
 
@@ -385,6 +387,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         saveSession(now = true)
+        TuneWidgets.stopped(this)
         scope.cancel()
         session?.run { player.release(); release() }
         session = null

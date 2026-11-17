@@ -32,6 +32,26 @@
 
         <receiver android:name=".TestOfflineReceiver" android:exported="false" />
 
+        <!-- home-screen widgets (app.tune.widget) -->
+        <receiver android:name=".widget.TuneWidget" android:exported="false" android:label="Player bar">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tune_widget_info" />
+        </receiver>
+        <receiver android:name=".widget.TuneSquareWidget" android:exported="false" android:label="Square">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tune_widget_square_info" />
+        </receiver>
+        <receiver android:name=".widget.TuneTallWidget" android:exported="false" android:label="Tall">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tune_widget_tall_info" />
+        </receiver>
+        <receiver android:name=".widget.TuneCoverWidget" android:exported="false" android:label="Album cover">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/tune_widget_cover_info" />
+        </receiver>
+        <service android:name=".widget.CoverStackService" android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"
