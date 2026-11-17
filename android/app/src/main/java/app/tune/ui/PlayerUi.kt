@@ -55,6 +55,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -117,71 +122,255 @@ fun MiniPlayer(modifier: Modifier = Modifier) {
 
 // ============================== now playing ==============================
 
-private enum class NpPane { Art, Lyrics, Queue }
-
+/**
+ * Now Playing. The queue lives in a drawer under the controls (like YouTube Music): tap "Queue" or drag the bottom
+ * row up and the drawer grows while the player slides up out of its way, ending as a small row at the top.
+ */
 @Composable
 fun NowPlaying() {
     val app = LocalApp.current
     val c = LocalTune.current
     val ui by app.player.ui.collectAsState()
     val t = ui.track
-    var pane by remember { mutableStateOf(if (app.queueOpen) NpPane.Queue else NpPane.Art) }
-    BackHandler { if (pane != NpPane.Art) pane = NpPane.Art else app.nowPlayingOpen = false }
-    LaunchedEffect(app.queueOpen) { if (app.queueOpen) { pane = NpPane.Queue; app.queueOpen = false } }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var lyrics by remember { mutableStateOf(false) }
+    var full by remember { mutableStateOf(false) }
+    // 0 = queue drawer closed, 1 = open
+    var sheet by remember { mutableFloatStateOf(0f) }
+    var settleJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun settle(open: Boolean) {
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            androidx.compose.animation.core.animate(sheet, if (open) 1f else 0f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 500f)) { v, _ -> sheet = v }
+        }
+    }
+    fun dragBy(fraction: Float) { settleJob?.cancel(); sheet = (sheet + fraction).coerceIn(0f, 1f) }
 
-    // solid base first (the page behind must never show through), then the cover blurred into a glow
-    Box(Modifier.fillMaxSize().background(c.base)
-        .pointerInput(Unit) { detectVerticalDragGestures { _, dy -> if (dy > 40 && pane == NpPane.Art) app.nowPlayingOpen = false } }) {
+    BackHandler {
+        when {
+            full -> full = false
+            sheet > 0.01f -> settle(false)
+            lyrics -> lyrics = false
+            else -> app.nowPlayingOpen = false
+        }
+    }
+    LaunchedEffect(app.queueOpen) { if (app.queueOpen) { settle(true); app.queueOpen = false } }
+    if (full && t != null) { FullScreenPlayer(t) { full = false }; return }
+
+    Box(Modifier.fillMaxSize().background(c.base)) {
         CoverGlow(t?.thumbnail)
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconBtn(Ico.ChevronDown, "Close", tint = c.text, size = 30.dp) { app.nowPlayingOpen = false }
-                Text("NOW PLAYING", style = Type.label, color = c.subtle, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                IconBtn(Ico.More, "More options", tint = c.text) { t?.let { app.menuFor = it; app.menuPlaylistId = null } }
+        BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            val density = LocalDensity.current
+            val handleH = 84.dp
+            val miniH = 68.dp
+            val playerH = maxHeight - handleH
+            val rangePx = with(density) { (maxHeight - miniH - handleH).toPx() }.coerceAtLeast(1f)
+            val pushPx = rangePx * sheet
+            var lastDy by remember { mutableFloatStateOf(0f) }
+            fun release() = settle(if (kotlin.math.abs(lastDy) > 4f) lastDy < 0 else sheet > 0.5f)
+            val sheetDrag = Modifier.pointerInput(rangePx) {
+                detectVerticalDragGestures(onDragEnd = { release() }, onDragCancel = { release() }) { change, dy ->
+                    change.consume(); lastDy = dy; dragBy(-dy / rangePx)
+                }
             }
-            if (t == null) { Message("Play a song to see it here."); return@Column }
 
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                when (pane) {
+            // ---------- the player: slides up (and fades) as the drawer grows ----------
+            Column(Modifier.fillMaxWidth().height(playerH)
+                .graphicsLayer { translationY = -pushPx; alpha = (1f - sheet * 1.6f).coerceIn(0f, 1f) }
+                // pull down to close; push up to open the queue
+                .pointerInput(rangePx) {
+                    var total = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { total = 0f },
+                        onDragEnd = { if (sheet > 0f) release() },
+                    ) { change, dy ->
+                        total += dy; lastDy = dy
+                        if (total < 0 || sheet > 0f) { change.consume(); dragBy(-dy / rangePx) }
+                        else if (total > 120f && !lyrics) app.nowPlayingOpen = false
+                    }
+                }
+                .padding(horizontal = 20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconBtn(Ico.ChevronDown, "Close", tint = c.text, size = 30.dp) { app.nowPlayingOpen = false }
+                    Text("NOW PLAYING", style = Type.label, color = c.subtle, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    if (t != null) IconBtn(Ico.Fullscreen, "Full screen", tint = c.text) { full = true }
+                    IconBtn(Ico.More, "More options", tint = c.text) { t?.let { app.menuFor = it; app.menuPlaylistId = null } }
+                }
+                if (t == null) { Message("Play a song to see it here."); return@Column }
+
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
                     // as big as the space allows; swipe for next / previous, tap to play or pause
-                    NpPane.Art -> SwipeArt(t, minOf(maxWidth, maxHeight))
-                    NpPane.Lyrics -> LyricsPane(t)
-                    NpPane.Queue -> QueuePane()
+                    if (lyrics) LyricsPane(t) else SwipeArt(t, minOf(maxWidth, maxHeight))
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(t.title, style = Type.title2, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(t.artistLine, style = Type.body, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable(enabled = t.artists.any { it.browseId != null }) { app.openArtist(t.artists.firstOrNull { it.browseId != null }?.browseId) })
+                    }
+                    val dl = rememberDownloadState(t.videoId)
+                    IconBtn(if (dl == DownloadState.Done) Ico.DownloadDone else Ico.Download, "Download",
+                        tint = if (dl != DownloadState.None) c.accentText else c.subtle) {
+                        if (dl == DownloadState.None) app.download(listOf(t)) else app.graph.toast("Downloaded — remove it from the ⋯ menu")
+                    }
+                    LikeButton(t, size = 26.dp, box = 48.dp)
+                }
+                SeekBar(ui.durationMs)
+                PlayControls(big = true)
+            }
+
+            // ---------- once the drawer is up: the song as a small row at the top ----------
+            if (t != null && sheet > 0.4f) {
+                Row(Modifier.fillMaxWidth().height(miniH).graphicsLayer { alpha = ((sheet - 0.55f) / 0.45f).coerceIn(0f, 1f) }
+                    .clickable { settle(false) }.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Art(t.thumbnail, 46.dp, corner = 8.dp)
+                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                        Text(t.title, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(t.artistLine, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconBtn(if (ui.isPlaying) Ico.Pause else Ico.Play, "Play/Pause", tint = c.text, size = 30.dp) { app.player.toggle() }
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(t.title, style = Type.title2, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(t.artistLine, style = Type.body, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable(enabled = t.artists.any { it.browseId != null }) { app.openArtist(t.artists.firstOrNull { it.browseId != null }?.browseId) })
+            // ---------- the drawer: Lyrics · Queue · Sleep row on top, the queue under it ----------
+            val sheetH = handleH + with(density) { pushPx.toDp() }
+            val nested = remember(rangePx) {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        // finger moving up while the drawer isn't fully open: open it first
+                        if (available.y < 0 && sheet < 1f) { lastDy = available.y; dragBy(-available.y / rangePx); return Offset(0f, available.y) }
+                        return Offset.Zero
+                    }
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                        // the list is at its top and the finger keeps pulling down: lower the drawer
+                        if (available.y > 0 && source == NestedScrollSource.UserInput) {
+                            lastDy = available.y; dragBy(-available.y / rangePx); return Offset(0f, available.y)
+                        }
+                        return Offset.Zero
+                    }
+                    override suspend fun onPreFling(available: Velocity): Velocity {
+                        if (sheet > 0.001f && sheet < 0.999f) {
+                            settle(if (kotlin.math.abs(available.y) > 300f) available.y < 0 else sheet > 0.5f)
+                            return available
+                        }
+                        return Velocity.Zero
+                    }
                 }
-                val dl = rememberDownloadState(t.videoId)
-                IconBtn(if (dl == DownloadState.Done) Ico.DownloadDone else Ico.Download, "Download",
-                    tint = if (dl != DownloadState.None) c.accentText else c.subtle) {
-                    if (dl == DownloadState.None) app.download(listOf(t)) else app.graph.toast("Downloaded — remove it from the ⋯ menu")
-                }
-                LikeButton(t, size = 26.dp, box = 48.dp)
             }
-            SeekBar(ui.durationMs)
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                IconBtn(Ico.Shuffle, "Shuffle", tint = if (ui.shuffle) c.accentText else c.subtle) { app.player.toggleShuffle() }
-                IconBtn(Ico.Prev, "Previous", tint = c.text, size = 34.dp, box = 56.dp) { app.player.previous() }
-                Box(Modifier.size(72.dp).shadow(16.dp, CircleShape, ambientColor = c.accent, spotColor = c.accent).clip(CircleShape).background(c.accent)
-                    .clickable { app.player.toggle() }, contentAlignment = Alignment.Center) {
-                    Icon(if (ui.isPlaying) Ico.Pause else Ico.Play, "Play/Pause", tint = c.onAccent, modifier = Modifier.size(38.dp))
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(sheetH)
+                .clip(RoundedCornerShape(topStart = 24.dp * sheet, topEnd = 24.dp * sheet))
+                .background(Color(0xFF17171A).copy(alpha = 0.97f * (sheet * 3f).coerceAtMost(1f)))
+                .nestedScroll(nested)) {
+                Column(Modifier.fillMaxWidth().height(handleH).then(sheetDrag), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.padding(top = 8.dp).size(36.dp, 4.dp).clip(RoundedCornerShape(2.dp)).background(c.subtle.copy(alpha = 0.6f)))
+                    Row(Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        PaneButton(Ico.Lyrics, "Lyrics", lyrics) { lyrics = !lyrics; if (sheet > 0f) settle(false) }
+                        PaneButton(Ico.Queue, "Queue", sheet > 0.5f) { settle(sheet < 0.5f) }
+                        SleepButton()
+                    }
                 }
-                IconBtn(Ico.Next, "Next", tint = c.text, size = 34.dp, box = 56.dp) { app.player.next() }
-                IconBtn(if (ui.repeat == Player.REPEAT_MODE_ONE) Ico.RepeatOne else Ico.Repeat, "Repeat",
-                    tint = if (ui.repeat != Player.REPEAT_MODE_OFF) c.accentText else c.subtle) { app.player.cycleRepeat() }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 36.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                PaneButton(Ico.Lyrics, "Lyrics", pane == NpPane.Lyrics) { pane = if (pane == NpPane.Lyrics) NpPane.Art else NpPane.Lyrics }
-                SleepButton()
-                PaneButton(Ico.Queue, "Queue", pane == NpPane.Queue) { pane = if (pane == NpPane.Queue) NpPane.Art else NpPane.Queue }
+                if (sheet > 0.01f) QueueList(Modifier.weight(1f).graphicsLayer { alpha = (sheet * 2f).coerceAtMost(1f) })
             }
         }
     }
+}
+
+/** Shuffle · previous · play/pause · next · repeat. */
+@Composable
+private fun PlayControls(big: Boolean) {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val ui by app.player.ui.collectAsState()
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        IconBtn(Ico.Shuffle, "Shuffle", tint = if (ui.shuffle) c.accentText else c.subtle) { app.player.toggleShuffle() }
+        IconBtn(Ico.Prev, "Previous", tint = c.text, size = 34.dp, box = 56.dp) { app.player.previous() }
+        Box(Modifier.size(if (big) 72.dp else 64.dp).shadow(16.dp, CircleShape, ambientColor = c.accent, spotColor = c.accent).clip(CircleShape).background(c.accent)
+            .clickable { app.player.toggle() }, contentAlignment = Alignment.Center) {
+            Icon(if (ui.isPlaying) Ico.Pause else Ico.Play, "Play/Pause", tint = c.onAccent, modifier = Modifier.size(if (big) 38.dp else 34.dp))
+        }
+        IconBtn(Ico.Next, "Next", tint = c.text, size = 34.dp, box = 56.dp) { app.player.next() }
+        IconBtn(if (ui.repeat == Player.REPEAT_MODE_ONE) Ico.RepeatOne else Ico.Repeat, "Repeat",
+            tint = if (ui.repeat != Player.REPEAT_MODE_OFF) c.accentText else c.subtle) { app.player.cycleRepeat() }
+    }
+}
+
+// ============================== full screen ==============================
+
+/**
+ * Full-screen player: system bars hidden, screen kept on, the cover with big synced lyrics. The controls slide down
+ * out of sight after a few seconds of playing (a thin progress line stays along the bottom); a tap brings them back.
+ */
+@Composable
+private fun FullScreenPlayer(t: Track, onExit: () -> Unit) {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val ui by app.player.ui.collectAsState()
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = (view.context as? android.app.Activity)?.window
+        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
+        bars?.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        view.keepScreenOn = true
+        onDispose { bars?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()); view.keepScreenOn = false }
+    }
+    var shown by remember { mutableStateOf(true) }
+    var poke by remember { mutableIntStateOf(0) }
+    LaunchedEffect(shown, poke, ui.isPlaying) { if (shown && ui.isPlaying) { delay(3500); shown = false } }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)
+        .pointerInput(Unit) { detectTapGestures(onTap = { shown = !shown; poke++ }) }) {
+        CoverGlow(t.thumbnail)
+        // the lyrics make room while the controls are up, and use the whole height when they're away
+        val reserve by androidx.compose.animation.core.animateDpAsState(if (shown) 190.dp else 8.dp, label = "reserve")
+        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp)) {
+            val wide = maxWidth > maxHeight
+            val artWide = minOf(maxHeight * 0.62f, maxWidth * 0.36f)
+            val artTall = minOf(maxWidth * 0.6f, 260.dp)
+            if (wide) Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(0.42f)) { FullArt(t, artWide) }
+                Box(Modifier.weight(0.58f).fillMaxHeight().padding(start = 32.dp, bottom = reserve)) { LyricsPane(t, big = true) }
+            } else Column(Modifier.fillMaxSize()) {
+                Spacer(Modifier.height(24.dp))
+                FullArt(t, artTall)
+                Box(Modifier.weight(1f).fillMaxWidth().padding(top = 20.dp, bottom = reserve)) { LyricsPane(t, big = true) }
+            }
+        }
+        // the controls sink below the bottom edge when idle; a progress line takes their place
+        val pos = rememberPosition()
+        val fraction = if (ui.durationMs > 0) (pos.toFloat() / ui.durationMs).coerceIn(0f, 1f) else 0f
+        val lineAlpha by animateFloatAsState(if (shown) 0f else 1f, label = "line")
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).graphicsLayer { alpha = lineAlpha }.background(Color.White.copy(alpha = 0.15f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(c.accent))
+        }
+        androidx.compose.animation.AnimatedVisibility(shown, Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+            Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
+                .pointerInput(Unit) { detectTapGestures { poke++ } }
+                .padding(horizontal = 24.dp).padding(top = 24.dp, bottom = 16.dp)) {
+                SeekBar(ui.durationMs)
+                PlayControls(big = false)
+            }
+        }
+        androidx.compose.animation.AnimatedVisibility(shown, Modifier.align(Alignment.TopEnd),
+            enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut()) {
+            Box(Modifier.padding(8.dp)) {
+                IconBtn(Ico.FullscreenExit, "Exit full screen", tint = c.text, size = 28.dp, box = 56.dp) { onExit() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullArt(t: Track, size: androidx.compose.ui.unit.Dp) {
+    val c = LocalTune.current
+    Art(t.thumbnail, size, corner = 16.dp, modifier = Modifier.shadow(24.dp, RoundedCornerShape(16.dp)))
+    Text(t.title, style = Type.title2, color = c.text, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp))
+    Text(t.artistLine, style = Type.body, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 /**
@@ -289,7 +478,7 @@ private fun SeekBar(durationMs: Long) {
 }
 
 @Composable
-private fun LyricsPane(t: Track) {
+private fun LyricsPane(t: Track, big: Boolean = false) {
     val app = LocalApp.current
     val c = LocalTune.current
     val version by app.graph.library.version.collectAsState()
@@ -315,7 +504,7 @@ private fun LyricsPane(t: Track) {
     LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
         itemsIndexed(lines) { i, line ->
             val alpha by animateFloatAsState(if (i == current) 1f else if (i < current) 0.35f else 0.55f, label = "line")
-            Text(line.text.ifBlank { "♪" }, style = Type.title2.copy(fontSize = 24.sp, lineHeight = 32.sp),
+            Text(line.text.ifBlank { "♪" }, style = Type.title2.copy(fontSize = if (big) 30.sp else 24.sp, lineHeight = if (big) 40.sp else 32.sp),
                 color = c.text.copy(alpha = alpha), fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { app.player.seek(line.atMs) }.padding(vertical = 8.dp))
         }
@@ -325,54 +514,66 @@ private fun LyricsPane(t: Track) {
 
 // ============================== queue ==============================
 
+/** The queue inside Now Playing's drawer: the song playing now, then what's up next (hold ≡ and drag to reorder). */
 @Composable
-private fun QueuePane() {
+private fun QueueList(modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val c = LocalTune.current
     val ui by app.player.ui.collectAsState()
+    val current = ui.queue.getOrNull(ui.index)
     val upcoming = ui.queue.withIndex().drop(ui.index + 1).toList()
     val rowPx = with(LocalDensity.current) { 64.dp.toPx() }
     var dragIndex by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    Column(Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Queue", style = Type.title2, color = c.text)
-                val total = upcoming.sumOf { it.value.durationSec ?: 0 }
-                if (upcoming.isNotEmpty()) Text("${upcoming.size} songs · ${total / 60} min", style = Type.caption, color = c.subtle)
-            }
-            if (upcoming.isNotEmpty()) IconBtn(Ico.Clear, "Clear the queue") { app.player.clearUpcoming(); app.graph.toast("Queue cleared") }
-        }
-        if (upcoming.isEmpty()) { Message("Nothing queued. Songs like this one will be added automatically."); return@Column }
-        Text("NEXT UP · hold ≡ and drag to reorder", style = Type.label, color = c.subtle, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
-        LazyColumn(Modifier.fillMaxSize()) {
-            itemsIndexed(upcoming, key = { _, it -> "${it.index}${it.value.videoId}" }) { pos, (index, t) ->
-                val isDragged = dragIndex == pos
-                Row(Modifier.fillMaxWidth().height(64.dp)
-                    .graphicsLayer { translationY = if (isDragged) dragOffset else 0f; shadowElevation = if (isDragged) 16f else 0f }
-                    .clip(RoundedCornerShape(10.dp)).background(if (isDragged) c.cardHover else Color.Transparent)
-                    .clickable { app.player.skipTo(index) }.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(40.dp).pointerInput(upcoming.size) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { dragIndex = pos; dragOffset = 0f },
-                            onDrag = { change, d -> change.consume(); dragOffset += d.y },
-                            onDragEnd = {
-                                val to = (pos + (dragOffset / rowPx).roundToInt()).coerceIn(0, upcoming.size - 1)
-                                if (to != pos) app.player.move(index, upcoming[to].index)
-                                dragIndex = -1; dragOffset = 0f
-                            },
-                            onDragCancel = { dragIndex = -1; dragOffset = 0f })
-                    }, contentAlignment = Alignment.Center) { Icon(Ico.Drag, "Drag to reorder", tint = c.subtle, modifier = Modifier.size(20.dp)) }
-                    Art(t.thumbnail, 44.dp)
-                    Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        Text(t.title, style = Type.body, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            DownloadBadge(rememberDownloadState(t.videoId), 12.dp, videoId = t.videoId)
-                            Text(t.artistLine, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
-                        }
-                    }
-                    IconBtn(Ico.Close, "Remove from queue", size = 18.dp, box = 40.dp) { app.player.remove(index) }
+    LazyColumn(modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
+        item {
+            Row(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Up next", style = Type.title2, color = c.text)
+                    val total = upcoming.sumOf { it.value.durationSec ?: 0 }
+                    Text(if (upcoming.isEmpty()) "Songs like this one will be added automatically" else "${upcoming.size} songs · ${total / 60} min",
+                        style = Type.caption, color = c.subtle)
                 }
+                if (upcoming.isNotEmpty()) IconBtn(Ico.Clear, "Clear the queue") { app.player.clearUpcoming(); app.graph.toast("Queue cleared") }
+            }
+        }
+        if (current != null) item(key = "now") {
+            Row(Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(10.dp)).background(c.accentSoft).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Art(current.thumbnail, 44.dp)
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(current.title, style = Type.bodyStrong, color = c.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(current.artistLine, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text("Playing", style = Type.label, color = c.accentText, modifier = Modifier.padding(end = 8.dp))
+            }
+        }
+        itemsIndexed(upcoming, key = { _, it -> "${it.index}${it.value.videoId}" }) { pos, (index, t) ->
+            val isDragged = dragIndex == pos
+            Row(Modifier.fillMaxWidth().height(64.dp)
+                .graphicsLayer { translationY = if (isDragged) dragOffset else 0f; shadowElevation = if (isDragged) 16f else 0f }
+                .clip(RoundedCornerShape(10.dp)).background(if (isDragged) c.cardHover else Color.Transparent)
+                .clickable { app.player.skipTo(index) }.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Art(t.thumbnail, 44.dp)
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(t.title, style = Type.body, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DownloadBadge(rememberDownloadState(t.videoId), 12.dp, videoId = t.videoId)
+                        Text(t.artistLine, style = Type.caption, color = c.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+                IconBtn(Ico.Close, "Remove from queue", size = 18.dp, box = 40.dp) { app.player.remove(index) }
+                Box(Modifier.size(44.dp).pointerInput(upcoming.size) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { dragIndex = pos; dragOffset = 0f },
+                        onDrag = { change, d -> change.consume(); dragOffset += d.y },
+                        onDragEnd = {
+                            val to = (pos + (dragOffset / rowPx).roundToInt()).coerceIn(0, upcoming.size - 1)
+                            if (to != pos) app.player.move(index, upcoming[to].index)
+                            dragIndex = -1; dragOffset = 0f
+                        },
+                        onDragCancel = { dragIndex = -1; dragOffset = 0f })
+                }, contentAlignment = Alignment.Center) { Icon(Ico.Drag, "Hold and drag to reorder", tint = c.subtle, modifier = Modifier.size(22.dp)) }
             }
         }
     }
