@@ -67,6 +67,132 @@
             <TranslateTransform x:Name="Slide" Y="8" />
         </Grid.RenderTransform>
 
+        <!-- ================= WIDE: cover with title + seek on the left, the queue and controls on the right ================= -->
+        <Grid x:Name="WideView" Visibility="Collapsed">
+            <Border CornerRadius="20" Background="#141414">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="24" ShadowDepth="5" Opacity="0.6" />
+                </Border.Effect>
+            </Border>
+            <Grid p:RoundClip.Radius="20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- left: the cover fills the panel; title, artists and the seek bar sit on it -->
+                <Grid>
+                    <Image Stretch="UniformToFill" p:Art.Url="{Binding ArtUrl}" />
+                    <Border>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#33000000" Offset="0" />
+                                <GradientStop Color="#00000000" Offset="0.3" />
+                                <GradientStop Color="#E6000000" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <StackPanel x:Name="WideTop" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0" Opacity="0">
+                        <Button Style="{StaticResource ToggleIconButton}" Width="30" Height="30" Foreground="White" Command="{Binding ToggleLikeCommand}"
+                                p:LikePop.Enabled="True" Tag="{Binding IsLiked, Converter={x:Static sh:BoolToOnConverter.Instance}}" ToolTip="Save to Liked songs">
+                            <p:Icon Size="17" Data="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}, Converter={x:Static sh:OnOffIconConverter.Instance}, ConverterParameter=IcoHeart|IcoHeartOutline}" />
+                        </Button>
+                        <Button Style="{StaticResource PinButton}" Width="26" Height="26" FontSize="10" Margin="4,0,0,0" Click="Pin_Click" />
+                        <Button Style="{StaticResource IconButton}" Content="&#xE740;" Width="26" Height="26" FontSize="10" Foreground="White" Background="#B0303030" Margin="4,0,0,0" Click="Expand_Click" ToolTip="Open Tune" />
+                        <Button Style="{StaticResource IconButton}" Content="&#xE711;" Width="26" Height="26" FontSize="10" Foreground="White" Background="#B0303030" Margin="4,0,0,0" Click="Hide_Click" ToolTip="Hide mini-player" />
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Bottom" Margin="16,0,14,12">
+                        <TextBlock Style="{StaticResource TitleText}" FontSize="17" FontWeight="Bold" ToolTip="{Binding Title}" />
+                        <p:ArtistLinks Artists="{Binding Track.Artists}" Style="{StaticResource ArtistText}" FontSize="13" Margin="0,2,0,0" />
+                        <Grid Margin="-6,8,-4,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Button Style="{StaticResource IconButton}" Width="30" Height="30" Foreground="White" Command="{Binding PreviousCommand}" ToolTip="Previous">
+                                <p:Icon Data="{StaticResource IcoPrev}" Size="18" />
+                            </Button>
+                            <Slider x:Name="WideSeek" Grid.Column="1" Style="{StaticResource ThinSlider}" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position, Mode=OneWay}"
+                                    VerticalAlignment="Center" Margin="6,0" p:SliderDrag.DragStarted="Seek_Started" p:SliderDrag.DragCompleted="Seek_Completed"
+                                    AutomationProperties.Name="Seek" />
+                            <Button Grid.Column="2" Style="{StaticResource IconButton}" Width="30" Height="30" Foreground="White" Command="{Binding NextCommand}" ToolTip="Next">
+                                <p:Icon Data="{StaticResource IcoNext}" Size="18" />
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+
+                <!-- right: up next + controls, over a dark wash of the song colour -->
+                <Grid Grid.Column="1">
+                    <Border Background="{Binding Tint}" Opacity="0.55" />
+                    <Border Background="#C8101010" />
+                    <Grid Margin="10,10,10,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ItemsControl ItemsSource="{Binding Queue.Upcoming, RelativeSource={RelativeSource AncestorType=Window}}" ClipToBounds="True">
+                            <ItemsControl.OpacityMask>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="Black" Offset="0.7" />
+                                    <GradientStop Color="#40000000" Offset="1" />
+                                </LinearGradientBrush>
+                            </ItemsControl.OpacityMask>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Cursor="Hand" Focusable="False" ToolTip="{Binding Track.Title}" Click="QueueRow_Click">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="b" Background="Transparent" CornerRadius="8" Padding="4,3">
+                                                    <ContentPresenter />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="b" Property="Background" Value="#1FFFFFFF" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                        <DockPanel>
+                                            <Image Width="30" Height="30" Stretch="UniformToFill" p:Art.Url="{Binding Track.ThumbnailUrl}" p:RoundClip.Radius="5" />
+                                            <TextBlock Text="{Binding Track.Title}" Style="{StaticResource WidgetText}" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Nothing up next" Style="{StaticResource WidgetText}" Foreground="#80FFFFFF" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding Queue.HasUpcoming, RelativeSource={RelativeSource AncestorType=Window}, Converter={x:Static sh:InverseBoolToVisConverter.Instance}}" />
+                        <Grid Grid.Row="1" Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Style="{StaticResource ToggleIconButton}" Width="34" Height="34" Foreground="#CCFFFFFF" Tag="{Binding ShuffleTag}" Command="{Binding ToggleShuffleCommand}" ToolTip="Shuffle">
+                                    <p:Icon Data="{StaticResource IcoShuffle}" Size="17" />
+                                </Button>
+                                <Button Style="{StaticResource PlayButton}" Width="42" Height="42" Margin="14,0" Command="{Binding PlayPauseCommand}" ToolTip="Play/Pause">
+                                    <p:Icon Data="{Binding PlayIconKey, Converter={x:Static sh:IconKeyConverter.Instance}}" Size="19" />
+                                </Button>
+                                <Button Style="{StaticResource ToggleIconButton}" Width="34" Height="34" Foreground="#CCFFFFFF" Tag="{Binding RepeatTag}" Command="{Binding CycleRepeatCommand}" ToolTip="{Binding RepeatTip}">
+                                    <p:Icon Data="{Binding RepeatIconKey, Converter={x:Static sh:IconKeyConverter.Instance}}" Size="17" />
+                                </Button>
+                            </StackPanel>
+                            <Button Grid.Column="2" Style="{StaticResource IconButton}" Width="34" Height="34" Foreground="#CCFFFFFF" HorizontalAlignment="Right"
+                                    Click="Lyrics_Click" ToolTip="Lyrics in Tune">
+                                <p:Icon Data="{StaticResource IcoLyrics}" Size="17" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Grid>
+            <Border CornerRadius="20" BorderBrush="#26FFFFFF" BorderThickness="1" IsHitTestVisible="False" />
+        </Grid>
+
         <!-- ================= COMPACT: slim album-tinted bar ================= -->
         <Grid x:Name="CompactView">
             <Border CornerRadius="16" Background="#181818">
@@ -267,6 +393,7 @@
                 <Storyboard>
                     <DoubleAnimation Storyboard.TargetName="CompactCorner" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" />
                     <DoubleAnimation Storyboard.TargetName="SquareControls" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18" />
+                    <DoubleAnimation Storyboard.TargetName="WideTop" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18" />
                 </Storyboard>
             </BeginStoryboard>
         </EventTrigger>
@@ -275,6 +402,7 @@
                 <Storyboard>
                     <DoubleAnimation Storyboard.TargetName="CompactCorner" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
                     <DoubleAnimation Storyboard.TargetName="SquareControls" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
+                    <DoubleAnimation Storyboard.TargetName="WideTop" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3" />
                 </Storyboard>
             </BeginStoryboard>
         </EventTrigger>

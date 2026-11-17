@@ -321,8 +321,9 @@ public partial class App : Application
     {
         if (_mini is null)
         {
-            _mini = new MiniPlayerWindow(Services.Library) { DataContext = Shell.Player };
+            _mini = new MiniPlayerWindow(Services.Library) { DataContext = Shell.Player, Queue = Shell.Queue };
             _mini.ExpandRequested += ShowMain;
+            _mini.LyricsRequested += () => { ShowMain(); Shell.NowPlaying.IsOpen = true; };
             _mini.HideRequested += HideMini;
             _mini.PinToggled += () =>
             {
@@ -332,6 +333,8 @@ public partial class App : Application
             };
         }
         ApplyMiniTopmost();
+        Shell.Queue.Watching = true; // the wide style lists what's up next
+        Shell.Queue.Refresh();
         _mini.Show();
         Services.Library.SetSetting("mini.visible", "1");
         SyncUpdates();
@@ -342,6 +345,7 @@ public partial class App : Application
         if (_mini is null) return;
         _mini.SavePlacement();
         _mini.Hide();
+        Shell.Queue.Watching = false;
         Services.Library.SetSetting("mini.visible", "0");
         SyncUpdates();
     }

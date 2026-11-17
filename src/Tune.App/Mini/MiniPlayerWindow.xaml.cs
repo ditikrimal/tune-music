@@ -6,7 +6,7 @@ using Tune.Core.Library;
 
 namespace Tune.App.Mini;
 
-public enum WidgetStyle { Compact, Card, Square }
+public enum WidgetStyle { Wide, Compact, Card, Square }
 
 /// <summary>
 /// The floating widget in three styles (compact bar, album-tinted card, art tile): draggable, optionally
@@ -25,13 +25,25 @@ public partial class MiniPlayerWindow : Window
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {
-            ApplyStyle(Enum.TryParse<WidgetStyle>(_lib.GetSetting(StyleKey), out var s) ? s : WidgetStyle.Compact, save: false);
+            // the wide player is new: everyone sees it once, then their choice sticks
+            var style = _lib.GetSetting("mini.wideShown") != "1" ? WidgetStyle.Wide
+                : Enum.TryParse<WidgetStyle>(_lib.GetSetting(StyleKey), out var s) ? s : WidgetStyle.Wide;
+            _lib.SetSetting("mini.wideShown", "1");
+            ApplyStyle(style, save: true);
             RestorePlacement();
         };
         LocationChanged += (_, _) => _dirty = true;
     }
 
     public WidgetStyle Current { get; private set; }
+
+    public static readonly DependencyProperty QueueProperty = DependencyProperty.Register(nameof(Queue), typeof(Tune.App.ViewModels.QueueViewModel), typeof(MiniPlayerWindow));
+
+    /// <summary>Up next, for the wide style.</summary>
+    public Tune.App.ViewModels.QueueViewModel? Queue { get => (Tune.App.ViewModels.QueueViewModel?)GetValue(QueueProperty); set => SetValue(QueueProperty, value); }
+
+    /// <summary>Raised by the wide style lyrics button: open Tune on Now Playing.</summary>
+    public event Action? LyricsRequested;
 
     /// <summary>Raised when the user asks for the main window (⤢).</summary>
     public event Action? ExpandRequested;
@@ -45,6 +57,7 @@ public partial class MiniPlayerWindow : Window
     public void ApplyStyle(WidgetStyle style, bool save = true)
     {
         Current = style;
+        WideView.Visibility = style == WidgetStyle.Wide ? Visibility.Visible : Visibility.Collapsed;
         CompactView.Visibility = style == WidgetStyle.Compact ? Visibility.Visible : Visibility.Collapsed;
         CardView.Visibility = style == WidgetStyle.Card ? Visibility.Visible : Visibility.Collapsed;
         SquareView.Visibility = style == WidgetStyle.Square ? Visibility.Visible : Visibility.Collapsed;
@@ -52,6 +65,7 @@ public partial class MiniPlayerWindow : Window
         {
             WidgetStyle.Card => (440.0, 196.0),
             WidgetStyle.Square => (236.0, 236.0),
+            WidgetStyle.Wide => (600.0, 206.0),
             _ => (352.0, 96.0),
         };
         if (save) _lib.SetSetting(StyleKey, style.ToString());
@@ -93,7 +107,7 @@ public partial class MiniPlayerWindow : Window
         {
             var item = new MenuItem
             {
-                Header = style switch { WidgetStyle.Card => "Card with controls", WidgetStyle.Square => "Album art tile", _ => "Compact bar" },
+                Header = style switch { WidgetStyle.Wide => "Wide with queue", WidgetStyle.Card => "Card with controls", WidgetStyle.Square => "Album art tile", _ => "Compact bar" },
                 IsCheckable = true,
                 IsChecked = style == Current,
             };
@@ -127,4 +141,17 @@ public partial class MiniPlayerWindow : Window
     private void Expand_Click(object sender, RoutedEventArgs e) => ExpandRequested?.Invoke();
 
     private void Hide_Click(object sender, RoutedEventArgs e) => HideRequested?.Invoke();
+
+    private void Lyrics_Click(object sender, RoutedEventArgs e) => LyricsRequested?.Invoke();
+
+    private void QueueRow_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is Tune.App.ViewModels.TrackRowViewModel row) Queue?.JumpCommand.Execute(row);
+    }
+
+    private Tune.App.ViewModels.PlayerBarViewModel? Player => DataContext as Tune.App.ViewModels.PlayerBarViewModel;
+
+    private void Seek_Started(object sender, RoutedEventArgs e) => Player?.BeginSeek();
+
+    private void Seek_Completed(object sender, RoutedEventArgs e) => Player?.CommitSeek(WideSeek.Value);
 }

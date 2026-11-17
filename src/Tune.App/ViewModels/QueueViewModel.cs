@@ -20,8 +20,11 @@ public sealed partial class QueueViewModel : ObservableObject
     {
         _shell = shell;
         _playback = shell.Services.Playback;
-        _playback.StateChanged += () => ui.BeginInvoke(() => { if (shell.IsQueueOpen) Refresh(); });
+        _playback.StateChanged += () => ui.BeginInvoke(() => { if (shell.IsQueueOpen || Watching) Refresh(); });
     }
+
+    /// <summary>Something besides the queue panel shows the queue (the wide mini-player): keep it current.</summary>
+    public bool Watching { get; set; }
 
     public ObservableCollection<TrackRowViewModel> Upcoming { get; } = [];
     public bool HasUpcoming => Upcoming.Count > 0;
