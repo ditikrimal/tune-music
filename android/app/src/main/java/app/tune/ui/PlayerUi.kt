@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -128,9 +129,10 @@ fun NowPlaying() {
     BackHandler { if (pane != NpPane.Art) pane = NpPane.Art else app.nowPlayingOpen = false }
     LaunchedEffect(app.queueOpen) { if (app.queueOpen) { pane = NpPane.Queue; app.queueOpen = false } }
 
-    // solid base first: the gradient alone is see-through and the page behind showed at the top
-    Box(Modifier.fillMaxSize().background(c.base).background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.32f), c.base, c.base)))
+    // solid base first (the page behind must never show through), then the cover blurred into a glow
+    Box(Modifier.fillMaxSize().background(c.base)
         .pointerInput(Unit) { detectVerticalDragGestures { _, dy -> if (dy > 40 && pane == NpPane.Art) app.nowPlayingOpen = false } }) {
+        CoverGlow(t?.thumbnail)
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconBtn(Ico.ChevronDown, "Close", tint = c.text, size = 30.dp) { app.nowPlayingOpen = false }
@@ -178,6 +180,25 @@ fun NowPlaying() {
                 SleepButton()
                 PaneButton(Ico.Queue, "Queue", pane == NpPane.Queue) { pane = if (pane == NpPane.Queue) NpPane.Art else NpPane.Queue }
             }
+        }
+    }
+}
+
+/**
+ * The song's cover, small and heavily blurred, filling the screen behind Now Playing (like the Windows full screen),
+ * darkened towards the bottom so the controls stay readable. Crossfades when the song changes.
+ */
+@Composable
+private fun CoverGlow(url: String?) {
+    androidx.compose.animation.Crossfade(url, animationSpec = androidx.compose.animation.core.tween(600), label = "glow") { u ->
+        Box(Modifier.fillMaxSize()) {
+            if (u != null)
+                coil3.compose.AsyncImage(model = app.tune.data.Thumbs.sized(u, 120), contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.3f; scaleY = 1.3f }
+                        .blur(70.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded))
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = 0.30f), 0.45f to Color.Black.copy(alpha = 0.45f), 1f to Color.Black.copy(alpha = 0.88f))))
         }
     }
 }
