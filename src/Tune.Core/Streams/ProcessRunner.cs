@@ -26,6 +26,8 @@ public sealed class ProcessRunner : IProcessRunner
         psi.Environment["PYTHONIOENCODING"] = "utf-8";
 
         using var p = Process.Start(psi) ?? throw new InvalidOperationException($"Could not start {exe}");
+        // Children (yt-dlp's own child, deno) inherit the job, so a Tune crash can't leave them running.
+        KillOnExitJob.Add(p);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
         var stdout = p.StandardOutput.ReadToEndAsync(cts.Token);
