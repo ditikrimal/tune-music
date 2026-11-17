@@ -183,6 +183,14 @@ fun TrackRow(track: Track, number: Int? = null, isCurrent: Boolean = false, play
 }
 
 @Composable
+fun ShowAllChip(onClick: () -> Unit) {
+    val c = LocalTune.current
+    Text("Show all", style = Type.bodyStrong.copy(fontSize = 13.sp), color = c.text,
+        modifier = Modifier.padding(end = 16.dp, top = 12.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, c.track, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 6.dp))
+}
+
+@Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) =
     Text(text, style = Type.section, color = LocalTune.current.text, modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp))
 
@@ -231,8 +239,13 @@ fun FeaturedCard(card: Card) {
 }
 
 @Composable
-fun ShelfRow(shelf: Shelf, featured: Boolean = false) {
-    SectionTitle(shelf.title)
+fun ShelfRow(shelf: Shelf, featured: Boolean = false, owner: String? = null) {
+    val app = LocalApp.current
+    if (shelf.more == null) SectionTitle(shelf.title)
+    else Row(verticalAlignment = Alignment.CenterVertically) {
+        SectionTitle(shelf.title, Modifier.weight(1f))
+        ShowAllChip { app.openMore(shelf, owner) }
+    }
     LazyRow(contentPadding = PaddingValues(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(if (featured) 10.dp else 2.dp)) {
         items(shelf.items, key = { (it.videoId ?: it.browseId ?: it.title) + it.kind }) { if (featured) FeaturedCard(it) else CardItem(it) }
     }

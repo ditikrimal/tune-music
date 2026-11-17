@@ -73,6 +73,14 @@ class AppState(val graph: Graph, val player: PlayerConnection, val nav: NavHostC
     /** Ticks when pins or the Home layout change: Home rebuilds. */
     var homeChanged by mutableStateOf(0)
 
+    /** "Show all" on a row: playlists open as playlists, releases (albums, singles) as a grid page. */
+    fun openMore(shelf: app.tune.data.Shelf, owner: String?) {
+        val link = shelf.more ?: return
+        if (link.browseId.startsWith("VL")) nav.navigate("ytplaylist/${link.browseId.removePrefix("VL")}")
+        else nav.navigate("grid/${android.net.Uri.encode(link.browseId)}/${android.net.Uri.encode(link.params ?: "-")}/" +
+            "${android.net.Uri.encode(shelf.title)}/${android.net.Uri.encode(owner ?: "-")}")
+    }
+
     fun openArtist(browseId: String?) { if (browseId != null) { nowPlayingOpen = false; nav.navigate("artist/$browseId") } }
 
     fun toggleLike(t: Track) {

@@ -61,6 +61,12 @@ import app.tune.BuildConfigLite
 import app.tune.SmartRefreshWorker
 import app.tune.data.Collection
 import app.tune.data.ArtistPage
+import app.tune.data.isFollowing
+import app.tune.data.setFollowing
+import app.tune.data.isAlbumSaved
+import app.tune.data.setAlbumSaved
+import app.tune.data.followedArtists
+import app.tune.data.savedAlbums
 import app.tune.data.DownloadState
 import app.tune.data.Feed
 import app.tune.data.SearchResults
@@ -272,6 +278,8 @@ fun LibraryScreen() {
     val version by app.graph.library.version.collectAsState()
     val dv by app.graph.downloads.version.collectAsState()
     val playlists = remember(version) { app.graph.library.playlists() }
+    val artists = remember(version) { app.graph.library.followedArtists() }
+    val albums = remember(version) { app.graph.library.savedAlbums() }
     val likedCount = remember(version) { app.graph.library.liked().size }
     val history = remember(version) { app.graph.library.history(20).map { it.first } }
     val ui by app.player.ui.collectAsState()
@@ -360,6 +368,37 @@ fun LibraryScreen() {
                 Icon(Ico.ChevronRight, null, tint = c.subtle, modifier = Modifier.size(22.dp))
             }
         }
+        // artists you follow, then albums you saved (both follow your account)
+        if (artists.isNotEmpty()) {
+            item { SavedHeader("Artists", artists.size) }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    items(artists, key = { "a" + it.browseId }) { a ->
+                        CardItem(Card(CardKind.Artist, a.name, "Artist", a.thumbnail, browseId = a.browseId), width = 120.dp)
+                    }
+                }
+            }
+        }
+        if (albums.isNotEmpty()) {
+            item { SavedHeader("Albums", albums.size) }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    items(albums, key = { "b" + it.browseId }) { a ->
+                        CardItem(Card(CardKind.Album, a.title, listOfNotNull(a.artist, a.year).joinToString(" • ").ifEmpty { "Album" }, a.thumbnail,
+                            browseId = a.browseId), width = 140.dp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavedHeader(title: String, count: Int) {
+    val c = LocalTune.current
+    Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = Type.section, color = c.text, modifier = Modifier.weight(1f))
+        Text("$count", style = Type.caption, color = c.subtle)
     }
 }
 
@@ -513,7 +552,16 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                 Spacer(Modifier.height(16.dp))
                 Text(col.title, style = Type.title1.copy(fontSize = 26.sp), color = c.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().clickable(enabled = kind == CollectionKind.Local) { renaming = true })
-                col.subtitle?.let { Text(it, style = Type.caption, color = c.subtle, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), maxLines = 2) }
+                if (kind == CollectionKind.Album && col.artists.isNotEmpty()) {
+                    // who made it (tap to open) • Album • 2023 • 12 songs • 48 min
+                    val minutes = col.tracks.sumOf { it.durationSec ?: 0 } / 60
+                    val facts = listOfNotNull(col.kind, col.year, "${col.tracks.size} songs", if (minutes > 0) "$minutes min" else null).joinToString(" • ")
+                    Text(col.artists.joinToString(", ") { it.name }, style = Type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable(enabled = col.artists.any { it.browseId != null }) {
+                            app.openArtist(col.artists.firstOrNull { it.browseId != null }?.browseId)
+                        })
+                    Text(facts, style = Type.caption, color = c.subtle, modifier = Modifier.fillMaxWidth().padding(top = 2.dp))
+                } else col.subtitle?.let { Text(it, style = Type.caption, color = c.subtle, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), maxLines = 2) }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     PlayButtons(onPlay = { app.playList(col.tracks, 0) }, onShuffle = { app.playList(col.tracks, 0, shuffle = true) }) {
                         if (kind != CollectionKind.Downloads && col.tracks.isNotEmpty()) {
@@ -527,6 +575,14 @@ fun CollectionScreen(kind: CollectionKind, id: String) {
                             }
                             IconBtn(Ico.More, "More options", size = 26.dp, box = 52.dp) {
                                 app.collectionMenuFor = CollectionTarget(kind, id, col.title, col.subtitle, col.thumbnail ?: col.tracks.firstOrNull()?.thumbnail)
+                            }
+                        }
+                        if (kind == CollectionKind.Album) {
+                            val saved = remember(version, id) { app.graph.library.isAlbumSaved(id) }
+                            IconBtn(if (saved) Ico.LibraryAdded else Ico.LibraryAdd, if (saved) "Saved to Your library" else "Save to Your library",
+                                tint = if (saved) c.accentText else c.subtle, size = 24.dp, box = 52.dp) {
+                                app.graph.library.setAlbumSaved(id, col.title, col.artists.firstOrNull()?.name, col.thumbnail, col.year, !saved)
+                                app.graph.toast(if (saved) "Removed from Your library" else "Saved to Your library")
                             }
                         }
                         if (col.tracks.isNotEmpty()) IconBtn(Ico.SelectAll, "Select songs", size = 24.dp, box = 52.dp) { selection.active = true }
@@ -608,6 +664,10 @@ fun ArtistScreen(browseId: String) {
     val state by vm.state.collectAsState()
     LaunchedEffect(browseId) { vm.load { app.graph.yt.artist(browseId) } }
     val page = state?.getOrNull()
+    val version by app.graph.library.version.collectAsState()
+    val following = remember(version, browseId) { app.graph.library.isFollowing(browseId) }
+    // keep the saved name/photo fresh for Your library
+    LaunchedEffect(page) { if (page != null && following) app.graph.library.setFollowing(browseId, page.name, page.thumbnail, true) }
     LazyColumn(contentPadding = BottomClearance, modifier = Modifier.fillMaxSize()) {
         item { BackRow() }
         if (page == null) { item { if (state?.isFailure == true) Message("Couldn't load this artist.") else Loading() }; return@LazyColumn }
@@ -615,17 +675,80 @@ fun ArtistScreen(browseId: String) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Art(page.thumbnail, 180.dp, circle = true)
                 Text(page.name, style = Type.title1, color = c.text, modifier = Modifier.padding(top = 14.dp))
-                if (page.topSongs.isNotEmpty())
-                    PlayButtons(onPlay = { app.playList(page.topSongs, 0) }, onShuffle = { app.playList(page.topSongs, 0, shuffle = true) })
+                val stats = listOfNotNull(page.subscribers?.let { "$it subscribers" }, page.monthly).joinToString("  ·  ")
+                if (stats.isNotEmpty()) Text(stats, style = Type.caption, color = c.subtle, modifier = Modifier.padding(top = 4.dp))
+                Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (page.topSongs.isNotEmpty())
+                        PlayButtons(onPlay = { app.playList(page.topSongs, 0) }, onShuffle = { app.playList(page.topSongs, 0, shuffle = true) }) {
+                            IconBtn(Ico.Radio, "Start radio", size = 24.dp, box = 52.dp) { app.player.playRadio(page.topSongs[0]) }
+                        }
+                    FollowPill(following) {
+                        app.graph.library.setFollowing(browseId, page.name, page.thumbnail, !following)
+                        app.graph.toast(if (following) "Unfollowed ${page.name}" else "Following ${page.name}")
+                    }
+                }
             }
         }
         if (page.topSongs.isNotEmpty()) {
-            item { SectionTitle("Popular") }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SectionTitle("Popular", Modifier.weight(1f))
+                    page.allSongs?.let { id -> ShowAllChip { app.nav.navigate("ytplaylist/$id") } }
+                }
+            }
             itemsIndexed(page.topSongs.take(10), key = { i, t -> "t$i${t.videoId}" }) { i, t ->
                 Box(Modifier.padding(horizontal = 8.dp)) { TrackRow(t, number = i + 1, isCurrent = ui.track?.videoId == t.videoId) { app.playList(page.topSongs, i) } }
             }
         }
-        page.shelves.forEachIndexed { i, s -> item(key = "sh$i") { ShelfRow(s) } }
+        page.shelves.forEachIndexed { i, s -> item(key = "sh$i") { ShelfRow(s, owner = page.name) } }
+        page.about?.let { about ->
+            item { SectionTitle("About") }
+            item {
+                var open by remember { mutableStateOf(false) }
+                Text(about, style = Type.body, color = c.subtle, maxLines = if (open) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card)
+                        .clickable { open = !open }.padding(18.dp))
+            }
+        }
+    }
+}
+
+/** "Follow" / "Following" (outlined; soft accent once you follow). */
+@Composable
+private fun FollowPill(following: Boolean, onClick: () -> Unit) {
+    val c = LocalTune.current
+    Text(if (following) "Following" else "Follow", style = Type.bodyStrong.copy(fontSize = 14.sp), color = if (following) c.accentText else c.text,
+        modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(20.dp))
+            .border(1.dp, if (following) c.accent else c.subtle.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+            .background(if (following) c.accentSoft else Color.Transparent).clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 8.dp))
+}
+
+// ============================== "Show all" grid ==============================
+
+/** An artist's albums / singles: every release as a grid of cards. */
+@Composable
+fun GridScreen(link: app.tune.data.BrowseLink, title: String, owner: String?) {
+    val app = LocalApp.current
+    val c = LocalTune.current
+    val vm: Loader<app.tune.data.GridPage> = viewModel(key = "grid/${link.browseId}/${link.params}")
+    val state by vm.state.collectAsState()
+    LaunchedEffect(link) { vm.load { app.graph.yt.grid(link) } }
+    val page = state?.getOrNull()
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(androidx.compose.foundation.lazy.grid.GridCells.Adaptive(160.dp),
+        contentPadding = BottomClearance, modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)) {
+        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+            Column {
+                BackRow()
+                (owner ?: page?.title?.ifEmpty { null })?.let { Text(it, style = Type.bodyStrong, color = c.subtle, modifier = Modifier.padding(horizontal = 10.dp)) }
+                Text(title, style = Type.title1, color = c.text, modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 12.dp))
+                if (page == null) { if (state?.isFailure == true) Message("Couldn't load this — check your connection.") else Loading() }
+                else if (page.items.isEmpty()) Message("Nothing more to show here.")
+            }
+        }
+        if (page != null) items(page.items.size, key = { page.items[it].let { c -> (c.browseId ?: c.title) + it } }) { i ->
+            androidx.compose.foundation.layout.BoxWithConstraints { CardItem(page.items[i], width = maxWidth) }
+        }
     }
 }
 

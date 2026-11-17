@@ -285,6 +285,7 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) 
             } finally { endTransaction() }
         }
         homeSynced.value++
+        if (key == ARTISTS_KEY || key == ALBUMS_KEY) changed() // Your library shows them
         return true
     }
 
@@ -494,7 +495,7 @@ object SyncKinds {
 }
 
 /** Settings that follow the account to every device. */
-val SYNCED_SETTINGS = setOf("home.layout", "speeddial.pins", NOT_INTERESTED_KEY)
+val SYNCED_SETTINGS = setOf("home.layout", "speeddial.pins", NOT_INTERESTED_KEY, ARTISTS_KEY, ALBUMS_KEY)
 
 /** Songs you said you're not interested in (comma-separated ids, newest first; synced). */
 const val NOT_INTERESTED_KEY = "taste.notInterested"

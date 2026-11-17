@@ -239,7 +239,8 @@ object Parsers {
     fun home(root: JSONObject): HomePage {
         val list = root.obj("continuationContents", "sectionListContinuation")
             ?: root.obj("contents", "singleColumnBrowseResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer")
-        val shelves = list.items("contents").mapNotNull { it.obj("musicCarouselShelfRenderer") }.mapNotNull { carousel(it) }.filter { it.items.isNotEmpty() }
+        // Home / mood rows: no "Show all" (their links lead to page types shown elsewhere)
+        val shelves = list.items("contents").mapNotNull { it.obj("musicCarouselShelfRenderer") }.mapNotNull { carousel(it)?.copy(more = null) }.filter { it.items.isNotEmpty() }
         return HomePage(shelves, list.str("continuations", 0, "nextContinuationData", "continuation"))
     }
 
@@ -263,7 +264,27 @@ object Parsers {
         }
         // rows of songs ("Quick picks", "Trending songs"...) are shown as a song grid
         val listRows = contents.count { it.obj("musicResponsiveListItemRenderer") != null }
-        return Shelf(title, items, isList = listRows > contents.size / 2 && items.count { it.track != null } > items.size / 2)
+        return Shelf(title, items, isList = listRows > contents.size / 2 && items.count { it.track != null } > items.size / 2, more = moreLink(shelf))
+    }
+
+    /** "Show all" for a carousel: its More button, else its title's link. */
+    private fun moreLink(shelf: JSONObject): BrowseLink? {
+        val h = shelf.obj("header", "musicCarouselShelfBasicHeaderRenderer")
+        val e = h.obj("moreContentButton", "buttonRenderer", "navigationEndpoint", "browseEndpoint")
+            ?: h.obj("title", "runs", 0, "navigationEndpoint", "browseEndpoint")
+        val id = e.str("browseId") ?: return null
+        return BrowseLink(id, e.str("params"))
+    }
+
+    /** "Show all" grid: an artist's albums, singles… */
+    fun grid(root: JSONObject): GridPage {
+        val title = root.at("header", "musicHeaderRenderer", "title").runsText() ?: ""
+        val grid = root.at("contents", "singleColumnBrowseResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer", "contents")
+            .items().firstNotNullOfOrNull { it.obj("gridRenderer") }
+        val items = ItemParser.safeMap(grid.items("items")) { i ->
+            i.obj("musicTwoRowItemRenderer")?.let { ItemParser.twoRowItem(it) } ?: i.obj("musicResponsiveListItemRenderer")?.let { ItemParser.responsiveItem(it) }
+        }
+        return GridPage(title, items)
     }
 
     private fun header(root: JSONObject) =
@@ -282,7 +303,10 @@ object Parsers {
         val ref = AlbumRef(title, browseId)
         val tracks = ItemParser.safeMap(listItems(trackShelf(root).items("contents"))) { ItemParser.responsiveItem(it, albumArtists, ref, thumb) }
             .mapNotNull { it.track?.copy(album = ref, thumbnail = thumb ?: it.track.thumbnail) }
-        return Collection(title, h.at("subtitle").runsText(), thumb, tracks)
+        // "Album • 2023" / "Single • 2021"
+        val parts = (h.at("subtitle").runsText() ?: "").split('•').map { it.trim() }.filter { it.isNotEmpty() }
+        val year = parts.firstOrNull { it.length == 4 && it.all(Char::isDigit) }
+        return Collection(title, h.at("subtitle").runsText(), thumb, tracks, albumArtists, parts.firstOrNull { it != year }, year)
     }
 
     data class TrackPage(val tracks: List<Track>, val continuation: String?)
@@ -322,7 +346,14 @@ object Parsers {
                 topSongs += ItemParser.safeMap(listItems(songs.items("contents"))) { ItemParser.responsiveItem(it, self) }.mapNotNull { it.track }
             } else section.obj("musicCarouselShelfRenderer")?.let { carousel(it) }?.takeIf { it.items.isNotEmpty() }?.let { shelves += it }
         }
-        return ArtistPage(name, h.at("thumbnail", "musicThumbnailRenderer", "thumbnail").bestThumbnail(), topSongs, shelves)
+        val sections = root.at("contents", "singleColumnBrowseResultsRenderer", "tabs", 0, "tabRenderer", "content", "sectionListRenderer", "contents").items()
+        val about = h.at("description").runsText() ?: sections.firstNotNullOfOrNull { it.at("musicDescriptionShelfRenderer", "description").runsText() }
+        val all = sections.mapNotNull { it.obj("musicShelfRenderer") }.firstNotNullOfOrNull {
+            it.str("title", "runs", 0, "navigationEndpoint", "browseEndpoint", "browseId") ?: it.str("bottomEndpoint", "browseEndpoint", "browseId")
+        }?.removePrefix("VL")
+        return ArtistPage(name, h.at("thumbnail", "musicThumbnailRenderer", "thumbnail").bestThumbnail(), topSongs, shelves,
+            subscribers = h.at("subscriptionButton", "subscribeButtonRenderer", "subscriberCountText").runsText(),
+            monthly = h.at("monthlyListenerCount").runsText(), about = about, allSongs = all)
     }
 
     fun radio(root: JSONObject): List<Track> {
@@ -397,6 +428,12 @@ class YtMusic(private val client: InnerTube) {
             token = more.continuation
         }
         return c.copy(tracks = tracks)
+    }
+
+    fun grid(link: BrowseLink): GridPage {
+        val body = JSONObject().put("browseId", link.browseId)
+        link.params?.let { body.put("params", android.net.Uri.decode(it)) }
+        return Parsers.grid(client.post("browse", body))
     }
 
     fun artist(browseId: String) = Parsers.artist(client.post("browse", JSONObject().put("browseId", browseId)), browseId)

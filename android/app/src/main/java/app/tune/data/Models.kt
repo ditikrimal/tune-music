@@ -60,10 +60,20 @@ data class Card(
     val pinned: Boolean = false,
 )
 
-/** A Home row; [isList] = a grid of song rows (Quick picks) instead of big cards; [isSpeedDial] = pages of 3×3 tiles. */
-data class Shelf(val title: String, val items: List<Card>, val isLocal: Boolean = false, val isList: Boolean = false, val isSpeedDial: Boolean = false)
+/** A YouTube Music page to open: browse id + optional params (an artist's "Albums → More" list…). */
+data class BrowseLink(val browseId: String, val params: String? = null)
 
-data class Collection(val title: String, val subtitle: String?, val thumbnail: String?, val tracks: List<Track>)
+/** A Home row; [isList] = a grid of song rows (Quick picks) instead of big cards; [isSpeedDial] = pages of 3×3 tiles;
+ *  [more] = where "Show all" goes. */
+data class Shelf(val title: String, val items: List<Card>, val isLocal: Boolean = false, val isList: Boolean = false, val isSpeedDial: Boolean = false,
+                 val more: BrowseLink? = null)
+
+/** A list of songs. Albums also carry their [artists], [kind] ("Album", "Single", "EP") and [year]. */
+data class Collection(val title: String, val subtitle: String?, val thumbnail: String?, val tracks: List<Track>,
+                      val artists: List<ArtistRef> = emptyList(), val kind: String? = null, val year: String? = null)
+
+/** A "Show all" page: a titled grid of albums / singles. */
+data class GridPage(val title: String, val items: List<Card>)
 
 /** A Moods & genres tile ("Chill", "Hip-hop"…): [params] opens its page; [color] is YouTube Music's ARGB stripe colour. */
 data class MoodCategory(val title: String, val params: String, val color: Long, val thumbnail: String? = null)
@@ -71,7 +81,9 @@ data class MoodCategory(val title: String, val params: String, val color: Long, 
 /** "Moods & moments" or "Genres". */
 data class MoodSection(val title: String, val items: List<MoodCategory>)
 
-data class ArtistPage(val name: String, val thumbnail: String?, val topSongs: List<Track>, val shelves: List<Shelf>)
+/** An artist's page. [allSongs]: the playlist behind "Popular → Show all"; [subscribers] / [monthly] as YouTube Music writes them. */
+data class ArtistPage(val name: String, val thumbnail: String?, val topSongs: List<Track>, val shelves: List<Shelf>,
+                      val subscribers: String? = null, val monthly: String? = null, val about: String? = null, val allSongs: String? = null)
 
 data class SearchResults(
     val top: Card?,

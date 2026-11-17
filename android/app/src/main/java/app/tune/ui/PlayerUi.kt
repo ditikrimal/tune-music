@@ -162,7 +162,7 @@ fun NowPlaying() {
         CoverGlow(t?.thumbnail)
         BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             val density = LocalDensity.current
-            val handleH = 84.dp
+            val handleH = 112.dp // Lyrics · Queue · Sleep, the arrow, and room above the screen edge
             val miniH = 68.dp
             val playerH = maxHeight - handleH
             val rangePx = with(density) { (maxHeight - miniH - handleH).toPx() }.coerceAtLeast(1f)
@@ -287,7 +287,7 @@ private fun PlayControls(big: Boolean) {
     Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         IconBtn(Ico.Shuffle, "Shuffle", tint = if (ui.shuffle) c.accentText else c.subtle) { app.player.toggleShuffle() }
         IconBtn(Ico.Prev, "Previous", tint = c.text, size = 34.dp, box = 56.dp) { app.player.previous() }
-        Box(Modifier.size(if (big) 72.dp else 64.dp).shadow(16.dp, CircleShape, ambientColor = c.accent, spotColor = c.accent).clip(CircleShape).background(c.accent)
+        Box(Modifier.size(if (big) 72.dp else 64.dp).clip(CircleShape).background(c.accent)
             .clickable { app.player.toggle() }, contentAlignment = Alignment.Center) {
             Icon(if (ui.isPlaying) Ico.Pause else Ico.Play, "Play/Pause", tint = c.onAccent, modifier = Modifier.size(if (big) 38.dp else 34.dp))
         }
