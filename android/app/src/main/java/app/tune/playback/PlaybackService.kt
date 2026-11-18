@@ -137,7 +137,14 @@ class PlaybackService : MediaSessionService() {
 
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        session = MediaSession.Builder(this, player).setSessionActivity(open).build()
+        // Media3 gives apps it can't verify (home-screen widgets, other launchers) only a reduced command set,
+        // so their play/pause/skip were silently dropped. Everyone gets the normal playback commands.
+        session = MediaSession.Builder(this, player).setSessionActivity(open)
+            .setCallback(object : MediaSession.Callback {
+                override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo) =
+                    MediaSession.ConnectionResult.AcceptedResultBuilder(session).build()
+            })
+            .build()
         restoreSession()
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) })
         scope.launch {
