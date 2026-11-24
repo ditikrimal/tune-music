@@ -356,8 +356,44 @@ object Parsers {
             monthly = h.at("monthlyListenerCount").runsText(), about = about, allSongs = all)
     }
 
-    fun radio(root: JSONObject): List<Track> {
+    fun radio(root: JSONObject): List<Track> = panelTracks(root.find("playlistPanelRenderer"))
+
+    /** The radio with its tuner chips, continuation and Related tab (see [RadioPage]). */
+    fun radioPage(root: JSONObject): RadioPage {
         val panel = root.find("playlistPanelRenderer")
+        val related = findAll(root, "tabRenderer").mapNotNull { it.str("endpoint", "browseEndpoint", "browseId") }.firstOrNull { it.startsWith("MPTRt") }
+        return RadioPage(radio(root), chips(root), radioContinuation(panel), related)
+    }
+
+    /** More songs of an endless radio. */
+    fun radioMore(root: JSONObject): RadioPage {
+        val panel = root.obj("continuationContents", "playlistPanelContinuation")
+        return RadioPage(panelTracks(panel), emptyList(), radioContinuation(panel))
+    }
+
+    /** The radio tuner chips ("Popular", "Chill", "2010s", "Hip hop"…), without "All". */
+    fun chips(root: JSONObject): List<VibeChip> {
+        val out = mutableListOf<VibeChip>()
+        for (chip in findAll(root, "chipCloudChipRenderer")) {
+            val we = chip.obj("navigationEndpoint", "queueUpdateCommand", "fetchContentsCommand", "watchEndpoint") ?: continue
+            val name = chip.at("text").runsText()?.takeIf { it.isNotBlank() && it != "All" } ?: continue
+            val playlist = we.str("playlistId") ?: continue
+            if (out.none { it.name == name }) out += VibeChip(name, playlist, we.str("params"), VibeChip.kindOf(name))
+        }
+        return out
+    }
+
+    /** A song's Related tab: "You might also like" songs, similar artists, recommended playlists. */
+    fun related(root: JSONObject): RelatedPage {
+        val cards = findAll(root, "musicCarouselShelfRenderer").mapNotNull { runCatching { carousel(it) }.getOrNull() }.flatMap { it.items }
+        return RelatedPage(cards.mapNotNull { it.track }.distinctBy { it.videoId },
+            cards.filter { it.kind == CardKind.Artist }, cards.filter { it.kind == CardKind.Playlist })
+    }
+
+    private fun radioContinuation(panel: Any?): String? =
+        panel.str("continuations", 0, "nextRadioContinuationData", "continuation") ?: panel.str("continuations", 0, "nextContinuationData", "continuation")
+
+    private fun panelTracks(panel: Any?): List<Track> {
         val videos = panel.items("contents").mapNotNull {
             it.obj("playlistPanelVideoRenderer") ?: it.obj("playlistPanelVideoWrapperRenderer", "primaryRenderer", "playlistPanelVideoRenderer")
         }
@@ -368,6 +404,19 @@ object Parsers {
             Track(id, title, ItemParser.artists(byline, false), ItemParser.album(byline),
                 ItemParser.parseDuration(v.at("lengthText").runsText()), v.at("thumbnail").bestThumbnail())
         }.distinctBy { it.videoId }
+    }
+
+    /** Every value under [key], anywhere in the tree. */
+    fun findAll(node: Any?, key: String, out: MutableList<JSONObject> = mutableListOf()): List<JSONObject> {
+        when (node) {
+            is JSONObject -> for (k in node.keys()) {
+                val child = node.opt(k)
+                if (k == key && child is JSONObject) out += child
+                findAll(child, key, out)
+            }
+            is JSONArray -> for (i in 0 until node.length()) findAll(node.opt(i), key, out)
+        }
+        return out
     }
 
     fun lyricsBrowseId(node: Any?): String? {
@@ -412,6 +461,17 @@ class YtMusic(private val client: InnerTube) {
 
     fun radio(videoId: String) = Parsers.radio(client.post("next", JSONObject()
         .put("videoId", videoId).put("playlistId", "RDAMVM$videoId").put("isAudioOnly", true)))
+
+    /** A song's radio with chips, continuation and Related id; [tuning] picks one of its chips. */
+    fun radioPage(videoId: String, tuning: VibeChip? = null): RadioPage {
+        val body = JSONObject().put("videoId", videoId).put("playlistId", tuning?.playlistId ?: "RDAMVM$videoId").put("isAudioOnly", true)
+        tuning?.params?.let { body.put("params", it) }
+        return Parsers.radioPage(client.post("next", body))
+    }
+
+    fun radioMore(continuation: String) = Parsers.radioMore(client.post("next", JSONObject().put("continuation", continuation).put("isAudioOnly", true)))
+
+    fun related(relatedId: String) = Parsers.related(client.post("browse", JSONObject().put("browseId", relatedId)))
 
     fun album(browseId: String) = Parsers.album(client.post("browse", JSONObject().put("browseId", browseId)), browseId)
 

@@ -36,7 +36,9 @@ class Graph(context: Context) {
     val yt = YtMusic(InnerTube(http))
     val streams = StreamResolver()
     val lyrics = LyricsService(http, yt) { library.setting("lyrics.synced") != "0" }
-    val feed = FeedBuilder(library, yt)
+    /** Recommendations: YouTube Music's per-song radios, vibe chips and Related, cached, steered by what you listen to. */
+    val vibe = app.tune.data.VibeEngine(library, app.tune.data.Signals(library, yt))
+    val feed = FeedBuilder(library, yt, vibe)
     val moods = app.tune.data.MoodsCatalog(library, yt)
 
     private val _online = MutableStateFlow(true)

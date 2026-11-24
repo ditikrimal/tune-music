@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -526,6 +527,9 @@ private fun QueueList(modifier: Modifier = Modifier) {
     val rowPx = with(LocalDensity.current) { 64.dp.toPx() }
     var dragIndex by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    val chips by app.graph.vibe.chips.collectAsState()
+    val tuning by app.graph.vibe.tuning.collectAsState()
+    val vibe by app.graph.vibe.vibe.collectAsState()
     LazyColumn(modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
         item {
             Row(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -534,8 +538,27 @@ private fun QueueList(modifier: Modifier = Modifier) {
                     val total = upcoming.sumOf { it.value.durationSec ?: 0 }
                     Text(if (upcoming.isEmpty()) "Songs like this one will be added automatically" else "${upcoming.size} songs · ${total / 60} min",
                         style = Type.caption, color = c.subtle)
+                    // what the radio follows: the chip you picked, or the vibe your recent songs share
+                    val note = tuning?.let { "Tuned to $it" } ?: vibe?.let { "Following your ${it.lowercase()} vibe" }
+                        ?: if (chips.isNotEmpty()) "Following what you play" else null
+                    if (note != null) Text(note, style = Type.caption, color = c.accentText)
                 }
                 if (upcoming.isNotEmpty()) IconBtn(Ico.Clear, "Clear the queue") { app.player.clearUpcoming(); app.graph.toast("Queue cleared") }
+            }
+        }
+        // YouTube Music's radio tuner: All (follow the vibe) · Popular · Discover · moods · eras · genres
+        if (chips.isNotEmpty()) item(key = "chips") {
+            val names = listOf<String?>(null) + listOfNotNull(tuning?.takeIf { t -> chips.none { it.name == t } }) + chips.map { it.name }
+            LazyRow(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) {
+                items(names.size) { i ->
+                    val name = names[i]
+                    val on = name == tuning
+                    Box(Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) c.accent else c.cardHover)
+                        .clickable { if (!on) app.graph.vibe.tuning.value = name }.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                        Text(name ?: "All", style = Type.label, color = if (on) c.onAccent else c.text)
+                    }
+                }
             }
         }
         if (current != null) item(key = "now") {

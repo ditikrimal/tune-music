@@ -20,9 +20,10 @@ data class Feed(val shelves: List<Shelf>, val offline: Boolean)
 class Taste(allPlays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<Pair<String, Long>>, private val now: Long,
             notInterested: Set<String> = emptySet()) {
     private val plays = allPlays.filter { it.first.videoId !in notInterested }
-    data class Entry(val track: Track, val lately: Double, val allTime: Double, val plays: Int, val lastPlayed: Long?, val skips: Int, val liked: Boolean)
+    data class Entry(val track: Track, val lately: Double, val allTime: Double, val plays: Int, val lastPlayed: Long?, val skips: Int, val liked: Boolean,
+                     val now: Double = 0.0)
 
-    private class Acc(val t: Track) { var l = 0.0; var a = 0.0; var p = 0; var last: Long? = null; var s = 0; var like = false }
+    private class Acc(val t: Track) { var l = 0.0; var a = 0.0; var n = 0.0; var p = 0; var last: Long? = null; var s = 0; var like = false }
 
     private val songs = HashMap<String, Entry>()
     private val artists = HashMap<String, Double>()
@@ -34,19 +35,19 @@ class Taste(allPlays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<P
         for ((t, at) in plays) {
             val e = acc.getOrPut(t.videoId) { Acc(t) }
             val days = max(0.0, (now - at) / DAY.toDouble())
-            e.l += decay(days, 30.0); e.a += decay(days, 120.0); e.p++
+            e.l += decay(days, 30.0); e.a += decay(days, 120.0); e.n += decay(days, 2.0); e.p++
             if (e.last == null || at > e.last!!) e.last = at
         }
         for (t in liked) acc.getOrPut(t.videoId) { Acc(t) }.apply { l += 2.5; a += 2.5; like = true }
         for ((id, at) in skips) {
             val e = acc[id] ?: continue
             val days = max(0.0, (now - at) / DAY.toDouble())
-            e.l -= 0.6 * decay(days, 30.0); e.a -= 0.6 * decay(days, 120.0); e.s++
+            e.l -= 0.6 * decay(days, 30.0); e.a -= 0.6 * decay(days, 120.0); e.n -= 0.6 * decay(days, 2.0); e.s++
         }
         skippedIds = skips.filter { now - it.second < 60 * DAY }.groupBy { it.first }
             .filter { (id, g) -> g.size >= 2 && acc[id].let { it == null || (it.p <= 1 && !it.like) } }.keys + notInterested
         for ((id, e) in acc) {
-            songs[id] = Entry(e.t, e.l, e.a, e.p, e.last, e.s, e.like)
+            songs[id] = Entry(e.t, e.l, e.a, e.p, e.last, e.s, e.like, e.n)
             for (a in e.t.artists) artists[artistKey(a)] = (artists[artistKey(a)] ?: 0.0) + max(0.0, e.l + e.a * 0.3)
         }
         topArtist = artists.values.maxOrNull()?.coerceAtLeast(1e-6) ?: 1.0
@@ -71,14 +72,19 @@ class Taste(allPlays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<P
         songs.values.flatMap { it.track.artists }.filter { it.browseId != null }.groupBy { artistKey(it) }
             .entries.sortedByDescending { artists[it.key] ?: 0.0 }.filter { (artists[it.key] ?: 0.0) > 0.3 }.map { it.value.first() }.take(max)
 
-    /** Songs to start radios from, weighted by how much you like them lately (seeds vary day to day). */
+    /** What you're into these days (plays of the last few days count most), best first. */
+    fun rightNow() = songs.values.filter { it.now > 0.05 }.sortedByDescending { it.now }
+
+    /** Songs to start radios from: weighted by how much you like them lately, and much more by the last few days
+     *  (so Home follows the mood you're in); seeds vary day to day. */
     fun seeds(count: Int, random: kotlin.random.Random): List<Track> {
-        val pool = lately().filter { it.track.videoId !in skippedIds }.take(20).toMutableList()
+        fun w(e: Entry) = max(0.01, e.lately + 2.5 * max(0.0, e.now))
+        val pool = songs.values.filter { it.lately > 0.05 && it.track.videoId !in skippedIds }.sortedByDescending(::w).take(20).toMutableList()
         val chosen = mutableListOf<Track>()
         while (chosen.size < count && pool.isNotEmpty()) {
-            var roll = random.nextDouble() * pool.sumOf { it.lately }
+            var roll = random.nextDouble() * pool.sumOf(::w)
             var i = 0
-            while (i < pool.size - 1 && roll > pool[i].lately) { roll -= pool[i].lately; i++ }
+            while (i < pool.size - 1 && roll > w(pool[i])) { roll -= w(pool[i]); i++ }
             chosen += pool.removeAt(i).track
         }
         return chosen
@@ -104,6 +110,8 @@ class Taste(allPlays: List<Pair<Track, Long>>, liked: List<Track>, skips: List<P
 enum class HomeSection(val label: String, val description: String) {
     SpeedDial("Speed dial", "Your pins and most-played songs"),
     QuickPicks("Quick picks", "New songs you'll like, mixed with favourites"),
+    Vibe("Keep the vibe going", "More of what you just listened to"),
+    Mixes("Mood mixes", "Your songs by mood, with new ones"),
     Because("Because you played", "More like songs you play a lot"),
     Forgotten("Forgotten favourites", "Old favourites you haven't played lately"),
     Artists("Your top artists", "The artists you play most"),
@@ -178,7 +186,7 @@ object SpeedDialPins {
 }
 
 /** Home in the user's layout; everything personal ranked by [Taste] (port of Tune.Core FeedBuilder). */
-class FeedBuilder(private val lib: Library, private val api: YtMusic) {
+class FeedBuilder(private val lib: Library, private val api: YtMusic, private val vibe: VibeEngine? = null) {
     private val radioCache = ConcurrentHashMap<String, Pair<Long, List<Track>>>()
     private val pictures = ConcurrentHashMap<String, Pair<Long, String?>>()
 
@@ -197,6 +205,10 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
             var seeds = taste.seeds(6, random)
             if (seeds.isEmpty()) seeds = lib.recent(6)
             val radios = seeds.map { s -> async { radio(s.videoId, now, fresh) } }.awaitAll()
+            // "You might also like" of what you played most these days widens Quick picks the way YouTube's does
+            val related = if (vibe == null) emptyList() else taste.rightNow().take(2).map { e ->
+                async { runCatching { vibe.signals.related(e.track.videoId) }.getOrNull()?.songs?.takeIf { it.isNotEmpty() }?.let { listOf(e.track) + it } }
+            }.awaitAll()
             val rows = HashMap<HomeSection, List<Shelf>>()
             val shown = HashSet<String>()
 
@@ -204,11 +216,20 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
                 rows[HomeSection.SpeedDial] = listOf(Shelf("Speed dial", it, isLocal = true, isSpeedDial = true))
             }
             if (HomeSection.QuickPicks in layout) {
-                val picks = quickPicks(taste, radios, shown, random, jitter = fresh)
+                val picks = quickPicks(taste, radios + related, shown, random, jitter = fresh)
                 if (picks.size >= 8) {
                     rows[HomeSection.QuickPicks] = listOf(Shelf("Quick picks", picks.map(::songCard), isLocal = true, isList = true))
                     picks.forEach { shown += it.videoId }
                 }
+            }
+            if (vibe != null && HomeSection.Vibe in layout) vibeRow(shown, random)?.let { row ->
+                rows[HomeSection.Vibe] = listOf(row)
+                row.items.forEach { c -> c.videoId?.let { shown += it } }
+            }
+            if (vibe != null && HomeSection.Mixes in layout) {
+                val mixes = runCatching { vibe.mixes(taste, shown, 3, 12, random) }.onFailure { android.util.Log.w("Tune", "Mood mixes unavailable: $it") }.getOrDefault(emptyList())
+                rows[HomeSection.Mixes] = mixes.map { (mood, tracks) -> Shelf("Your ${mood.lowercase()} mix", tracks.map(::songCard), isLocal = true) }
+                mixes.forEach { (_, tracks) -> tracks.forEach { shown += it.videoId } }
             }
             if (HomeSection.Because in layout) {
                 val because = mutableListOf<Shelf>()
@@ -238,6 +259,17 @@ class FeedBuilder(private val lib: Library, private val api: YtMusic) {
             rows[HomeSection.Discovery] = d.orEmpty()
             Feed(layout.flatMap { rows[it].orEmpty() }, offline = d == null)
         }
+    }
+
+    /** "Keep the vibe going": your latest session (up to half a day ago) continued in its vibe; "· Chill" when it had a clear mood. */
+    private suspend fun vibeRow(shown: Set<String>, random: kotlin.random.Random): Shelf? {
+        val engine = vibe ?: return null
+        val session = engine.session(null, maxAge = 12 * HOUR)
+        if (session.played.size < 2) return null
+        val (tracks, v) = runCatching { engine.rank(session, HashSet(shown), 12, null, random) }
+            .onFailure { android.util.Log.w("Tune", "Keep the vibe unavailable: $it") }.getOrNull() ?: return null
+        if (tracks.size < 3) return null
+        return Shelf(if (v != null) "Keep the vibe going · $v" else "Keep the vibe going", tracks.map(::songCard), isLocal = true)
     }
 
     /** Pins first (your own playlists kept current: name, art, deleted), then the songs you come back to. */

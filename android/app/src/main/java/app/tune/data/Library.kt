@@ -13,7 +13,7 @@ data class PlaylistInfo(val id: Long, val name: String, val count: Int, val thum
  * Everything Tune remembers on the phone: play history, likes, playlists, settings, downloads.
  * Same tables as the Windows app's LibraryStore. [version] ticks on every change so screens refresh.
  */
-class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) {
+class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 5) {
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version
 
@@ -36,6 +36,7 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) 
         db.execSQL("CREATE TABLE downloads (video_id TEXT PRIMARY KEY, path TEXT, bytes INTEGER NOT NULL DEFAULT 0, added_at INTEGER NOT NULL, smart INTEGER NOT NULL DEFAULT 0)")
         createSync(db, fresh = true)
         createSkips(db)
+        createSignals(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -45,6 +46,32 @@ class Library(context: Context) : SQLiteOpenHelper(context, "tune.db", null, 4) 
         if (oldVersion < 3) createSync(db, fresh = false)
         // v4: early skips (a "not now" signal for recommendations)
         if (oldVersion < 4) createSkips(db)
+        // v5: what YouTube Music says about each song (radio, vibe chips, Related), cached for recommendations
+        if (oldVersion < 5) createSignals(db)
+    }
+
+    private fun createSignals(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS song_signals (video_id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS song_signals_at ON song_signals(at)")
+    }
+
+    fun signals(videoId: String): SongSignals? =
+        readableDatabase.rawQuery("SELECT json FROM song_signals WHERE video_id = ?", arrayOf(videoId)).use {
+            if (it.moveToFirst()) SongSignals.fromJson(it.getString(0)) else null
+        }
+
+    fun saveSignals(s: SongSignals) {
+        writableDatabase.insertWithOnConflict("song_signals", null, ContentValues().apply {
+            put("video_id", s.videoId); put("json", s.toJson().toString()); put("at", s.at)
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+        if (kotlin.random.Random.nextInt(50) == 0)
+            writableDatabase.execSQL("DELETE FROM song_signals WHERE video_id NOT IN (SELECT video_id FROM song_signals ORDER BY at DESC LIMIT 3000)")
+    }
+
+    /** A skip that also remembers the song (so recommendations know whose song it was). */
+    fun recordSkip(t: Track, at: Long = System.currentTimeMillis()) {
+        saveTrack(writableDatabase, t)
+        recordSkip(t.videoId, at)
     }
 
     private fun createSkips(db: SQLiteDatabase) {

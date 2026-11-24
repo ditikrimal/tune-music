@@ -47,7 +47,8 @@ object TuneUri {
     fun of(videoId: String): Uri = "$SCHEME://$videoId".toUri()
 }
 
-fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
+/** [auto]: added by the radio, so the radio may re-steer it later (songs you add yourself are never touched). */
+fun Track.toMediaItem(auto: Boolean = false): MediaItem = MediaItem.Builder()
     .setMediaId(videoId)
     .setUri(TuneUri.of(videoId))
     .setMediaMetadata(MediaMetadata.Builder()
@@ -56,11 +57,14 @@ fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
         .setAlbumTitle(album?.title)
         .setArtworkUri(Thumbs.sized(thumbnail, 544)?.toUri())
         .setDurationMs(durationSec?.let { it * 1000L })
-        .setExtras(Bundle().apply { putString("track", toJson().toString()) })
+        .setExtras(Bundle().apply { putString("track", toJson().toString()); if (auto) putBoolean("auto", true) })
         .build())
     .build()
 
 fun MediaItem.track(): Track? = Track.fromJson(mediaMetadata.extras?.getString("track"))
+
+/** Added by the radio (see [toMediaItem]). */
+val MediaItem.isAuto: Boolean get() = mediaMetadata.extras?.getBoolean("auto") == true
 
 /**
  * Plays music in the background: notification + lock screen + headset/Bluetooth controls (Media3 session),
@@ -73,6 +77,8 @@ class PlaybackService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var recordJob: Job? = null
     private var playingId: String? = null
+    private var playingTrack: Track? = null
+    private var steerJob: Job? = null
     private var playingSince = 0L
     private var radioFor: String? = null
     private var retriedFor: String? = null
@@ -146,6 +152,14 @@ class PlaybackService : MediaSessionService() {
             })
             .build()
         restoreSession()
+        // a chip picked in the queue: re-steer everything coming up
+        scope.launch {
+            var first = true
+            graph.vibe.tuning.collect {
+                if (first) { first = false; return@collect }
+                if (player.mediaItemCount - player.currentMediaItemIndex - 1 == 0) { radioFor = null; topUpRadio() } else steerSoon(keep = 0)
+            }
+        }
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) })
         scope.launch {
             graph.online.collect { online ->
@@ -218,12 +232,15 @@ class PlaybackService : MediaSessionService() {
                 scheduleOfflineCheck(justArrived = true) // don't even try a song that can't play offline
                 return
             }
+            // a new list/radio from the UI starts untuned
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) app.graph.vibe.tuning.value = null
             // you moved on from a song early (it played a bit, never counted as a play): a skip, for recommendations
-            val left = playingId
-            if (left != null && recordJob?.isActive == true && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK &&
-                android.os.SystemClock.elapsedRealtime() - playingSince >= 3_000)
-                scope.launch(Dispatchers.IO) { app.graph.library.recordSkip(left) }
+            val left = playingTrack
+            val skipped = left != null && recordJob?.isActive == true && reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK &&
+                android.os.SystemClock.elapsedRealtime() - playingSince >= 3_000
+            if (skipped) scope.launch(Dispatchers.IO) { app.graph.library.recordSkip(left!!) }
             playingId = mediaItem?.mediaId
+            playingTrack = mediaItem?.track()
             playingSince = android.os.SystemClock.elapsedRealtime()
             recordJob?.cancel()
             val track = mediaItem?.track() ?: return
@@ -231,7 +248,10 @@ class PlaybackService : MediaSessionService() {
             recordJob = scope.launch {
                 delay(30_000)
                 withContext(Dispatchers.IO) { app.graph.library.recordPlay(track) }
+                steerSoon(keep = 1) // it counts as a play: the radio follows it
             }
+            if (skipped) steerSoon(keep = 1) // steer away from what was just skipped
+            else updateChips(track)
             topUpRadio()
             prepareUpcoming()
         }
@@ -260,6 +280,46 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    // ---------- the radio follows what you listen to ----------
+
+    /** Radio songs after the next [keep] (what re-steering may replace). */
+    private fun autoAfter(keep: Int): List<Int> {
+        if (player.repeatMode == Player.REPEAT_MODE_ALL) return emptyList()
+        return (player.currentMediaItemIndex + 1 + keep until player.mediaItemCount).filter { player.getMediaItemAt(it).isAuto }
+    }
+
+    /** Re-ranks the radio songs coming up from the session so far (plays pull, skips push away). Never inside a player callback. */
+    private fun steerSoon(keep: Int) {
+        if (!app.graph.online.value) return
+        steerJob?.cancel()
+        steerJob = scope.launch {
+            val current = player.currentMediaItem?.track() ?: return@launch
+            if (autoAfter(keep).isEmpty()) { updateChips(current); return@launch }
+            val fixed = (0..minOf(player.currentMediaItemIndex + keep, player.mediaItemCount - 1)).map { player.getMediaItemAt(it).mediaId }
+            val result = runCatching { app.graph.vibe.upNext(current, fixed, 25) }.getOrNull() ?: return@launch
+            // something newer happened meanwhile (another song, another queue): that one steers
+            if (player.currentMediaItem?.mediaId != current.videoId) return@launch
+            app.graph.vibe.vibe.value = result.vibe
+            app.graph.vibe.chips.value = result.chips
+            if (result.tracks.size < 5) return@launch
+            val old = autoAfter(keep)
+            for (i in old.asReversed()) player.removeMediaItem(i)
+            val present = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.toSet()
+            val notInterested = app.graph.library.notInterested()
+            player.addMediaItems(result.tracks.filter { it.videoId !in present && it.videoId !in notInterested }.map { it.toMediaItem(auto = true) })
+            prepareUpcoming()
+        }
+    }
+
+    /** The playing song's tuner chips for the queue. */
+    private fun updateChips(track: Track) {
+        if (!app.graph.online.value) return
+        scope.launch {
+            val chips = withContext(Dispatchers.IO) { app.graph.vibe.signals.get(track.videoId)?.chips }.orEmpty()
+            if (player.currentMediaItem?.mediaId == track.videoId) app.graph.vibe.chips.value = chips
+        }
+    }
+
     /** When fewer than 3 songs are left, append YouTube Music radio for the last one (offline: the offline mix). */
     private fun topUpRadio() {
         if (player.repeatMode == Player.REPEAT_MODE_ALL) return
@@ -274,11 +334,17 @@ class PlaybackService : MediaSessionService() {
         if (radioFor == seed) return
         radioFor = seed
         scope.launch {
-            val tracks = withContext(Dispatchers.IO) { runCatching { app.graph.yt.radio(seed) }.getOrNull() } ?: run { radioFor = null; return@launch }
+            // the vibe engine follows the session; plain radio of the last song if it has nothing
+            val current = player.currentMediaItem?.track()
+            val queued = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+            val steered = current?.let { runCatching { app.graph.vibe.upNext(it, queued, 25) }.getOrNull() }
+            steered?.let { app.graph.vibe.vibe.value = it.vibe; app.graph.vibe.chips.value = it.chips }
+            val tracks = steered?.tracks?.takeIf { it.size >= 5 }
+                ?: withContext(Dispatchers.IO) { runCatching { app.graph.yt.radio(seed) }.getOrNull() } ?: run { radioFor = null; return@launch }
             radioIds[seed] = tracks.map { it.videoId }
             val present = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.toSet()
             val notInterested = app.graph.library.notInterested() // radios leave out songs you said no to
-            player.addMediaItems(tracks.filter { it.videoId !in present && it.videoId !in notInterested }.map { it.toMediaItem() })
+            player.addMediaItems(tracks.filter { it.videoId !in present && it.videoId !in notInterested }.map { it.toMediaItem(auto = true) })
         }
     }
 
