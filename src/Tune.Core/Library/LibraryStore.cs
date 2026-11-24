@@ -50,6 +50,7 @@ public sealed partial class LibraryStore : IDisposable, Tune.Core.Streams.IStrea
             Exec("ALTER TABLE downloads ADD COLUMN smart INTEGER NOT NULL DEFAULT 0;");
         MigrateSync();
         MigrateTaste();
+        MigrateSignals();
     }
 
     public void Dispose() => _db.Dispose();

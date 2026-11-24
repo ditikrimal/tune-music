@@ -18,6 +18,7 @@ public sealed class PlayQueue(Random? random = null)
     private readonly Lock _gate = new();
     private List<Track> _items = [];
     private List<Track> _original = []; // list part in its unshuffled order
+    private readonly HashSet<string> _userAdded = []; // "play next" / moved by hand: never re-steered away
     private Track[]? _snapshot;
     private int _listCount;
     private int _currentIndex = -1;
@@ -82,6 +83,7 @@ public sealed class PlayQueue(Random? random = null)
         {
             _items = [.. list];
             _original = [.. list];
+            _userAdded.Clear();
             _listCount = _items.Count;
             _currentIndex = _items.Count == 0 ? -1 : Math.Clamp(startIndex, 0, _items.Count - 1);
             if (_shuffle && _items.Count > 0) ApplyShuffle();
@@ -136,10 +138,41 @@ public sealed class PlayQueue(Random? random = null)
         }
     }
 
+    /// <summary>Radio songs coming up after the next <paramref name="keep"/> (what <see cref="ReplaceAuto"/> may change).</summary>
+    public int AutoUpcoming(int keep = 1)
+    {
+        lock (_gate)
+        {
+            if (_repeat == RepeatMode.All || _currentIndex < 0) return 0;
+            var start = Math.Max(_listCount, _currentIndex + 1 + keep);
+            return _items.Skip(start).Count(t => !_userAdded.Contains(t.VideoId));
+        }
+    }
+
+    /// <summary>
+    /// Re-steers the radio: every radio song after the next <paramref name="keep"/> is replaced by
+    /// <paramref name="tracks"/>. The list part and songs the user queued or moved stay where they are.
+    /// </summary>
+    public void ReplaceAuto(IReadOnlyList<Track> tracks, int keep = 1)
+    {
+        lock (_gate)
+        {
+            if (_repeat == RepeatMode.All || _currentIndex < 0) return;
+            var start = Math.Min(_items.Count, Math.Max(_listCount, _currentIndex + 1 + keep));
+            var kept = _items.Take(start).Concat(_items.Skip(start).Where(t => _userAdded.Contains(t.VideoId))).ToList();
+            var present = kept.Select(t => t.VideoId).ToHashSet();
+            foreach (var t in tracks)
+                if (present.Add(t.VideoId)) kept.Add(t);
+            _items = kept;
+            _snapshot = null;
+        }
+    }
+
     public void PlayNext(Track t)
     {
         lock (_gate)
         {
+            _userAdded.Add(t.VideoId);
             var at = Math.Max(_currentIndex + 1, 0);
             _items.Insert(at, t);
             if (at <= _listCount) _listCount++;
@@ -178,6 +211,7 @@ public sealed class PlayQueue(Random? random = null)
         {
             if (from < 0 || from >= _items.Count || to < 0 || to >= _items.Count || from == to) return;
             var item = _items[from];
+            _userAdded.Add(item.VideoId); // placed by hand: re-steering leaves it alone
             _items.RemoveAt(from);
             _items.Insert(to, item);
 

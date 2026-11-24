@@ -42,6 +42,16 @@ public interface IYtMusic
     Task<SearchResults> SearchAsync(string query, CancellationToken ct = default);
     Task<IReadOnlyList<Shelf>> GetHomeAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Track>> GetRadioAsync(string videoId, CancellationToken ct = default);
+
+    /// <summary>A song's radio with its tuner chips, continuation and Related id; <paramref name="tuning"/> picks a chip.</summary>
+    async Task<RadioPage> GetRadioPageAsync(string videoId, VibeChip? tuning = null, CancellationToken ct = default) =>
+        new(await GetRadioAsync(videoId, ct).ConfigureAwait(false), [], null);
+
+    /// <summary>More songs of an endless radio (<see cref="RadioPage.Continuation"/>).</summary>
+    Task<RadioPage> GetRadioMoreAsync(string continuation, CancellationToken ct = default) => Task.FromResult(new RadioPage([], [], null));
+
+    /// <summary>A song's Related tab (<see cref="RadioPage.RelatedId"/>).</summary>
+    Task<RelatedPage> GetRelatedAsync(string relatedId, CancellationToken ct = default) => Task.FromResult(new RelatedPage([], [], []));
     Task<Collection> GetAlbumAsync(string browseId, CancellationToken ct = default);
     Task<Collection> GetPlaylistAsync(string playlistId, CancellationToken ct = default);
     Task<ArtistPage> GetArtistAsync(string browseId, CancellationToken ct = default);

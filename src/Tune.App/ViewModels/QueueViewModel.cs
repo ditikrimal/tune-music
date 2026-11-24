@@ -29,8 +29,51 @@ public sealed partial class QueueViewModel : ObservableObject
     public ObservableCollection<TrackRowViewModel> Upcoming { get; } = [];
     public bool HasUpcoming => Upcoming.Count > 0;
 
+    /// <summary>YouTube Music's radio tuner chips for the song playing: "All" (follow the vibe), then its own.</summary>
+    public ObservableCollection<VibeChipViewModel> Chips { get; } = [];
+    public bool HasChips => Chips.Count > 1;
+
+    /// <summary>"Following your downbeat vibe" / "Tuned to Popular".</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasVibeNote))] private string _vibeNote = "";
+    public bool HasVibeNote => VibeNote.Length > 0;
+
+    private string _chipKey = "";
+
+    private void RefreshChips()
+    {
+        var chips = _playback.CurrentChips;
+        var tuning = _playback.Tuning;
+        var key = string.Join('|', chips.Select(c => c.Name)) + "#" + tuning;
+        if (key != _chipKey)
+        {
+            _chipKey = key;
+            Chips.Clear();
+            if (chips.Count > 0)
+            {
+                Chips.Add(new VibeChipViewModel("All", null, tuning is null));
+                // a chip picked earlier stays visible even if this song doesn't have it
+                if (tuning is not null && chips.All(c => c.Name != tuning)) Chips.Add(new VibeChipViewModel(tuning, tuning, true));
+                foreach (var c in chips) Chips.Add(new VibeChipViewModel(c.Name, c.Name, c.Name == tuning));
+            }
+            OnPropertyChanged(nameof(HasChips));
+        }
+        VibeNote = tuning is { } t ? $"Tuned to {t}"
+            : _playback.CurrentVibe is { } v ? $"Following your {v.ToLowerInvariant()} vibe"
+            : HasChips ? "Following what you play" : "";
+    }
+
+    /// <summary>A chip was clicked: tune the radio to it ("All" = follow the vibe again).</summary>
+    [RelayCommand]
+    private void Tune(string? chip)
+    {
+        if (chip == _playback.Tuning) return;
+        _playback.Tune(chip);
+        Refresh();
+    }
+
     public void Refresh()
     {
+        RefreshChips();
         var q = _playback.Queue;
         var items = q.Items;
         var cur = q.CurrentIndex;
@@ -105,4 +148,10 @@ public sealed partial class QueueViewModel : ObservableObject
 
     [RelayCommand]
     private void Close() => _shell.IsQueueOpen = false;
+}
+
+/// <summary>One tuner chip: <see cref="Key"/> is what it tunes to (null = "All").</summary>
+public sealed record VibeChipViewModel(string Name, string? Key, bool IsSelected)
+{
+    public string State => IsSelected ? "On" : "";
 }

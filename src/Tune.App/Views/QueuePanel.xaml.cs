@@ -38,6 +38,14 @@ public partial class QueuePanel : UserControl
         }
     }
 
+    /// <summary>The wheel scrolls the chip row sideways.</summary>
+    private void Chips_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer sv) return;
+        sv.ScrollToHorizontalOffset(sv.HorizontalOffset - e.Delta * 0.6);
+        e.Handled = true;
+    }
+
     private void Remove_Click(object sender, RoutedEventArgs e)
     {
         Vm?.RemoveCommand.Execute(Row(sender));

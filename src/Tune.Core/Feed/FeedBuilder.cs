@@ -13,12 +13,14 @@ public sealed record FeedResult(IReadOnlyList<Shelf> Shelves, bool Offline);
 /// favourites, top artists, recently played, then YouTube Music's own rows. Everything personal is ranked by
 /// <see cref="Taste"/> (plays with recency, likes, skips) and changes day to day; a manual refresh reshuffles.
 /// </summary>
-public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
+public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock, VibeEngine? vibe = null)
 {
     private const int MinRowItems = 3;
     private const int BecauseRows = 3;
     private const int BecauseItems = 12;
     private const int RadioSeeds = 6;
+    private const int RelatedSeeds = 2;
+    private const int MixRows = 3;
     private const int SpeedDialMax = 27;
     private const int QuickPicksMax = 20;
     private const int QuickPicksMin = 8;
@@ -50,6 +52,10 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
         var seeds = taste.Seeds(RadioSeeds, random).ToList();
         if (seeds.Count == 0) seeds = lib.GetRecent(RadioSeeds).ToList();
         var radios = await Task.WhenAll(seeds.Select(s => RadioAsync(s.VideoId, now, ct, fresh))).ConfigureAwait(false);
+        // "You might also like" of what you played most these days widens Quick picks the way YouTube's does
+        var related = vibe is null ? [] : await Task.WhenAll(taste.RightNow().Take(RelatedSeeds).Select(async e =>
+            await vibe.Signals.RelatedAsync(e.Track.VideoId, ct).ConfigureAwait(false) is { Songs.Count: > 0 } r
+                ? (IReadOnlyList<Track>?)[e.Track, .. r.Songs] : null)).ConfigureAwait(false);
 
         var shelves = new Dictionary<HomeSection, List<Shelf>>();
         var shown = new HashSet<string>(); // songs already on Home (no row repeats another)
@@ -59,12 +65,25 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
 
         if (layout.Contains(HomeSection.QuickPicks))
         {
-            var picks = QuickPicks(taste, radios, shown, random, jitter: fresh);
+            var picks = QuickPicks(taste, [.. radios, .. related], shown, random, jitter: fresh);
             if (picks.Count >= QuickPicksMin)
             {
                 shelves[HomeSection.QuickPicks] = [new Shelf("Quick picks", picks.Select(SongCard).ToList(), IsLocal: true, IsList: true)];
                 foreach (var t in picks) shown.Add(t.VideoId);
             }
+        }
+
+        if (vibe is not null && layout.Contains(HomeSection.Vibe) && await VibeRowAsync(shown, random, ct).ConfigureAwait(false) is { } vibeRow)
+        {
+            shelves[HomeSection.Vibe] = [vibeRow];
+            foreach (var c in vibeRow.Items) if (c.VideoId is { } id) shown.Add(id);
+        }
+
+        if (vibe is not null && layout.Contains(HomeSection.Mixes))
+        {
+            var mixes = await SafeAsync(() => vibe.MixesAsync(taste, shown, MixRows, BecauseItems, random, ct), "Mood mixes").ConfigureAwait(false) ?? [];
+            shelves[HomeSection.Mixes] = mixes.Select(m => new Shelf($"Your {m.Mood.ToLowerInvariant()} mix", m.Tracks.Select(SongCard).ToList(), IsLocal: true)).ToList();
+            foreach (var m in mixes) foreach (var t in m.Tracks) shown.Add(t.VideoId);
         }
 
         if (layout.Contains(HomeSection.Because))
@@ -181,6 +200,30 @@ public sealed class FeedBuilder(LibraryStore lib, IYtMusic api, IClock clock)
             if (Fits(next)) picks.Add(next);
         }
         return picks;
+    }
+
+    /// <summary>
+    /// "Keep the vibe going": your latest listening session (up to half a day ago) continued in its vibe, like the
+    /// radio would have; "· Chill" when the session had a clear mood.
+    /// </summary>
+    private async Task<Shelf?> VibeRowAsync(IReadOnlySet<string> shown, Random random, CancellationToken ct)
+    {
+        var session = vibe!.CurrentSession(null, TimeSpan.FromHours(12));
+        if (session.Played.Count() < 2) return null;
+        var result = await SafeAsync(() => vibe.RankAsync(session, [.. shown], BecauseItems, null, random, ct), "Keep the vibe").ConfigureAwait(false);
+        if (result is not { Tracks.Count: >= MinRowItems } r) return null;
+        var title = r.Vibe is { } v ? $"Keep the vibe going · {v}" : "Keep the vibe going";
+        return new Shelf(title, r.Tracks.Select(SongCard).ToList(), IsLocal: true);
+    }
+
+    private static async Task<T?> SafeAsync<T>(Func<Task<T>> work, string what)
+    {
+        try { return await work().ConfigureAwait(false); }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            Log.Warn(what + " unavailable", e);
+            return default;
+        }
     }
 
     private async Task<(IReadOnlyList<Shelf>, bool Offline)> DiscoveryAsync(CancellationToken ct)

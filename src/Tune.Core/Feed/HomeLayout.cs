@@ -6,7 +6,7 @@ using Tune.Core.Sync;
 namespace Tune.Core.Feed;
 
 /// <summary>The rows Home can show. Order and visibility are the user's (Settings > Home), synced with the account.</summary>
-public enum HomeSection { SpeedDial, QuickPicks, Because, Forgotten, Artists, Recent, Discovery }
+public enum HomeSection { SpeedDial, QuickPicks, Because, Forgotten, Artists, Recent, Discovery, Vibe, Mixes }
 
 public sealed record HomeSectionState(HomeSection Section, bool Visible);
 
@@ -19,6 +19,8 @@ public static class HomeLayout
     [
         new(HomeSection.SpeedDial, true),
         new(HomeSection.QuickPicks, true),
+        new(HomeSection.Vibe, true),
+        new(HomeSection.Mixes, true),
         new(HomeSection.Because, true),
         new(HomeSection.Forgotten, true),
         new(HomeSection.Artists, true),
@@ -30,6 +32,8 @@ public static class HomeLayout
     {
         HomeSection.SpeedDial => "Speed dial",
         HomeSection.QuickPicks => "Quick picks",
+        HomeSection.Vibe => "Keep the vibe going",
+        HomeSection.Mixes => "Mood mixes",
         HomeSection.Because => "Because you played",
         HomeSection.Forgotten => "Forgotten favourites",
         HomeSection.Artists => "Your top artists",
@@ -41,6 +45,8 @@ public static class HomeLayout
     {
         HomeSection.SpeedDial => "Your pins and most-played songs",
         HomeSection.QuickPicks => "New songs you'll like, mixed with favourites",
+        HomeSection.Vibe => "More of what you just listened to",
+        HomeSection.Mixes => "Your songs by mood, with new ones",
         HomeSection.Because => "More like songs you play a lot",
         HomeSection.Forgotten => "Old favourites you haven't played lately",
         HomeSection.Artists => "The artists you play most",

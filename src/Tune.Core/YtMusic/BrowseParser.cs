@@ -27,6 +27,18 @@ public static class BrowseParser
         return new HomePage(shelves!, list.Str("continuations", 0, "nextContinuationData", "continuation"));
     }
 
+    // ---------- a song's Related tab ----------
+
+    /// <summary>"You might also like" (songs), "Similar artists" and "Recommended playlists" of a song.</summary>
+    public static RelatedPage ParseRelated(JsonNode root)
+    {
+        var shelves = RadioParser.FindAll(root, "musicCarouselShelfRenderer").Select(CarouselShelf).OfType<Shelf>().ToList();
+        var songs = shelves.SelectMany(s => s.Items).Select(c => c.Track).OfType<Track>().DistinctBy(t => t.VideoId).ToList();
+        var artists = shelves.SelectMany(s => s.Items).Where(c => c.Kind == CardKind.Artist).ToList();
+        var playlists = shelves.SelectMany(s => s.Items).Where(c => c.Kind == CardKind.Playlist).ToList();
+        return new RelatedPage(songs, artists, playlists);
+    }
+
     // ---------- moods & genres ----------
 
     public static IReadOnlyList<MoodSection> ParseMoods(JsonNode root) =>

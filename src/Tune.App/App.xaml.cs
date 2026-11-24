@@ -191,15 +191,17 @@ public partial class App : Application
         _downloads.FromCache = _cache.LocalPath; // downloading a song you've streamed copies it instead of fetching it again
         var offline = new Tune.Core.Offline.OfflineLibrary(_downloads, _cache, _library);
         var smart = new Tune.Core.Offline.SmartDownloads(_library, api, _downloads, clock);
+        // recommendations: YouTube Music's per-song radios, vibe chips and Related, cached, steered by the session
+        var vibe = new VibeEngine(_library, new Signals(_library, api, clock), clock);
         var playback = new PlaybackService(new PlayQueue(), resolver, _player, _library, sponsorBlock, api,
-            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock, offline);
+            ct => tools.UpdateYtDlpIfDueAsync(force: true, ct), clock, offline, vibe);
         Task.Run(art.Trim);
 
         var updater = new AppUpdater(toolsHttp, dataDir);
         _account = LoadSyncConfig() is { } syncConfig
             ? new Tune.Core.Sync.AccountSync(_library, new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, syncConfig)
             : null;
-        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock), tools, art, clock, dataDir, prefetcher, lyrics,
+        Services = new AppServices(_library, api, playback, new FeedBuilder(_library, api, clock, vibe), tools, art, clock, dataDir, prefetcher, lyrics,
             _downloads, _network, _cache, offline, smart, updater, _account, new MoodsCatalog(api, _library, clock));
         _downloads.Start();
         _cache.Start();

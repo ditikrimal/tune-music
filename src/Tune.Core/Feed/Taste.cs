@@ -10,9 +10,9 @@ namespace Tune.Core.Feed;
 /// </summary>
 public sealed class Taste
 {
-    public sealed record Entry(Track Track, double Lately, double AllTime, int Plays, DateTimeOffset? LastPlayed, int Skips, bool Liked);
+    public sealed record Entry(Track Track, double Lately, double AllTime, int Plays, DateTimeOffset? LastPlayed, int Skips, bool Liked, double Now = 0);
 
-    private const double LatelyHalfLife = 30, AllTimeHalfLife = 120, LikeBonus = 2.5, SkipPenalty = 0.6;
+    private const double LatelyHalfLife = 30, AllTimeHalfLife = 120, NowHalfLife = 2, LikeBonus = 2.5, SkipPenalty = 0.6;
     private readonly Dictionary<string, Entry> _songs = [];
     private readonly Dictionary<string, double> _artists = [];
     private readonly double _topArtist;
@@ -24,12 +24,13 @@ public sealed class Taste
         notInterested ??= new HashSet<string>();
         plays = plays.Where(p => !notInterested.Contains(p.Track.VideoId));
         _now = now;
-        var acc = new Dictionary<string, (Track T, double L, double A, int P, DateTimeOffset? Last, int S, bool Like)>();
+        var acc = new Dictionary<string, (Track T, double L, double A, int P, DateTimeOffset? Last, int S, bool Like, double N)>();
         foreach (var (t, at) in plays)
         {
-            var e = acc.GetValueOrDefault(t.VideoId, (t, 0, 0, 0, null, 0, false));
+            var e = acc.GetValueOrDefault(t.VideoId, (t, 0, 0, 0, null, 0, false, 0));
             var days = Math.Max(0, (now - at).TotalDays);
             e.L += Decay(days, LatelyHalfLife);
+            e.N += Decay(days, NowHalfLife);
             e.A += Decay(days, AllTimeHalfLife);
             e.P++;
             if (e.Last is null || at > e.Last) e.Last = at;
@@ -37,7 +38,7 @@ public sealed class Taste
         }
         foreach (var t in liked)
         {
-            var e = acc.GetValueOrDefault(t.VideoId, (t, 0, 0, 0, null, 0, false));
+            var e = acc.GetValueOrDefault(t.VideoId, (t, 0, 0, 0, null, 0, false, 0));
             e.L += LikeBonus; e.A += LikeBonus; e.Like = true;
             acc[t.VideoId] = e;
         }
@@ -47,6 +48,7 @@ public sealed class Taste
             var days = Math.Max(0, (now - at).TotalDays);
             e.L -= SkipPenalty * Decay(days, LatelyHalfLife);
             e.A -= SkipPenalty * Decay(days, AllTimeHalfLife);
+            e.N -= SkipPenalty * Decay(days, NowHalfLife);
             e.S++;
             acc[id] = e;
         }
@@ -55,7 +57,7 @@ public sealed class Taste
             .Select(g => g.Key).Concat(notInterested).ToHashSet();
         foreach (var (id, e) in acc)
         {
-            _songs[id] = new Entry(e.T, e.L, e.A, e.P, e.Last, e.S, e.Like);
+            _songs[id] = new Entry(e.T, e.L, e.A, e.P, e.Last, e.S, e.Like, e.N);
             foreach (var a in e.T.Artists)
                 _artists[ArtistKey(a)] = _artists.GetValueOrDefault(ArtistKey(a)) + Math.Max(0, e.L + e.A * 0.3);
         }
@@ -97,17 +99,26 @@ public sealed class Taste
             .GroupBy(ArtistKey).OrderByDescending(g => _artists.GetValueOrDefault(g.Key)).Select(g => g.First())
             .Where(a => _artists.GetValueOrDefault(ArtistKey(a)) > 0.3).Take(max).ToList();
 
-    /// <summary>Songs to start radios from: weighted by how much you like them lately, so seeds vary day to day.</summary>
+    /// <summary>What you're into these days (plays of the last few days count most), best first.</summary>
+    public IReadOnlyList<Entry> RightNow() =>
+        _songs.Values.Where(e => e.Now > 0.05).OrderByDescending(e => e.Now).ToList();
+
+    /// <summary>
+    /// Songs to start radios from: weighted by how much you like them lately, and much more by what you played in the
+    /// last few days (so Home follows the mood you're in), so seeds vary day to day.
+    /// </summary>
     public IReadOnlyList<Track> Seeds(int count, Random random)
     {
-        var pool = Lately().Where(e => !SkippedIds.Contains(e.Track.VideoId)).Take(20).ToList();
+        static double W(Entry e) => Math.Max(0.01, e.Lately + 2.5 * Math.Max(0, e.Now));
+        var pool = _songs.Values.Where(e => e.Lately > 0.05 && !SkippedIds.Contains(e.Track.VideoId))
+            .OrderByDescending(W).Take(20).ToList();
         var chosen = new List<Track>();
         while (chosen.Count < count && pool.Count > 0)
         {
-            var total = pool.Sum(e => e.Lately);
+            var total = pool.Sum(W);
             var roll = random.NextDouble() * total;
             var i = 0;
-            for (var acc = pool[0].Lately; acc < roll && i < pool.Count - 1; acc += pool[++i].Lately) { }
+            for (var acc = W(pool[0]); acc < roll && i < pool.Count - 1; acc += W(pool[++i])) { }
             chosen.Add(pool[i].Track);
             pool.RemoveAt(i);
         }

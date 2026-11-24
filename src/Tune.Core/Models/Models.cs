@@ -56,6 +56,20 @@ public sealed record MoodCategory(string Title, string Params, uint Color, strin
 /// <summary>"Moods &amp; moments" or "Genres".</summary>
 public sealed record MoodSection(string Title, IReadOnlyList<MoodCategory> Items);
 
+/// <summary>What a radio chip changes: <see cref="Discovery"/> (Popular, Discover, Deep cuts), <see cref="Mood"/> (Chill,
+/// Downbeat, Pump-up…), <see cref="Era"/> (2010s…) or <see cref="Genre"/> (Hip hop, Bengali…).</summary>
+public enum VibeKind { Discovery, Mood, Era, Genre }
+
+/// <summary>One of YouTube Music's radio tuner chips for a song: a tag for the song's vibe, and the tuned radio behind it.</summary>
+public sealed record VibeChip(string Name, string PlaylistId, string? Params, VibeKind Kind);
+
+/// <summary>A song's radio as YouTube Music gives it: the songs, the tuner chips, more songs (<paramref name="Continuation"/>)
+/// and the song's Related tab (<paramref name="RelatedId"/>).</summary>
+public sealed record RadioPage(IReadOnlyList<Track> Tracks, IReadOnlyList<VibeChip> Chips, string? Continuation, string? RelatedId = null);
+
+/// <summary>A song's Related tab: "You might also like" songs, similar artists, recommended playlists.</summary>
+public sealed record RelatedPage(IReadOnlyList<Track> Songs, IReadOnlyList<Card> Artists, IReadOnlyList<Card> Playlists);
+
 public sealed record SearchResults(
     Card? Top,
     IReadOnlyList<Track> Songs,

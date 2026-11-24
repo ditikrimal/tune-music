@@ -1,3 +1,4 @@
+using Tune.Core.Feed;
 using Tune.Core.Library;
 using Tune.Core.Models;
 using Tune.Core.Offline;
@@ -34,6 +35,8 @@ public sealed class PlaybackService
     private readonly Func<CancellationToken, Task<bool>> _updateYtDlp;
     private readonly IClock _clock;
     private readonly IOfflineSource? _offline;
+    private readonly VibeEngine? _vibe;
+    private int _steerVersion;
     private volatile bool _fromStream; // the current song plays from YouTube, not a downloaded file
 
     private readonly Lock _pendingGate = new();
@@ -60,9 +63,10 @@ public sealed class PlaybackService
 
     public PlaybackService(PlayQueue queue, IStreamResolver resolver, IAudioPlayer player, LibraryStore lib,
         ISponsorBlock sponsorBlock, IYtMusic api, Func<CancellationToken, Task<bool>> updateYtDlp, IClock clock,
-        IOfflineSource? offline = null)
+        IOfflineSource? offline = null, VibeEngine? vibe = null)
     {
         _offline = offline;
+        _vibe = vibe;
         if (offline is not null) offline.Network.Changed += OnNetworkChanged;
         Queue = queue;
         _resolver = resolver;
@@ -92,6 +96,28 @@ public sealed class PlaybackService
 
     /// <summary>True between choosing a song and its audio starting (yt-dlp + YouTube's start delay).</summary>
     public bool IsLoading { get; private set; }
+
+    /// <summary>The recommendation engine (null in tests without it: plain YouTube radio).</summary>
+    public VibeEngine? Vibe => _vibe;
+
+    /// <summary>The vibe the radio follows now (a chip name such as "Chill"), or null.</summary>
+    public string? CurrentVibe { get; private set; }
+
+    /// <summary>The current song's radio tuner chips (YouTube Music's "Popular", "Discover", moods, eras, genres).</summary>
+    public IReadOnlyList<VibeChip> CurrentChips { get; private set; } = [];
+
+    /// <summary>The chip the user picked for the radio, or null (follow the vibe).</summary>
+    public string? Tuning => _vibe?.Tuning;
+
+    /// <summary>Picks a radio chip (null = back to following the vibe) and re-steers everything coming up.</summary>
+    public void Tune(string? chip)
+    {
+        if (_vibe is null) return;
+        _vibe.Tuning = chip;
+        StateChanged?.Invoke();
+        if (Queue.AutoUpcoming(keep: 0) == 0 && Queue.NeedsRadio) Spawn(EnsureRadioAsync);
+        else SteerSoon(keep: 0);
+    }
 
     /// <summary>
     /// Sleep timer "end of song": when the current song finishes, move to the next one but don't start it.
@@ -126,6 +152,7 @@ public sealed class PlaybackService
         }
         Queue.StartList(list, index);
         Interlocked.Increment(ref _queueEpoch);
+        if (_vibe is not null) _vibe.Tuning = null;
         return PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
     }
 
@@ -134,6 +161,7 @@ public sealed class PlaybackService
         if (IsOffline) return PlayListAsync([seed], 0); // no radio without internet
         Queue.StartRadio(seed);
         Interlocked.Increment(ref _queueEpoch);
+        if (_vibe is not null) _vibe.Tuning = null;
         var play = PlayCurrentAsync(TimeSpan.Zero, resetTrackState: true);
         Spawn(EnsureRadioAsync);
         return play;
@@ -223,12 +251,18 @@ public sealed class PlaybackService
         }
 
         // leaving a song early (it played a bit but never counted as a play): a skip, for recommendations
-        if (resetTrackState && _loaded && !_recorded && _playingId is { } skipped && _player.Position >= TimeSpan.FromSeconds(3))
+        var skippedNow = false;
+        if (resetTrackState && _loaded && !_recorded && _playingTrack is { } skipped && _player.Position >= TimeSpan.FromSeconds(3))
+        {
             _lib.RecordSkip(skipped, _clock.Now);
+            skippedNow = true;
+        }
         var (gen, ct) = BeginLoad();
         if (resetTrackState)
         {
-            _playingId = track.VideoId;
+            _playingTrack = track;
+            if (skippedNow) SteerSoon(keep: 1); // steer away from what was just skipped
+            else Spawn(() => UpdateChipsAsync(track));
             _recorded = false;
             _lookaheadDone = false;
             _reloadTried = false;
@@ -516,7 +550,15 @@ public sealed class PlaybackService
     {
         try
         {
-            var tracks = await _api.GetRadioAsync(key.Seed).ConfigureAwait(false);
+            IReadOnlyList<Track> tracks = [];
+            if (_vibe is not null && Queue.Current is { } current)
+            {
+                var result = await _vibe.UpNextAsync(current, Queue.Items.Select(t => t.VideoId), RadioBatch).ConfigureAwait(false);
+                CurrentVibe = result.Vibe;
+                CurrentChips = result.Chips;
+                tracks = result.Tracks;
+            }
+            if (tracks.Count < MinSteer) tracks = await _api.GetRadioAsync(key.Seed).ConfigureAwait(false);
             if (key.Epoch != Volatile.Read(ref _queueEpoch)) return; // the user started something else meanwhile
             var notInterested = _lib.GetNotInterested(); // radios leave out songs you said no to
             Queue.AppendRadio(tracks.Where(t => !notInterested.Contains(t.VideoId)).ToList());
@@ -560,13 +602,59 @@ public sealed class PlaybackService
         }
     }
 
-    private string? _playingId;
+    private Track? _playingTrack;
 
     private void RecordPlay()
     {
         if (_recorded || !_loaded || Current is not { } t) return;
         _recorded = true;
         _lib.RecordPlay(t, _clock.Now);
+        SteerSoon(keep: 1); // it counts as a play: the radio follows it
+    }
+
+    // ---------- the radio follows what you listen to ----------
+
+    private const int RadioBatch = 25, MinSteer = 5;
+
+    private void SteerSoon(int keep)
+    {
+        if (_vibe is null || IsOffline) return;
+        var version = Interlocked.Increment(ref _steerVersion);
+        Spawn(() => SteerAsync(keep, version));
+    }
+
+    /// <summary>Re-ranks the radio songs coming up from the session so far (plays pull, skips push away).</summary>
+    private async Task SteerAsync(int keep, int version)
+    {
+        if (_vibe is null || Queue.Current is not { } current) return;
+        var epoch = Volatile.Read(ref _queueEpoch);
+        if (Queue.AutoUpcoming(keep) == 0)
+        {
+            await UpdateChipsAsync(current).ConfigureAwait(false);
+            return;
+        }
+        var fixedPart = Queue.Items.Take(Queue.CurrentIndex + 1 + keep).Select(t => t.VideoId).ToList();
+        var result = await _vibe.UpNextAsync(current, fixedPart, RadioBatch).ConfigureAwait(false);
+        // something newer happened meanwhile (another skip, another song, a new queue): that one steers
+        if (version != Volatile.Read(ref _steerVersion) || epoch != Volatile.Read(ref _queueEpoch) || Queue.Current?.VideoId != current.VideoId) return;
+        CurrentVibe = result.Vibe;
+        CurrentChips = result.Chips;
+        if (result.Tracks.Count >= MinSteer)
+        {
+            var notInterested = _lib.GetNotInterested();
+            Queue.ReplaceAuto(result.Tracks.Where(t => !notInterested.Contains(t.VideoId)).ToList(), keep);
+        }
+        StateChanged?.Invoke();
+        if (_loaded) PrepareUpcoming();
+    }
+
+    private async Task UpdateChipsAsync(Track track)
+    {
+        if (_vibe is null || IsOffline) return;
+        var s = await _vibe.Signals.GetAsync(track.VideoId).ConfigureAwait(false);
+        if (Queue.Current?.VideoId != track.VideoId) return;
+        CurrentChips = s?.Chips ?? [];
+        StateChanged?.Invoke();
     }
 
     private void Stop()

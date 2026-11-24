@@ -44,6 +44,28 @@ public sealed class YtMusicApi(InnerTubeClient client) : IYtMusic
             ["isAudioOnly"] = true,
         }, ct).ConfigureAwait(false));
 
+    public async Task<RadioPage> GetRadioPageAsync(string videoId, VibeChip? tuning = null, CancellationToken ct = default)
+    {
+        var body = new JsonObject
+        {
+            ["videoId"] = videoId,
+            ["playlistId"] = tuning?.PlaylistId ?? "RDAMVM" + videoId,
+            ["isAudioOnly"] = true,
+        };
+        if (tuning?.Params is { } p) body["params"] = p;
+        return RadioParser.ParsePage(await client.PostAsync("next", body, ct).ConfigureAwait(false));
+    }
+
+    public async Task<RadioPage> GetRadioMoreAsync(string continuation, CancellationToken ct = default) =>
+        RadioParser.ParseContinuation(await client.PostAsync("next", new JsonObject
+        {
+            ["continuation"] = continuation,
+            ["isAudioOnly"] = true,
+        }, ct).ConfigureAwait(false));
+
+    public async Task<RelatedPage> GetRelatedAsync(string relatedId, CancellationToken ct = default) =>
+        BrowseParser.ParseRelated(await client.PostAsync("browse", new JsonObject { ["browseId"] = relatedId }, ct).ConfigureAwait(false));
+
     public async Task<Collection> GetAlbumAsync(string browseId, CancellationToken ct = default) =>
         BrowseParser.ParseAlbum(await client.PostAsync("browse", new JsonObject { ["browseId"] = browseId }, ct).ConfigureAwait(false), browseId);
 

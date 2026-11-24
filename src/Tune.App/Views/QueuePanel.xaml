@@ -93,10 +93,33 @@
                        Visibility="{Binding NowPlaying, Converter={StaticResource NullToVis}}" />
             <ContentControl DockPanel.Dock="Top" Content="{Binding NowPlaying}" ContentTemplate="{StaticResource QueueRow}" Focusable="False"
                             Visibility="{Binding NowPlaying, Converter={StaticResource NullToVis}}" />
-            <DockPanel DockPanel.Dock="Top" Margin="8,18,4,6">
-                <TextBlock DockPanel.Dock="Right" Text="drag to reorder" Style="{StaticResource Caption}" FontSize="11"
+            <!-- radio tuner: All (follow the vibe) · Popular · Discover · moods · eras · genres -->
+            <ScrollViewer DockPanel.Dock="Top" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Margin="6,16,4,0"
+                          PreviewMouseWheel="Chips_MouseWheel" Visibility="{Binding HasChips, Converter={StaticResource BoolToVis}}">
+                <ItemsControl ItemsSource="{Binding Chips}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource VibeChip}" Content="{Binding Name}" Tag="{Binding State}" Margin="0,0,6,0"
+                                    Command="{Binding DataContext.TuneCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding Key}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <DockPanel DockPanel.Dock="Top" Margin="8,14,4,6">
+                <TextBlock DockPanel.Dock="Right" Text="drag to reorder" Style="{StaticResource Caption}" FontSize="11" VerticalAlignment="Bottom"
                            Visibility="{Binding HasUpcoming, Converter={StaticResource BoolToVis}}" />
-                <TextBlock Text="NEXT UP" Style="{StaticResource SectionLabel}" />
+                <StackPanel>
+                    <TextBlock Text="NEXT UP" Style="{StaticResource SectionLabel}" />
+                    <TextBlock Text="{Binding VibeNote}" Style="{StaticResource Caption}" FontSize="12" Margin="0,2,0,0"
+                               Foreground="{DynamicResource AccentTextBrush}"
+                               Visibility="{Binding HasVibeNote, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
             </DockPanel>
             <TextBlock DockPanel.Dock="Top" Text="Nothing queued. Songs like this one will be added automatically." Style="{StaticResource Subtle}"
                        TextWrapping="Wrap" Margin="8,8,8,0"
