@@ -29,8 +29,8 @@ android {
         applicationId = "app.tune.music"
         minSdk = 28
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.5.0"
+        versionCode = 8
+        versionName = "1.6.0"
         buildConfigField("String", "FIREBASE_PROJECT", "\"${firebaseValue("projectId", "demo-tune")}\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"${firebaseValue("apiKey", "fake")}\"")
         buildConfigField("String", "FIREBASE_WEB_CLIENT", "\"${firebaseValue("webClientId", "")}\"")
