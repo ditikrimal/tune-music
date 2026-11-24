@@ -195,4 +195,21 @@ public sealed class VibePlaybackTests : IDisposable
         Assert.Equal("Chill", _svc.Tuning);
         Assert.StartsWith("chill", Upcoming()[0]);
     }
+
+    [Fact]
+    public async Task A_chip_retunes_a_playlist_too_but_keeps_songs_you_queued()
+    {
+        _api.Radios[Id("a")] = [T("a"), .. Enumerable.Range(0, 8).Select(i => T("a" + i, "A" + i))];
+        _api.Chips[Id("a")] = [FakeYtMusic.Chip("Chill", "a")];
+        _api.Tuned[Id("a") + "|Chill"] = [T("a"), .. Enumerable.Range(0, 8).Select(i => T("chill" + i, "C" + i))];
+        await _svc.PlayListAsync([T("a"), T("l1"), T("l2")], 0);
+        _svc.Queue.PlayNext(T("mine"));
+        await _svc.Background;
+
+        _svc.Tune("Chill");
+        await _svc.Background;
+        Assert.Equal("mine", Upcoming()[0]);
+        Assert.DoesNotContain("l1", Upcoming());
+        Assert.StartsWith("chill", Upcoming()[1]);
+    }
 }

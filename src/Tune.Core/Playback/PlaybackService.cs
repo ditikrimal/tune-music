@@ -115,8 +115,7 @@ public sealed class PlaybackService
         if (_vibe is null) return;
         _vibe.Tuning = chip;
         StateChanged?.Invoke();
-        if (Queue.AutoUpcoming(keep: 0) == 0 && Queue.NeedsRadio) Spawn(EnsureRadioAsync);
-        else SteerSoon(keep: 0);
+        SteerSoon(keep: 0, retune: true); // everything coming up follows the chip (songs you queued stay)
     }
 
     /// <summary>
@@ -616,19 +615,19 @@ public sealed class PlaybackService
 
     private const int RadioBatch = 25, MinSteer = 5;
 
-    private void SteerSoon(int keep)
+    private void SteerSoon(int keep, bool retune = false)
     {
         if (_vibe is null || IsOffline) return;
         var version = Interlocked.Increment(ref _steerVersion);
-        Spawn(() => SteerAsync(keep, version));
+        Spawn(() => SteerAsync(keep, version, retune));
     }
 
     /// <summary>Re-ranks the radio songs coming up from the session so far (plays pull, skips push away).</summary>
-    private async Task SteerAsync(int keep, int version)
+    private async Task SteerAsync(int keep, int version, bool retune = false)
     {
         if (_vibe is null || Queue.Current is not { } current) return;
         var epoch = Volatile.Read(ref _queueEpoch);
-        if (Queue.AutoUpcoming(keep) == 0)
+        if (!retune && Queue.AutoUpcoming(keep) == 0)
         {
             await UpdateChipsAsync(current).ConfigureAwait(false);
             return;
@@ -642,7 +641,7 @@ public sealed class PlaybackService
         if (result.Tracks.Count >= MinSteer)
         {
             var notInterested = _lib.GetNotInterested();
-            Queue.ReplaceAuto(result.Tracks.Where(t => !notInterested.Contains(t.VideoId)).ToList(), keep);
+            Queue.ReplaceAuto(result.Tracks.Where(t => !notInterested.Contains(t.VideoId)).ToList(), keep, includeList: retune);
         }
         StateChanged?.Invoke();
         if (_loaded) PrepareUpcoming();

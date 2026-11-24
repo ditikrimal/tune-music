@@ -151,18 +151,24 @@ public sealed class PlayQueue(Random? random = null)
 
     /// <summary>
     /// Re-steers the radio: every radio song after the next <paramref name="keep"/> is replaced by
-    /// <paramref name="tracks"/>. The list part and songs the user queued or moved stay where they are.
+    /// <paramref name="tracks"/>. The list part and songs the user queued or moved stay where they are; with
+    /// <paramref name="includeList"/> (a tuner chip was picked) the rest of the list makes way too, like YouTube Music.
     /// </summary>
-    public void ReplaceAuto(IReadOnlyList<Track> tracks, int keep = 1)
+    public void ReplaceAuto(IReadOnlyList<Track> tracks, int keep = 1, bool includeList = false)
     {
         lock (_gate)
         {
             if (_repeat == RepeatMode.All || _currentIndex < 0) return;
-            var start = Math.Min(_items.Count, Math.Max(_listCount, _currentIndex + 1 + keep));
+            var start = Math.Min(_items.Count, includeList ? _currentIndex + 1 + keep : Math.Max(_listCount, _currentIndex + 1 + keep));
             var kept = _items.Take(start).Concat(_items.Skip(start).Where(t => _userAdded.Contains(t.VideoId))).ToList();
             var present = kept.Select(t => t.VideoId).ToHashSet();
             foreach (var t in tracks)
                 if (present.Add(t.VideoId)) kept.Add(t);
+            if (includeList && _listCount > start)
+            {
+                _listCount = start;
+                _original = _shuffle ? _original.Where(t => kept.Take(start).Any(k => k.VideoId == t.VideoId)).ToList() : kept.Take(start).ToList();
+            }
             _items = kept;
             _snapshot = null;
         }

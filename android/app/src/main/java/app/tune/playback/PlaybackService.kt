@@ -157,7 +157,7 @@ class PlaybackService : MediaSessionService() {
             var first = true
             graph.vibe.tuning.collect {
                 if (first) { first = false; return@collect }
-                if (player.mediaItemCount - player.currentMediaItemIndex - 1 == 0) { radioFor = null; topUpRadio() } else steerSoon(keep = 0)
+                steerSoon(keep = 0, retune = true) // everything coming up follows the chip, like YouTube Music
             }
         }
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply { setSmallIcon(R.drawable.ic_notification) })
@@ -282,19 +282,19 @@ class PlaybackService : MediaSessionService() {
 
     // ---------- the radio follows what you listen to ----------
 
-    /** Radio songs after the next [keep] (what re-steering may replace). */
-    private fun autoAfter(keep: Int): List<Int> {
+    /** Radio songs after the next [keep] (what re-steering may replace); [all]: every song after them (a chip was picked). */
+    private fun autoAfter(keep: Int, all: Boolean = false): List<Int> {
         if (player.repeatMode == Player.REPEAT_MODE_ALL) return emptyList()
-        return (player.currentMediaItemIndex + 1 + keep until player.mediaItemCount).filter { player.getMediaItemAt(it).isAuto }
+        return (player.currentMediaItemIndex + 1 + keep until player.mediaItemCount).filter { all || player.getMediaItemAt(it).isAuto }
     }
 
     /** Re-ranks the radio songs coming up from the session so far (plays pull, skips push away). Never inside a player callback. */
-    private fun steerSoon(keep: Int) {
+    private fun steerSoon(keep: Int, retune: Boolean = false) {
         if (!app.graph.online.value) return
         steerJob?.cancel()
         steerJob = scope.launch {
             val current = player.currentMediaItem?.track() ?: return@launch
-            if (autoAfter(keep).isEmpty()) { updateChips(current); return@launch }
+            if (!retune && autoAfter(keep).isEmpty()) { updateChips(current); return@launch }
             val fixed = (0..minOf(player.currentMediaItemIndex + keep, player.mediaItemCount - 1)).map { player.getMediaItemAt(it).mediaId }
             val result = runCatching { app.graph.vibe.upNext(current, fixed, 25) }.getOrNull() ?: return@launch
             // something newer happened meanwhile (another song, another queue): that one steers
@@ -302,7 +302,7 @@ class PlaybackService : MediaSessionService() {
             app.graph.vibe.vibe.value = result.vibe
             app.graph.vibe.chips.value = result.chips
             if (result.tracks.size < 5) return@launch
-            val old = autoAfter(keep)
+            val old = autoAfter(keep, all = retune)
             for (i in old.asReversed()) player.removeMediaItem(i)
             val present = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }.toSet()
             val notInterested = app.graph.library.notInterested()
